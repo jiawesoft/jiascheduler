@@ -1,0 +1,58 @@
+[package]
+name = "openapi"
+version = "0.1.0"
+edition = "2021"
+
+
+[features]
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+poem.workspace = true
+poem-openapi.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+openapi-derive.workspace = true
+tracing-subscriber.workspace = true
+sea-orm.workspace = true
+# diesel.workspace = true
+nanoid.workspace = true
+futures.workspace = true
+serde_repr.workspace = true
+russh.workspace = true
+russh-sftp.workspace = true
+russh-keys.workspace = true
+termion.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+config.workspace = true
+redis.workspace = true
+# redis = { version = "0.25.3", features = [
+#     "aio",
+#     "tokio-comp",
+#     "connection-manager",
+# ] }
+casbin = "*"
+rust-crypto.workspace = true
+chrono.workspace = true
+automate.workspace = true
+reqwest.workspace = true
+sea-query.workspace = true
+rust-embed.workspace = true
+evalexpr.workspace = true
+sea-orm-adapter.workspace = true
+simple_crypt.workspace = true
+rustc-serialize.workspace = true
+toml.workspace = true
+url.workspace = true
+shellexpand.workspace = true
+migration.workspace = true
+git-version.workspace = true
+http.workspace = true
+tokio-tungstenite.workspace = true
+sql-builder.workspace = true

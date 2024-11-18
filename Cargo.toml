@@ -1,0 +1,138 @@
+[workspace]
+members = ["automate", "openapi", "openapi-derive", "migration"]
+
+[package]
+name = "jiascheduler"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[profile.release]
+strip = true
+
+[[bin]]
+name = "jiascheduler-console"
+path = "src/bin/console.rs"
+
+[[bin]]
+name = "jiascheduler-agent"
+path = "src/bin/agent.rs"
+
+[[bin]]
+name = "jiascheduler-comet"
+path = "src/bin/comet.rs"
+
+[dependencies]
+poem.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio-tungstenite.workspace = true
+url.workspace = true
+anyhow.workspace = true
+local-ip-address.workspace = true
+moka.workspace = true
+serde_json.workspace = true
+bytes.workspace = true
+serde.workspace = true
+file-rotate.workspace = true
+tokio.workspace = true
+tokio-nsq.workspace = true
+cron.workspace = true
+nanoid.workspace = true
+redis.workspace = true
+futures.workspace = true
+redis-macros.workspace = true
+tokio-cron-scheduler.workspace = true
+uuid.workspace = true
+automate.workspace = true
+openapi.workspace = true
+watchexec-supervisor.workspace = true
+terminal-keycode = "1.1.1"
+
+
+[workspace.dependencies]
+# diesel = { version = "2.1.4", features = ["mysql"] }
+poem = { version = "3.1.1", features = [
+    "anyhow",
+    "redis-session",
+    "websocket",
+    "embed",
+    "static-files",
+] }
+poem-openapi = { version = "5.1.1", features = ["rapidoc"] }
+tokio = { version = "1.35.0", features = ["full"] }
+clap = { version = "4.5.17", features = ["derive"] }
+futures-util = "0.3.29"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+tokio-tungstenite = "0.23.1"
+url = "2.5.0"
+anyhow = "1.0.75"
+local-ip-address = "0.6.1"
+moka = { version = "0.12.1", features = ["future"] }
+serde_json = "1.0.108"
+bytes = "1.5.0"
+serde = "1.0.193"
+file-rotate = "0.7.5"
+openapi-derive = { path = "openapi-derive" }
+redis = { version = "0.27", features = [
+    "json",
+    "aio",
+    "tokio-comp",
+    "connection-manager",
+] }
+sea-orm = { version = "1.0.0", features = [
+    "macros",
+    "with-json",
+    "with-chrono",
+    "with-rust_decimal",
+    "with-bigdecimal",
+    "with-uuid",
+    "with-time",
+    "sqlx-mysql",
+    "runtime-tokio-native-tls",
+    "debug-print",
+    # "runtime-tokio-rustls",
+] }
+syn = "2.0.48"
+quote = "1.0.35"
+proc-macro2 = "1.0.76"
+thiserror = "1.0.56"
+tokio-nsq = "0.14.0"
+cron = "0.12.0"
+tokio-cron-scheduler = "0.13.0"
+nanoid = "0.4.0"
+uuid = "*"
+futures = "*"
+serde_repr = "0.1.18"
+russh = "0.44.0"
+russh-sftp = "2.0.1"
+russh-keys = "0.44.0"
+termion = "*"
+redis-macros = "0.4.0"
+config = "*"
+chrono = "*"
+rust-crypto = "*"
+automate = { path = "automate" }
+openapi = { path = "openapi" }
+migration = { path = "migration" }
+sea-query = "*"
+rust-embed = "*"
+reqwest = { version = "*", features = ["json"] }
+evalexpr = "^11.3.0"
+watchexec-supervisor = "*"
+sea-orm-adapter = "0.4.0"
+simple_crypt = "*"
+rustc-serialize = "0.3.25"
+async-trait = "0.1.81"
+toml = "0.8.19"
+shellexpand = "3.1.0"
+git-version = "0.3.9"
+users = "0.11.0"
+rand = "0.8.5"
+http = "1.1.0"
+sql-builder = "3.1.1"

@@ -1,0 +1,114 @@
+@baseUrl = http://localhost:9090
+@contentType = application/json
+
+# @name login
+POST {{baseUrl}}/api/user/login HTTP/1.1
+Content-Type: {{contentType}}
+
+
+{"username":"admin","password":"admin"}
+
+###
+
+@cookie = {{login.response.headers.Cookie}}
+
+GET {{baseUrl}}/api/instance/list
+Cookie: {{cookie}}
+
+###
+
+GET {{baseUrl}}/api/instance/user-server
+Cookie: {{cookie}}
+
+
+###
+
+POST  {{baseUrl}}/api/instance/granted-user
+Cookie: {{cookie}}
+Content-Type: {{contentType}}
+
+{
+    "instance_ids": [
+        1
+    ]
+}
+
+###
+
+GET {{baseUrl}}/api/user/list
+Cookie: {{cookie}}
+
+###
+
+POST  {{baseUrl}}/api/user/info
+Cookie: {{cookie}}
+
+###
+
+GET {{baseUrl}}/api/file/sftp/read-dir?ip=127.0.0.1&dir=/home/iwannay/Dev/log/weops-agent
+Cookie: {{cookie}}
+
+
+
+###
+
+GET {{baseUrl}}/api/file/sftp/download?ip=127.0.0.1&file_path=/home/iwannay/Dev/log/weops-agent/1.log
+Cookie: {{cookie}}
+
+
+###
+GET {{baseUrl}}/api/instance/user-server
+Cookie: {{cookie}}
+
+###
+GET {{baseUrl}}/api/migration/version/list?page=1
+
+###
+POST  {{baseUrl}}/api/migration/version/upgrade
+Cookie: {{cookie}}
+Content-Type: {{contentType}}
+
+{
+    "version":"v1.0.0"
+}
+
+###
+GET {{baseUrl}}/api/migration/database/get?name=jiascheduler
+
+###
+GET {{baseUrl}}/api/job/list?updated_time_range=2&updated_time_range=1
+
+###
+
+POST {{baseUrl}}/api/instance/save
+Cookie: {{cookie}}
+Content-Type: {{contentType}}
+
+{
+  "id": 0,
+  "ip": "172.22.110.232",
+  "namespace": "default",
+  "instance_group_id": 0,
+  "info": "localhost",
+  "status": 0,
+  "sys_user": "iwannay",
+  "password": "qqqqqq",
+  "ssh_port": 22
+}
+
+###
+GET {{baseUrl}}/api/instance/list
+
+
+###
+GET {{baseUrl}}/api/migration/conf/init
+
+###
+POST {{baseUrl}}/api/job/dashboard
+Cookie: {{cookie}}
+Content-Type: {{contentType}}
+
+{
+    "job_type":"bundle",
+    "filter_schedule_history":[]
+}
