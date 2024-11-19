@@ -189,8 +189,7 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES
-    (
+VALUES (
         'bash',
         'bash -c',
         'linux',
@@ -214,8 +213,8 @@ CREATE TABLE `job_exec_history` (
     `schedule_id` varchar(40) NOT NULL DEFAULT '' COMMENT '调度uuid',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
-    `bind_namespace` varchar(500) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
-    `bind_ip` varchar(200) NOT NULL DEFAULT '0' COMMENT 'job绑定的ip',
+    `bind_namespace` varchar(50) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
+    `bind_ip` varchar(20) NOT NULL DEFAULT '' COMMENT 'job绑定的ip',
     `bundle_script_result` JSON DEFAULT NULL COMMENT '脚本包执行结果',
     `exit_status` varchar(200) NOT NULL DEFAULT '' COMMENT '退出状态',
     `exit_code` int NOT NULL DEFAULT 0 COMMENT '退出码',
@@ -226,15 +225,15 @@ CREATE TABLE `job_exec_history` (
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
     KEY `idx_eid` (`eid`),
-    KEY `idx_ip` (`bind_namespace`,`bind_ip`)
+    KEY `idx_ip` (`bind_namespace`, `bind_ip`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业执行历史';
 
 DROP TABLE IF EXISTS `job_running_status`;
 
 CREATE TABLE `job_running_status` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
-    `bind_ip` varchar(200) NOT NULL DEFAULT '' COMMENT '绑定的ip',
-    `bind_namespace` varchar(500) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
+    `bind_ip` varchar(20) NOT NULL DEFAULT '' COMMENT '绑定的ip',
+    `bind_namespace` varchar(50) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
     `schedule_type` VARCHAR(10) NOT NULL DEFAULT 'once' COMMENT '调度类型 once timer flow',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
