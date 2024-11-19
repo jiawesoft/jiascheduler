@@ -21,10 +21,10 @@ jiascheduler 执行脚本的节点不需要都在同一个网络，其内部设�
 此时guest账号下并没有在线的节点，你可以自己部署Agent，部署成功的Agent将自动接入jiascheduler在线控制台，你可以在控制台查看Agent的状态，执行脚本，查看执行结果。
 
 ```bash
-## 仅使用作业调度能力
+# 仅使用作业调度能力
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest
 
-## 使用作业调度能力和webssh能力
+# 使用作业调度能力和webssh能力
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest --ssh-user your_ssh_user --ssh-port 22 --ssh-password your_ssh_user_password --namespace home
 ```
 
@@ -34,16 +34,16 @@ jiascheduler 执行脚本的节点不需要都在同一个网络，其内部设�
 
 1. 安装jiascheduler-console
 ```bash
-Usage: jiascheduler-console [OPTIONS]
+# Usage: jiascheduler-console [OPTIONS]
 
-Options:
-  -d, --debug                        if enable debug mode
-      --bind-addr <BIND_ADDR>        http server listen address, eg: "0.0.0.0:9090"
-      --config <FILE>                where to read config file, you can temporarily overwrite the configuration file using command-line parameters [default: ~/.jiascheduler/console.toml]
-  -h, --help                         Print help
-  -V, --version                      Print version
+# Options:
+#   -d, --debug                        if enable debug mode
+#       --bind-addr <BIND_ADDR>        http server listen address, eg: "0.0.0.0:9090"
+#       --config <FILE>                where to read config file, you can temporarily overwrite the configuration file using command-line parameters [default: ~/.jiascheduler/console.toml]
+#   -h, --help                         Print help
+#   -V, --version                      Print version
 
-## 首次安装需要指定--bind-addr，服务启动后访问0.0.0.0:9090，进入安装界面，按提示完成安装
+# 首次安装需要指定--bind-addr，服务启动后访问0.0.0.0:9090，进入安装界面，按提示完成安装
 ./jiascheduler-console --bind-addr 0.0.0.0:9090
 ```
 
@@ -51,55 +51,55 @@ Options:
 
 2. 安装jiaschduler-comet
 ```bash
-Usage: jiascheduler-comet [OPTIONS]
+# Usage: jiascheduler-comet [OPTIONS]
 
-Options:
-  -d, --debug            if enable debug mode
-  -b, --bind <BIND>      [default: 0.0.0.0:3000]
-  -r <REDIS_URL>         [default: redis://:wang@127.0.0.1]
-      --secret <SECRET>  [default: rYzBYE+cXbtdMg==]
-  -h, --help             Print help
-  -V, --version          Print version
+# Options:
+#   -d, --debug            if enable debug mode
+#   -b, --bind <BIND>      [default: 0.0.0.0:3000]
+#   -r <REDIS_URL>         [default: redis://:wang@127.0.0.1]
+#       --secret <SECRET>  [default: rYzBYE+cXbtdMg==]
+#   -h, --help             Print help
+#   -V, --version          Print version
 
-## 设置comet监听地址，secret则采用默认值
+# 设置comet监听地址，secret则采用默认值
 ./jiascheduler-comet --bind 0.0.0.0:3000
 ```
 
 3. 安装jiascheduler-agent
 ```bash
-Usage: jiascheduler-agent [OPTIONS]
+# Usage: jiascheduler-agent [OPTIONS]
 
-Options:
-  -d, --debug
-          If enable debug mode
-  -b, --bind <BIND>
-          [default: 0.0.0.0:3001]
-      --comet-addr <COMET_ADDR>
-          [default: ws://127.0.0.1:3000]
-      --output-dir <OUTPUT_DIR>
-          Directory for saving job execution logs [default: ./log]
-      --comet-secret <COMET_SECRET>
-          [default: rYzBYE+cXbtdMg==]
-  -n, --namespace <NAMESPACE>
-          [default: default]
-      --ssh-user <SSH_USER>
-          Set the login user of the instance for SSH remote connection
-      --ssh-password <SSH_PASSWORD>
-          Set the login user's password of the instance for SSH remote connection
-      --ssh-port <SSH_PORT>
-          Set the port of this instance for SSH remote connection
-      --assign-username <ASSIGN_USERNAME>
-          Assign this instance to a user and specify their username
-      --assign-password <ASSIGN_PASSWORD>
-          Assign this instance to a user and specify their password
-  -h, --help
-          Print help
-  -V, --version
-          Print version
+# Options:
+#   -d, --debug
+#           If enable debug mode
+#   -b, --bind <BIND>
+#           [default: 0.0.0.0:3001]
+#       --comet-addr <COMET_ADDR>
+#           [default: ws://127.0.0.1:3000]
+#       --output-dir <OUTPUT_DIR>
+#           Directory for saving job execution logs [default: ./log]
+#       --comet-secret <COMET_SECRET>
+#           [default: rYzBYE+cXbtdMg==]
+#   -n, --namespace <NAMESPACE>
+#           [default: default]
+#       --ssh-user <SSH_USER>
+#           Set the login user of the instance for SSH remote connection
+#       --ssh-password <SSH_PASSWORD>
+#           Set the login user's password of the instance for SSH remote connection
+#       --ssh-port <SSH_PORT>
+#           Set the port of this instance for SSH remote connection
+#       --assign-username <ASSIGN_USERNAME>
+#           Assign this instance to a user and specify their username
+#       --assign-password <ASSIGN_PASSWORD>
+#           Assign this instance to a user and specify their password
+#   -h, --help
+#           Print help
+#   -V, --version
+#           Print version
 
 
-## 使用作业调度能力和webssh能力
-## ssh相关配置也可以不传，稍后可以在控制台直接配置
+# 使用作业调度能力和webssh能力
+# ssh相关配置也可以不传，稍后可以在控制台直接配置
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest --ssh-user your_ssh_user --ssh-port 22 --ssh-password your_ssh_user_password --namespace home
 
 ```
