@@ -82,7 +82,7 @@ impl<'a> InstanceLogic<'a> {
 
         Instance::insert(instance::ActiveModel {
             ip: Set(agent_ip.clone()),
-            namespace: Set(namespace),
+            namespace: Set(namespace.clone()),
             status: Set(status),
             sys_user,
             password,
@@ -101,6 +101,7 @@ impl<'a> InstanceLogic<'a> {
             assign_user,
             Instance::find()
                 .filter(instance::Column::Ip.eq(agent_ip.clone()))
+                .filter(instance::Column::Namespace.eq(namespace.clone()))
                 .one(&self.ctx.db)
                 .await?,
         ) {
