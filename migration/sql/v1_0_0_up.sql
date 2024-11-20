@@ -92,9 +92,9 @@ CREATE TABLE `user_server` (
     `instance_group_id` BIGINT(20) NOT NULL DEFAULT '0' COMMENT '实例分组id',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_instance` (`user_id`, `instance_id`),
-    UNIQUE KEY `uk_user_instance_group` (
+    UNIQUE KEY `uk_user_instance` (
         `user_id`,
+        `instance_id`,
         `instance_group_id`
     )
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '节点';
