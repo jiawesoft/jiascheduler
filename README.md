@@ -24,7 +24,7 @@ At this time, there are no online nodes under the guest account. You can deploy 
 # Only use job scheduling capability
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest
 
-# Utilize job scheduling and websh capabilities
+# Utilize job scheduling and webssh capabilities
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest --ssh-user your_ssh_user --ssh-port 22 --ssh-password your_ssh_user_password --namespace home
 ```
 
@@ -99,7 +99,7 @@ If you need to log off the node, simply exit the agent
 #           Print version
 
 
-# Utilize job scheduling and websh capabilities
+# Utilize job scheduling and webssh capabilities
 # SSH related configurations can also be omitted and can be configured directly in the console later
 ./jiascheduler-agent --comet-addr ws://115.159.194.153:3000 --assign-username guest --assign-password guest --ssh-user your_ssh_user --ssh-port 22 --ssh-password your_ssh_user_password --namespace home
 
