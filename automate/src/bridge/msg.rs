@@ -117,6 +117,7 @@ pub struct RuntimeActionParams {
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub struct HeartbeatParams {
     pub namespace: String,
+    pub mac_addr: String,
     pub source_ip: String,
 }
 
@@ -135,6 +136,7 @@ pub struct UpdateJobParams {
     pub schedule_id: String,
     pub schedule_type: Option<ScheduleType>,
     pub base_job: BaseJob,
+    pub instance_id: String,
     pub bind_ip: String,
     pub bind_namespace: String,
     pub run_status: Option<RunStatus>,
@@ -207,6 +209,7 @@ pub struct AuthParams {
 pub struct AgentOnlineParams {
     pub agent_ip: String,
     pub namespace: String,
+    pub mac_addr: String,
     pub is_initialized: bool,
     pub secret_header: SecretHeader,
 }
@@ -214,5 +217,5 @@ pub struct AgentOnlineParams {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AgentOfflineParams {
     pub agent_ip: String,
-    pub namespace: String,
+    pub mac_addr: String,
 }

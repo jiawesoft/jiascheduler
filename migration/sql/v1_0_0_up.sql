@@ -26,8 +26,10 @@ DROP TABLE IF EXISTS `instance`;
 
 CREATE TABLE `instance` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `instance_id` varchar(40) NOT NULL DEFAULT '' COMMENT '实例id',
     `ip` varchar(100) NOT NULL DEFAULT '' COMMENT '节点ip',
     `namespace` varchar(100) NOT NULL DEFAULT 'default' COMMENT 'namespace',
+    `mac_addr` CHAR(20) NOT NULL DEFAULT '' COMMENT 'mac地址',
     `instance_group_id` BIGINT(20) unsigned NOT NULL DEFAULT '0' COMMENT '实例分组',
     `info` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '介绍',
     `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '节点状态: 0下线, 1上线',
@@ -37,7 +39,7 @@ CREATE TABLE `instance` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_ip` (`namespace`, `ip`)
+    UNIQUE KEY `uk_ip` (`mac_addr`, `ip`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '节点';
 
 DROP TABLE IF EXISTS `instance_group`;
@@ -58,7 +60,7 @@ DROP TABLE IF EXISTS `instance_role`;
 CREATE TABLE `instance_role` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
     `role_id` BIGINT(20) unsigned NOT NULL DEFAULT '0' COMMENT '角色id',
-    `instance_id` BIGINT(20) unsigned NOT NULL DEFAULT '0' COMMENT '实例id',
+    `instance_id` varchar(40) NOT NULL DEFAULT '' COMMENT '实例id',
     `instance_group_id` BIGINT(20) unsigned NOT NULL DEFAULT '0' COMMENT '实例分组id',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
@@ -88,7 +90,7 @@ DROP TABLE IF EXISTS `user_server`;
 CREATE TABLE `user_server` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
     `user_id` varchar(10) not null COMMENT '用户id',
-    `instance_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '实例id',
+    `instance_id` varchar(40) NOT NULL DEFAULT '' COMMENT '实例id',
     `instance_group_id` BIGINT(20) NOT NULL DEFAULT '0' COMMENT '实例分组id',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
@@ -189,8 +191,7 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES
-    (
+VALUES (
         'bash',
         'bash -c',
         'linux',
@@ -214,8 +215,7 @@ CREATE TABLE `job_exec_history` (
     `schedule_id` varchar(40) NOT NULL DEFAULT '' COMMENT '调度uuid',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
-    `bind_namespace` varchar(50) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
-    `bind_ip` varchar(20) NOT NULL DEFAULT '' COMMENT 'job绑定的ip',
+    `instance_id` varchar(40) NOT NULL DEFAULT '' COMMENT '实例id',
     `bundle_script_result` JSON DEFAULT NULL COMMENT '脚本包执行结果',
     `exit_status` varchar(200) NOT NULL DEFAULT '' COMMENT '退出状态',
     `exit_code` int NOT NULL DEFAULT 0 COMMENT '退出码',
@@ -233,8 +233,7 @@ DROP TABLE IF EXISTS `job_running_status`;
 
 CREATE TABLE `job_running_status` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
-    `bind_ip` varchar(20) NOT NULL DEFAULT '' COMMENT '绑定的ip',
-    `bind_namespace` varchar(50) NOT NULL DEFAULT 'default' COMMENT 'job绑定的namespace',
+    `instance_id` varchar(40) NOT NULL DEFAULT '' COMMENT '实例id',
     `schedule_type` VARCHAR(10) NOT NULL DEFAULT 'once' COMMENT '调度类型 once timer flow',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
@@ -254,8 +253,7 @@ CREATE TABLE `job_running_status` (
     UNIQUE KEY `uk_eid` (
         `eid`,
         `schedule_type`,
-        `bind_namespace`,
-        `bind_ip`
+        `instance_id`
     )
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业运行状态';
 

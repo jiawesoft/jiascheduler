@@ -221,13 +221,14 @@ impl<'a> SshLogic<'a> {
         &self,
         namespace: String,
         ip: String,
+        mac_addr: String,
         port: u16,
         dir: Option<String>,
         user: String,
         password: String,
     ) -> Result<Value> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
-        let pair = logic.get_link_pair(namespace.clone(), ip.clone()).await?;
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
         let api_url = format!("http://{}/sftp/tunnel/read-dir", pair.1.comet_addr);
 
         let body = automate::SftpReadDirRequest {
@@ -240,6 +241,7 @@ impl<'a> SshLogic<'a> {
                 dir,
                 port,
             },
+            mac_addr,
         };
         let mut ret = self
             .ctx
@@ -262,6 +264,7 @@ impl<'a> SshLogic<'a> {
         &self,
         namespace: String,
         ip: String,
+        mac_addr: String,
         port: u16,
         user: String,
         password: String,
@@ -269,12 +272,13 @@ impl<'a> SshLogic<'a> {
         data: Vec<u8>,
     ) -> Result<String> {
         let logic = automate::Logic::new(self.ctx.redis());
-        let pair = logic.get_link_pair(namespace.clone(), ip.clone()).await?;
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
         let api_url = format!("http://{}/sftp/tunnel/upload", pair.1.comet_addr);
 
         let body = automate::SftpUploadRequest {
             agent_ip: ip.clone(),
             namespace: namespace.clone(),
+            mac_addr,
             params: SftpUploadParams {
                 ip,
                 port,
@@ -351,18 +355,20 @@ impl<'a> SshLogic<'a> {
         &self,
         namespace: String,
         ip: String,
+        mac_addr: String,
         port: u16,
         user: String,
         password: String,
         filepath: String,
     ) -> Result<Vec<u8>> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
-        let pair = logic.get_link_pair(namespace.clone(), ip.clone()).await?;
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
         let api_url = format!("http://{}/sftp/tunnel/download", pair.1.comet_addr);
 
         let body = automate::SftpDownloadRequest {
             agent_ip: ip.clone(),
             namespace: namespace.clone(),
+            mac_addr,
             params: SftpDownloadParams {
                 ip,
                 port,

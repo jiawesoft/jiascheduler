@@ -9,6 +9,7 @@ use automate::{
 };
 
 use evalexpr::eval_boolean;
+use poem_openapi::param;
 use sea_orm::{
     ActiveValue::NotSet, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, QueryTrait, Set,
@@ -21,7 +22,7 @@ use tokio::fs;
 use tracing::error;
 
 use crate::{
-    entity::{self, executor, job, job_running_status, job_schedule_history, prelude::*},
+    entity::{self, executor, instance, job, job_running_status, job_schedule_history, prelude::*},
     file_name,
     logic::{executor::ExecutorLogic, job::types::DispatchResult},
     utils, IdGenerator,
@@ -164,11 +165,11 @@ impl<'a> JobLogic<'a> {
         let active_model = JobRunningStatus::insert(job_running_status::ActiveModel {
             schedule_type,
             eid: Set(params.base_job.eid.clone()),
-            bind_ip: Set(params.bind_ip.clone()),
+            instance_id: Set(params.instance_id.clone()),
             schedule_id: Set(params.schedule_id.clone()),
             schedule_status,
             run_status,
-            bind_namespace: Set(params.bind_namespace.clone()),
+
             start_time: Set(params.start_time),
             job_type: Set(params
                 .base_job
@@ -182,8 +183,7 @@ impl<'a> JobLogic<'a> {
             OnConflict::columns([
                 job_running_status::Column::Eid,
                 job_running_status::Column::ScheduleType,
-                job_running_status::Column::BindNamespace,
-                job_running_status::Column::BindIp,
+                job_running_status::Column::InstanceId,
             ])
             .values(update_values)
             .to_owned(),
@@ -227,8 +227,7 @@ impl<'a> JobLogic<'a> {
 
                 let ret = JobExecHistory::insert(entity::job_exec_history::ActiveModel {
                     schedule_id: Set(params.schedule_id),
-                    bind_ip: Set(params.bind_ip.clone()),
-                    bind_namespace: Set(params.bind_namespace.clone()),
+                    instance_id: Set(params.instance_id),
                     exit_status: Set(params.exit_status.clone().unwrap_or_default()),
                     exit_code: Set(params.exit_code.unwrap_or_default()),
                     output: Set(output),
@@ -485,7 +484,15 @@ impl<'a> JobLogic<'a> {
         &self,
         bind_namespace: String,
         bind_ip: String,
+        mac_address: String,
     ) -> Result<()> {
+        let ins = Instance::find()
+            .filter(instance::Column::MacAddr.eq(mac_address))
+            .filter(instance::Column::Ip.eq(bind_ip.clone()))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("cannot found instance"))?;
+
         let runnable: Vec<Option<serde_json::Value>> = JobRunningStatus::find()
             .select_only()
             .column(job_schedule_history::Column::DispatchData)
@@ -500,8 +507,7 @@ impl<'a> JobLogic<'a> {
                 ScheduleStatus::Scheduling.to_string(),
                 ScheduleStatus::Prepare.to_string(),
             ]))
-            .filter(job_running_status::Column::BindIp.eq(bind_ip.clone()))
-            .filter(job_running_status::Column::BindNamespace.eq(bind_namespace.clone()))
+            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
             .into_tuple()
             .all(&self.ctx.db)
             .await?;
@@ -520,7 +526,7 @@ impl<'a> JobLogic<'a> {
                 dispatch_params: dispatch_data.params.clone(),
             };
             let pair = match logic
-                .get_link_pair(bind_namespace.clone(), bind_ip.clone())
+                .get_link_pair(bind_ip.clone(), ins.mac_addr.clone())
                 .await
             {
                 Ok(v) => v,
@@ -711,11 +717,16 @@ impl<'a> JobLogic<'a> {
     pub async fn action(
         &self,
         schedule_id: String,
-        ip: String,
+        instance_id: String,
         updated_user: String,
-        namespace: String,
         action: JobAction,
     ) -> Result<Value> {
+        let ins = Instance::find()
+            .filter(instance::Column::InstanceId.eq(instance_id))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("cannot found instance"))?;
+
         let schedule_record =
             self.get_schedule(schedule_id.clone())
                 .await?
@@ -730,7 +741,6 @@ impl<'a> JobLogic<'a> {
 
         let dispatch_data = serde_json::from_value::<DispatchData>(dispatch_data)?;
 
-        // 已经调度过的任务，无需重复下载
         // if dispatch_data.params.base_job.upload_file.is_some() {
         //     let job_record = Job::find()
         //         .filter(entity::job::Column::Eid.eq(schedule_record.eid.clone()))
@@ -746,18 +756,17 @@ impl<'a> JobLogic<'a> {
         //     })
         // }
 
-        let mut body = automate::DispatchJobRequest {
-            agent_ip: ip.clone(),
-            namespace: namespace.clone(),
-            dispatch_params: dispatch_data.params.clone(),
-        };
-
-        body.dispatch_params.action = action.clone();
-
         let logic = automate::Logic::new(self.ctx.redis());
 
-        let pair = logic.get_link_pair(namespace.clone(), ip.clone()).await?;
+        let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
+
+        let mut body = automate::DispatchJobRequest {
+            agent_ip: ins.ip.clone(),
+            namespace: pair.1.namespace.clone(),
+            dispatch_params: dispatch_data.params.clone(),
+        };
+        body.dispatch_params.action = action.clone();
 
         let ret = self
             .ctx
@@ -794,7 +803,7 @@ impl<'a> JobLogic<'a> {
                 ..Default::default()
             })
             .filter(job_running_status::Column::ScheduleId.eq(schedule_id.clone()))
-            .filter(job_running_status::Column::BindIp.eq(ip.clone()))
+            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
             .exec(&self.ctx.db)
             .await?;
 

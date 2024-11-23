@@ -41,7 +41,6 @@ pub mod types {
 
     #[derive(Deserialize)]
     pub struct WebSshQuery {
-        pub namespace: String,
         pub cols: u32,
         pub rows: u32,
     }
@@ -49,15 +48,11 @@ pub mod types {
 
 #[handler]
 pub async fn webssh(
-    Path(ip): Path<String>,
+    Path(instance_id): Path<String>,
     state: Data<&AppState>,
     _session: &WebSession,
     user_info: Data<&logic::types::UserInfo>,
-    Query(types::WebSshQuery {
-        rows,
-        cols,
-        namespace,
-    }): Query<types::WebSshQuery>,
+    Query(types::WebSshQuery { rows, cols }): Query<types::WebSshQuery>,
     ws: WebSocket,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
@@ -77,11 +72,11 @@ pub async fn webssh(
 
         let instance_record = if can_manage_instance {
             svc.instance
-                .get_one_admin_server(namespace, Some(ip.clone()), None)
+                .get_one_admin_server(None, None, Some(instance_id))
                 .await
         } else {
             svc.instance
-                .get_one_user_server(namespace, Some(ip.clone()), None, user_id.clone())
+                .get_one_user_server(None, None, Some(instance_id), user_id.clone())
                 .await
         };
 
@@ -108,7 +103,7 @@ pub async fn webssh(
         let mut ssh = match Session::connect(ConnectParams {
             user: instance_record.sys_user.unwrap_or_default(),
             password,
-            addrs: (ip, instance_record.ssh_port.unwrap_or(22)),
+            addrs: (instance_record.ip, instance_record.ssh_port.unwrap_or(22)),
         })
         .await
         {
@@ -141,13 +136,9 @@ pub async fn proxy_webssh(
     req: &Request,
     headers: &HeaderMap,
     state: Data<&AppState>,
-    Path(ip): Path<String>,
+    Path(instance_id): Path<String>,
     user_info: Data<&logic::types::UserInfo>,
-    Query(types::WebSshQuery {
-        rows,
-        cols,
-        namespace,
-    }): Query<types::WebSshQuery>,
+    Query(types::WebSshQuery { rows, cols }): Query<types::WebSshQuery>,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
     let user_id = user_info.user_id.clone();
@@ -161,18 +152,6 @@ pub async fn proxy_webssh(
 
     ws.on_upgrade(move |socket| async move {
         let (mut clientsink, mut clientstream) = socket.split();
-        let pair = match Logic::new(state_clone.redis().clone())
-            .get_link_pair(namespace.clone(), ip.clone())
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                return_err_to_wsconn!(
-                    clientsink,
-                    format!("Notice: failed to get instance register info, {e}")
-                );
-            }
-        };
 
         let svc = state_clone.service();
 
@@ -188,11 +167,11 @@ pub async fn proxy_webssh(
 
         let instance_record = if can_manage_instance {
             svc.instance
-                .get_one_admin_server(namespace.clone(), Some(ip.clone()), None)
+                .get_one_admin_server(None, None, Some(instance_id))
                 .await
         } else {
             svc.instance
-                .get_one_user_server(namespace.clone(), Some(ip.clone()), None, user_id.clone())
+                .get_one_user_server(None, None, Some(instance_id), user_id.clone())
                 .await
         };
 
@@ -203,6 +182,19 @@ pub async fn proxy_webssh(
             }
             Err(e) => {
                 return_err_to_wsconn!(clientsink, format!("Notice: failed get instance, {e}"));
+            }
+        };
+
+        let pair = match Logic::new(state_clone.redis().clone())
+            .get_link_pair(&instance_record.ip, &instance_record.mac_addr)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return_err_to_wsconn!(
+                    clientsink,
+                    format!("Notice: failed to get instance register info, {e}")
+                );
             }
         };
 
@@ -229,16 +221,16 @@ pub async fn proxy_webssh(
         };
 
         let uri = format!(
-            "ws://{}/ssh/tunnel/{}?cols={}&rows={}&user={}&password={}&ip={}&port={}&namespace={}",
+            "ws://{}/ssh/tunnel?cols={}&rows={}&user={}&password={}&ip={}&port={}&namespace={}&mac_addr={}",
             pair.1.comet_addr,
-            ip,
             cols,
             rows,
             user,
             password,
             instance_record.ip,
             port,
-            instance_record.namespace
+            instance_record.namespace,
+            instance_record.mac_addr,
         );
 
         let mut ws_request = http::Request::builder()

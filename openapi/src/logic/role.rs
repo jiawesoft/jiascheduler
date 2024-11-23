@@ -196,7 +196,7 @@ impl<'a> RoleLogic<'a> {
         &self,
         role_id: u64,
         instance_group_ids: Option<Vec<u64>>,
-        instance_ids: Option<Vec<u64>>,
+        instance_ids: Option<Vec<String>>,
     ) -> Result<u64> {
         if let Some(instance_ids) = instance_ids {
             let data = instance_ids

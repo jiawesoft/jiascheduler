@@ -75,7 +75,7 @@ pub mod types {
 
     #[derive(Debug, Multipart)]
     pub struct SftpUploadPayload {
-        pub ip: String,
+        pub instance_id: String,
         pub file: Upload,
         pub namespace: String,
         pub file_path: String,
@@ -88,8 +88,7 @@ pub mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct SftpRemovePayload {
-        pub namespace: String,
-        pub ip: String,
+        pub instance_id: String,
         /// delete type, dir or file
         pub remove_type: String,
         pub path: String,
@@ -169,19 +168,13 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Query(namespace): Query<String>,
+        Query(instance_id): Query<String>,
         Query(file_path): Query<String>,
-        Query(ip): Query<String>,
     ) -> types::GetFileResponse {
         let svc = state.service();
         let instance_record = unwrap_or_response!(
             svc.instance
-                .get_one_user_server_with_permission(
-                    state.clone(),
-                    &user_info,
-                    namespace,
-                    ip.clone()
-                )
+                .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
                 .await
         )
         .map_or(Err(anyhow!("not found")), |v| Ok(v));
@@ -193,7 +186,7 @@ impl FileApi {
             SshSession::connect(ConnectParams {
                 user: instance_record.sys_user.unwrap_or_default(),
                 password,
-                addrs: (ip, 22),
+                addrs: (instance_record.ip, 22),
             })
             .await
         );
@@ -218,20 +211,20 @@ impl FileApi {
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
         Query(namespace): Query<String>,
-        Query(ip): Query<String>,
+        Query(instance_id): Query<String>,
         Query(dir): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, namespace, ip.clone())
+            .get_one_user_server_with_permission(state.clone(), &user_info, instance_id.clone())
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
         let password = state.decrypt(instance_record.password.unwrap_or_default())?;
         let ssh_session = SshSession::connect(ConnectParams {
             user: instance_record.sys_user.unwrap_or_default(),
             password,
-            addrs: (ip, 22),
+            addrs: (instance_record.ip, 22),
         })
         .await?;
 
@@ -292,29 +285,23 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-
-        upload: types::SftpUploadPayload,
+        req: types::SftpUploadPayload,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(
-                state.clone(),
-                &user_info,
-                upload.namespace,
-                upload.ip.clone(),
-            )
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
         let password = state.decrypt(instance_record.password.unwrap_or_default())?;
         let ssh_session = SshSession::connect(ConnectParams {
             user: instance_record.sys_user.unwrap_or_default(),
             password,
-            addrs: (upload.ip, 22),
+            addrs: (instance_record.ip, 22),
         })
         .await?;
 
-        let dir = std::path::Path::new(&upload.file_path)
+        let dir = std::path::Path::new(&req.file_path)
             .parent()
             .map(|v| v.to_str())
             .flatten();
@@ -328,10 +315,10 @@ impl FileApi {
             }
         }
 
-        let data = upload.file.into_vec().await.map_err(std_into_error)?;
+        let data = req.file.into_vec().await.map_err(std_into_error)?;
 
         let mut file = sftp_session
-            .create(upload.file_path)
+            .create(req.file_path)
             .await
             .map_err(std_into_error)?;
 
@@ -352,19 +339,14 @@ impl FileApi {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(
-                state.clone(),
-                &user_info,
-                req.namespace,
-                req.ip.clone(),
-            )
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
         let password = state.decrypt(instance_record.password.unwrap_or_default())?;
         let ssh_session = SshSession::connect(ConnectParams {
             user: instance_record.sys_user.unwrap_or_default(),
             password,
-            addrs: (req.ip, 22),
+            addrs: (instance_record.ip, 22),
         })
         .await?;
 
@@ -392,25 +374,19 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Query(namespace): Query<String>,
-        Query(ip): Query<String>,
+        Query(instance_id): Query<String>,
         Query(dir): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(
-                state.clone(),
-                &user_info,
-                namespace.clone(),
-                ip.clone(),
-            )
+            .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
         let user = instance_record
             .sys_user
             .filter(|v| v != "")
-            .ok_or(anyhow!("no sys user"))?;
+            .ok_or(anyhow!("no system user"))?;
         let password = instance_record
             .password
             .filter(|v| v != "")
@@ -423,7 +399,15 @@ impl FileApi {
         let password = state.decrypt(password)?;
         let ret = svc
             .ssh
-            .sftp_read_dir(namespace, ip, port, dir, user, password)
+            .sftp_read_dir(
+                instance_record.namespace,
+                instance_record.ip,
+                instance_record.mac_addr,
+                port,
+                dir,
+                user,
+                password,
+            )
             .await?;
 
         let dir_detail: types::ReadDirResp = serde_json::from_value(ret).map_err(std_into_error)?;
@@ -436,17 +420,12 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        upload: types::SftpUploadPayload,
+        req: types::SftpUploadPayload,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(
-                state.clone(),
-                &user_info,
-                upload.namespace.clone(),
-                upload.ip.clone(),
-            )
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
 
@@ -465,17 +444,18 @@ impl FileApi {
 
         let password = state.decrypt(password)?;
 
-        let data = upload.file.into_vec().await.map_err(std_into_error)?;
+        let data = req.file.into_vec().await.map_err(std_into_error)?;
 
         let ret = svc
             .ssh
             .sftp_upload(
-                upload.namespace,
-                instance_record.ip.clone(),
+                req.namespace,
+                instance_record.ip,
+                instance_record.mac_addr,
                 port,
                 user,
                 password,
-                upload.file_path,
+                req.file_path,
                 data,
             )
             .await?;
@@ -498,12 +478,7 @@ impl FileApi {
         let svc = state.service();
         let instance_record = svc
             .instance
-            .get_one_user_server_with_permission(
-                state.clone(),
-                &user_info,
-                req.namespace.clone(),
-                req.ip.clone(),
-            )
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
         let user = instance_record
@@ -524,7 +499,7 @@ impl FileApi {
         let ret = svc
             .ssh
             .sftp_remove(
-                req.namespace,
+                instance_record.namespace,
                 instance_record.ip.clone(),
                 port,
                 user,
@@ -542,19 +517,13 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Query(namespace): Query<String>,
         Query(file_path): Query<String>,
-        Query(ip): Query<String>,
+        Query(instance_id): Query<String>,
     ) -> types::GetFileResponse {
         let svc = state.service();
         let instance_record = unwrap_or_response!(
             svc.instance
-                .get_one_user_server_with_permission(
-                    state.clone(),
-                    &user_info,
-                    namespace.clone(),
-                    ip.clone()
-                )
+                .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
                 .await
         );
 
@@ -580,8 +549,9 @@ impl FileApi {
         let data = unwrap_or_response!(
             svc.ssh
                 .sftp_download(
-                    namespace.clone(),
-                    ip,
+                    instance_record.namespace,
+                    instance_record.ip,
+                    instance_record.mac_addr,
                     port,
                     user,
                     password,

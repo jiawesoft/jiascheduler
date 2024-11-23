@@ -40,7 +40,7 @@ pub mod types {
     #[derive(Object, Serialize, Default)]
     pub struct GrantedUserReq {
         pub user_id: Vec<String>,
-        pub instance_ids: Option<Vec<u64>>,
+        pub instance_ids: Option<Vec<String>>,
         pub instance_group_ids: Option<Vec<i64>>,
     }
 

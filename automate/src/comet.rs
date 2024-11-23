@@ -56,7 +56,7 @@ impl Comet {
     }
 
     pub async fn get_ssh_stream(&self, params: SshLoginParams) -> Option<WebSocketStream> {
-        let key = get_endpoint(params.namespace.clone(), params.ip.clone());
+        let key = get_endpoint(&params.ip, &params.mac_addr);
         debug!("get ssh stream {key}");
         if let Some(mut stream) = self.ssh_ws_streams.lock().await.remove(&key) {
             let res =
@@ -84,8 +84,9 @@ impl Comet {
         ip: String,
         client: Sender<(Msg, Option<Sender<MsgState>>)>,
     ) {
-        let key = get_endpoint(namespace.clone(), ip.clone());
-        info!("{key} online");
+        let mac_address = secret_header.mac_address.clone();
+        let key = get_endpoint(ip.clone(), mac_address.clone());
+        info!("{ip}:{namespace}:{} online", secret_header.mac_address);
 
         self.bridge.append_client(key, client).await;
         let ret = self
@@ -93,6 +94,7 @@ impl Comet {
             .agent_online(AgentOnlineParams {
                 is_initialized,
                 agent_ip: ip,
+                mac_addr: mac_address,
                 namespace,
                 secret_header,
             })
@@ -102,9 +104,9 @@ impl Comet {
         }
     }
 
-    pub async fn client_offline(&self, namespace: String, ip: String) {
+    pub async fn client_offline(&self, ip: String, mac_address: String) {
         {
-            let key = get_endpoint(namespace.clone(), ip.clone());
+            let key = get_endpoint(ip.clone(), mac_address.clone());
             self.ssh_ws_streams.lock().await.remove(&key);
         }
 
@@ -112,7 +114,7 @@ impl Comet {
             .logic
             .agent_offline(AgentOfflineParams {
                 agent_ip: ip,
-                namespace,
+                mac_addr: mac_address.clone(),
             })
             .await;
 

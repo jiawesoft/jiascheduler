@@ -235,8 +235,7 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct ActionReq {
         pub action: JobAction,
-        pub ip: String,
-        pub namespace: String,
+        pub instance_id: String,
         pub schedule_id: String,
     }
 
@@ -792,7 +791,7 @@ impl JobApi {
         user_info: Data<&logic::types::UserInfo>,
         #[oai(default)] Query(bind_namespace): Query<Option<String>>,
         #[oai(default)] Query(bind_ip): Query<Option<String>>,
-
+        #[oai(default)] Query(instance_id): Query<Option<String>>,
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
         Query(job_type): Query<String>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
@@ -828,6 +827,7 @@ impl JobApi {
                 eid,
                 schedule_name,
                 Some(user_info.username.clone()),
+                instance_id.filter(|v| v != ""),
                 bind_namespace,
                 bind_ip,
                 start_time_range,
@@ -842,7 +842,7 @@ impl JobApi {
             .map(|v| types::ExecRecord {
                 id: v.id,
                 schedule_id: v.schedule_id,
-                bind_ip: v.bind_ip,
+                bind_ip: v.ip,
                 exit_status: v.exit_status,
                 exit_code: v.exit_code,
                 output: v.output,
@@ -882,9 +882,8 @@ impl JobApi {
             .job
             .action(
                 req.schedule_id,
-                req.ip,
+                req.instance_id,
                 user_info.username.clone(),
-                req.namespace,
                 action,
             )
             .await?;

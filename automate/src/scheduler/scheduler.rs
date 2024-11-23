@@ -733,6 +733,7 @@ impl
         let client_key = self.client_key();
         let namespace = self.namespace.clone();
         let source_ip = get_local_ip().to_string();
+        let mac_addr = self.mac_address.clone();
         tokio::spawn(async move {
             loop {
                 sleep(Duration::from_secs(5)).await;
@@ -741,6 +742,7 @@ impl
                         &client_key,
                         MsgReqKind::HeartbeatRequest(HeartbeatParams {
                             namespace: namespace.clone(),
+                            mac_addr: mac_addr.clone(),
                             source_ip: source_ip.clone(),
                         }),
                     )

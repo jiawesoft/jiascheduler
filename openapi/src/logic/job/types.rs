@@ -31,7 +31,8 @@ pub struct RunStatusRelatedScheduleJobModel {
 pub struct ExecHistoryRelatedScheduleModel {
     pub id: u64,
     pub schedule_id: String,
-    pub bind_ip: String,
+    pub ip: String,
+    pub namespace: String,
     pub job_type: String,
     pub output: String,
     pub bundle_script_result: Option<serde_json::Value>,

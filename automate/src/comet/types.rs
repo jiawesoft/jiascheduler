@@ -24,6 +24,7 @@ pub struct RuntimeActionRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SftpReadDirRequest {
     pub agent_ip: String,
+    pub mac_addr: String,
     pub namespace: String,
     pub params: SftpReadDirParams,
 }
@@ -31,6 +32,7 @@ pub struct SftpReadDirRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SftpUploadRequest {
     pub agent_ip: String,
+    pub mac_addr: String,
     pub namespace: String,
     pub params: SftpUploadParams,
 }
@@ -45,12 +47,14 @@ pub struct SftpRemoveRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SftpDownloadRequest {
     pub agent_ip: String,
+    pub mac_addr: String,
     pub namespace: String,
     pub params: SftpDownloadParams,
 }
 
 #[derive(Serialize, Clone, FromRedisValue, Deserialize, ToRedisArgs)]
 pub struct LinkPair {
+    pub namespace: String,
     pub comet_addr: String,
 }
 impl ToString for LinkPair {
@@ -94,4 +98,5 @@ pub struct SshLoginParams {
     pub password: String,
     pub port: u16,
     pub ip: String,
+    pub mac_addr: String,
 }

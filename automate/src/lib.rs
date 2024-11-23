@@ -29,18 +29,9 @@ pub fn get_local_ip() -> IpAddr {
     ip.to_owned()
 }
 
-pub fn get_endpoint(namespace: impl Into<String>, ip: impl Into<String>) -> String {
-    let (namespace, ip) = (namespace.into(), ip.into());
-
-    if namespace != "" {
-        format!("jiascheduler:ins:{namespace}:{ip}")
-    } else {
-        format!("jiascheduler:ins:{ip}")
-    }
-}
-
-pub fn get_nanid(prefix: &str) -> String {
-    format!("{prefix}-{}", nanoid!(10)).into()
+pub fn get_endpoint(ip: impl Into<String>, mac_address: impl Into<String>) -> String {
+    let (ip, mac_address) = (ip.into(), mac_address.into());
+    format!("jiascheduler:ins:{ip}:{mac_address}")
 }
 
 pub fn get_http_client() -> Client {

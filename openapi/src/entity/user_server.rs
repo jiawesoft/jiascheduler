@@ -9,7 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
     pub user_id: String,
-    pub instance_id: u64,
+    pub instance_id: String,
     pub instance_group_id: i64,
     pub created_time: DateTimeUtc,
 }

@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
                 .data(comet.clone()),
         )
         .at(
-            "/ssh/tunnel/:ip",
+            "/ssh/tunnel",
             handler::proxy_ssh
                 .with(bearer_auth(&args.secret))
                 .data(comet.clone()),

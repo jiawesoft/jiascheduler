@@ -87,6 +87,7 @@ impl IdGenerator {
     const TIMER_JOB_PREFIX: &'static str = "t";
     const FLOW_JOB_PREFIX: &'static str = "f";
     const SCHEDULE_ID_PREFIX: &'static str = "s";
+    const INSTANCE_PREFIX: &'static str = "i";
 
     pub fn get_job_eid() -> String {
         Self::get_id(Self::JOB_PREFIX)
@@ -105,6 +106,10 @@ impl IdGenerator {
     }
     pub fn get_schedule_uid() -> String {
         Self::get_id(Self::SCHEDULE_ID_PREFIX)
+    }
+
+    pub fn get_instance_uid() -> String {
+        Self::get_id(Self::INSTANCE_PREFIX)
     }
 
     fn get_id(prefix: &str) -> String {

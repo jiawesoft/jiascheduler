@@ -31,23 +31,25 @@ impl Logic {
         }
     }
 
-    pub fn get_agent_key(&self, namespace: impl Into<String>, ip: impl Into<String>) -> String {
-        get_endpoint(namespace, ip)
+    pub fn get_agent_key(&self, ip: impl Into<String>, mac_addr: impl Into<String>) -> String {
+        get_endpoint(ip, mac_addr)
     }
 
     async fn set_link_pair<T: Into<String>>(
         &self,
         namespace: T,
-        agent_ip: T,
+        ip: T,
+        mac_addr: T,
         port: u16,
     ) -> Result<()> {
         let mut conn = self.get_async_connection().await?;
-        let key = self.get_agent_key(namespace, agent_ip);
+        let key = self.get_agent_key(ip.into(), mac_addr.into());
         let ret = conn
             .set_ex(
                 key,
                 types::LinkPair {
                     comet_addr: format!("{}:{}", self.local_ip.to_string(), port),
+                    namespace: namespace.into(),
                 },
                 10,
             )
@@ -57,16 +59,16 @@ impl Logic {
 
     pub async fn get_link_pair<T: Into<String>>(
         &self,
-        namespace: T,
         agent_ip: T,
+        mac_addr: T,
     ) -> Result<(String, types::LinkPair)> {
-        let (namespace, agent_ip) = (namespace.into(), agent_ip.into());
+        let (agent_ip, mac_addr) = (agent_ip.into(), mac_addr.into());
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
-        let key = self.get_agent_key(namespace.clone(), agent_ip.clone());
+        let key = self.get_agent_key(agent_ip.clone(), mac_addr.clone());
         let val = conn.get(key.clone()).await?;
 
         if val == redis::Value::Nil {
-            anyhow::bail!("Agent {agent_ip}:{namespace} not registered, please deploy first");
+            anyhow::bail!("Agent {agent_ip}:{mac_addr} not registered, please deploy first");
         }
 
         Ok((key.clone(), LinkPair::from_redis_value(&val)?))
@@ -85,7 +87,7 @@ impl Logic {
         &self,
         req: types::SftpReadDirRequest,
     ) -> Result<(String, MsgReqKind)> {
-        let key = self.get_agent_key(&req.namespace, &req.agent_ip);
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
         let msg = MsgReqKind::SftpReadDirRequest(req.params);
         Ok((key, msg))
     }
@@ -135,7 +137,8 @@ impl Logic {
     }
 
     pub async fn heartbeat(&self, v: HeartbeatParams, port: u16) -> Result<Value> {
-        self.set_link_pair(&v.namespace, &v.source_ip, port).await?;
+        self.set_link_pair(&v.namespace, &v.source_ip, &v.mac_addr, port)
+            .await?;
         self.bus.heartbeat(v).await?;
         Ok(json!({"data":"heartbeat success"}))
     }

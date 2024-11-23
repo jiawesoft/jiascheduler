@@ -22,10 +22,7 @@ async fn heartbeat(state: AppState, msg: HeartbeatParams) -> Result<()> {
 }
 
 async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
-    info!(
-        "namespace: {}, agent_ip: {} online",
-        msg.namespace, msg.agent_ip
-    );
+    info!("{}:{}:{} online", msg.agent_ip, msg.namespace, msg.mac_addr);
     let mut svc = state.service();
     if !msg.is_initialized {
         info!(
@@ -34,7 +31,11 @@ async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
         );
         if let Err(e) = svc
             .job
-            .dispatch_runnable_job_to_endpoint(msg.namespace.clone(), msg.agent_ip.clone())
+            .dispatch_runnable_job_to_endpoint(
+                msg.namespace.clone(),
+                msg.agent_ip.clone(),
+                msg.mac_addr.clone(),
+            )
             .await
         {
             error!(
@@ -47,8 +48,9 @@ async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
     Ok(svc
         .instance
         .update_status(
-            msg.namespace,
+            Some(msg.namespace),
             msg.agent_ip,
+            msg.mac_addr,
             1,
             msg.secret_header.assign_user,
             msg.secret_header.ssh_connection_params,
@@ -57,15 +59,12 @@ async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
 }
 
 async fn agent_offline(state: AppState, msg: AgentOfflineParams) -> Result<()> {
-    info!(
-        "namespace: {}, agent_ip: {} offline",
-        msg.namespace, msg.agent_ip
-    );
+    info!("{}:{} offline", msg.agent_ip, msg.mac_addr,);
 
     Ok(state
         .service()
         .instance
-        .update_status(msg.namespace, msg.agent_ip, 0, None, None)
+        .update_status(None, msg.agent_ip, msg.mac_addr, 0, None, None)
         .await?)
 }
 

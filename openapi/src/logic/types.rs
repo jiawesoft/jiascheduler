@@ -45,6 +45,7 @@ pub struct UserRecord {
 pub struct UserServer {
     pub id: u64,
     pub ip: String,
+    pub mac_addr: String,
     pub info: String,
     pub namespace: String,
     pub sys_user: Option<String>,

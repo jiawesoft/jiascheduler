@@ -25,6 +25,7 @@ use crate::entity::user;
 use crate::entity::{self, instance, instance_group, prelude::*, user_server};
 use crate::state::AppContext;
 use crate::state::AppState;
+use crate::IdGenerator;
 use crate::APP;
 use anyhow::Result;
 
@@ -51,8 +52,9 @@ impl<'a> InstanceLogic<'a> {
 
     pub async fn update_status(
         &mut self,
-        namespace: String,
+        namespace: Option<String>,
         agent_ip: String,
+        mac_addr: String,
         status: i8,
         assign_user: Option<(String, String)>,
         ssh_connection_option: Option<SshConnectionOption>,
@@ -66,8 +68,8 @@ impl<'a> InstanceLogic<'a> {
             None => (NotSet, NotSet, NotSet),
         };
 
-        let updated = if sys_user.is_set() {
-            OnConflict::columns([instance::Column::Namespace, instance::Column::Ip])
+        let mut updated = if sys_user.is_set() {
+            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
                 .value(instance::Column::UpdatedTime, Local::now())
                 .value(instance::Column::Status, status)
                 .value(instance::Column::SysUser, sys_user.clone().unwrap())
@@ -75,16 +77,24 @@ impl<'a> InstanceLogic<'a> {
                 .value(instance::Column::SshPort, ssh_port.clone().unwrap())
                 .to_owned()
         } else {
-            OnConflict::columns([instance::Column::Namespace, instance::Column::Ip])
+            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
                 .value(instance::Column::UpdatedTime, Local::now())
                 .value(instance::Column::Status, status)
                 .to_owned()
         };
 
+        if let Some(ref namespace) = namespace {
+            updated.value(instance::Column::Namespace, namespace.clone());
+        }
+
+        let instance_id = IdGenerator::get_instance_uid();
+
         Instance::insert(instance::ActiveModel {
             ip: Set(agent_ip.clone()),
-            namespace: Set(namespace.clone()),
+            namespace: namespace.clone().map_or(NotSet, |v| Set(v)),
             status: Set(status),
+            instance_id: Set(instance_id),
+            mac_addr: Set(mac_addr),
             sys_user,
             password,
             ssh_port,
@@ -117,7 +127,7 @@ impl<'a> InstanceLogic<'a> {
 
                 UserServer::insert(user_server::ActiveModel {
                     user_id: Set(u.user_id),
-                    instance_id: Set(ins.id),
+                    instance_id: Set(ins.instance_id),
                     ..Default::default()
                 })
                 .on_conflict(
@@ -307,7 +317,7 @@ impl<'a> InstanceLogic<'a> {
     pub async fn granted_user(
         &self,
         user_id: Vec<String>,
-        instance_ids: Option<Vec<u64>>,
+        instance_ids: Option<Vec<String>>,
         instance_group_ids: Option<Vec<i64>>,
     ) -> Result<u64> {
         let mut models = vec![];
@@ -813,9 +823,9 @@ impl<'a> InstanceLogic<'a> {
 
     pub async fn get_one_admin_server(
         &self,
-        namespace: String,
+        namespace: Option<String>,
         ip: Option<String>,
-        id: Option<u64>,
+        instance_id: Option<String>,
     ) -> Result<Option<types::UserServer>> {
         let model = Instance::find()
             .select_only()
@@ -823,6 +833,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
+            .column(instance::Column::MacAddr)
             .column(instance::Column::Password)
             .column(instance::Column::SysUser)
             .column(instance::Column::SshPort)
@@ -838,8 +849,12 @@ impl<'a> InstanceLogic<'a> {
                     .to(instance::Column::InstanceGroupId)
                     .into(),
             )
-            .filter(instance::Column::Namespace.eq(namespace))
-            .apply_if(id, |query, v| query.filter(instance::Column::Id.eq(v)))
+            .apply_if(namespace, |query, v| {
+                query.filter(instance::Column::Namespace.eq(v))
+            })
+            .apply_if(instance_id, |query, v| {
+                query.filter(instance::Column::InstanceId.eq(v))
+            })
             .apply_if(ip, |query, v| {
                 query.filter(instance::Column::Ip.contains(v))
             });
@@ -850,15 +865,16 @@ impl<'a> InstanceLogic<'a> {
 
     pub async fn get_one_user_server(
         &self,
-        namespace: String,
+        namespace: Option<String>,
         ip: Option<String>,
-        id: Option<u64>,
+        instance_id: Option<String>,
         user_id: String,
     ) -> Result<Option<types::UserServer>> {
         let mut model = User::find()
             .select_only()
             .column(instance::Column::Id)
             .column(instance::Column::Ip)
+            .column(instance::Column::MacAddr)
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::SysUser)
@@ -898,7 +914,12 @@ impl<'a> InstanceLogic<'a> {
                     .into(),
             )
             .filter(user::Column::UserId.eq(user_id.clone()))
-            .filter(instance::Column::Namespace.eq(namespace.clone()))
+            .apply_if(instance_id.clone(), |query, v| {
+                query.filter(instance::Column::InstanceId.eq(v))
+            })
+            .apply_if(namespace.clone(), |query, v| {
+                query.filter(instance::Column::Namespace.eq(v))
+            })
             .as_query()
             .to_owned();
 
@@ -940,17 +961,18 @@ impl<'a> InstanceLogic<'a> {
                         .into(),
                 )
                 .filter(user_server::Column::UserId.eq(user_id.clone()))
-                .filter(instance::Column::Namespace.eq(namespace.clone()))
+                .apply_if(namespace, |query, v| {
+                    query.filter(instance::Column::Namespace.eq(v))
+                })
+                .apply_if(instance_id.clone(), |query, v| {
+                    query.filter(instance::Column::InstanceId.eq(v))
+                })
                 .as_query()
                 .clone(),
         );
 
         if let Some(ip) = ip {
             model.and_where(instance::Column::Ip.contains(ip));
-        }
-
-        if let Some(id) = id {
-            model.and_where(instance::Column::Id.eq(id));
         }
 
         let (sql, vals) = model.clone().build(MysqlQueryBuilder);
@@ -970,21 +992,15 @@ impl<'a> InstanceLogic<'a> {
         &self,
         state: AppState,
         user_info: &types::UserInfo,
-        namespace: String,
-        ip: String,
+        instance_id: String,
     ) -> Result<Option<types::UserServer>> {
         let can_manage_instance = state.can_manage_instance(&user_info.user_id).await?;
         let instance_record = if can_manage_instance {
-            self.get_one_admin_server(namespace, Some(ip.clone()), None)
+            self.get_one_admin_server(None, None, Some(instance_id))
                 .await
         } else {
-            self.get_one_user_server(
-                namespace,
-                Some(ip.clone()),
-                None,
-                user_info.user_id.to_string(),
-            )
-            .await
+            self.get_one_user_server(None, None, Some(instance_id), user_info.user_id.to_string())
+                .await
         };
 
         instance_record

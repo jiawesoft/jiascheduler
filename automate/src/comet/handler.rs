@@ -179,6 +179,7 @@ pub fn ws(
 
         let (namespace, agent_ip) = (client.get_namespace(), client.get_local_ip());
 
+        let mac_address = secret_header.mac_address.clone();
         comet
             .client_online(
                 secret_header,
@@ -194,7 +195,7 @@ pub fn ws(
             .recv(|msg| async move { ncomet.handle(msg).await })
             .await;
 
-        comet.client_offline(namespace, agent_ip).await;
+        comet.client_offline(agent_ip, mac_address).await;
 
         client.drop().await;
     })
@@ -303,7 +304,6 @@ pub async fn ssh_register(
 #[handler]
 pub async fn proxy_ssh(
     webssh: WebSocket,
-    Path(_ip): Path<String>,
     Query(login_params): Query<SshLoginParams>,
     comet: Data<&Comet>,
 ) -> impl IntoResponse {

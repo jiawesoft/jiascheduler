@@ -129,8 +129,8 @@ impl<W, R> WsClient<W, R> {
 
     pub fn key(&self) -> String {
         get_endpoint(
-            self.namespace.as_ref().unwrap(),
-            self.local_ip.unwrap().to_string(),
+            self.local_ip.as_ref().unwrap().to_string(),
+            self.mac_address.as_ref().unwrap(),
         )
     }
 
