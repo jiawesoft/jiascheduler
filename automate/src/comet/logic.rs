@@ -60,12 +60,13 @@ impl Logic {
         namespace: T,
         agent_ip: T,
     ) -> Result<(String, types::LinkPair)> {
+        let (namespace, agent_ip) = (namespace.into(), agent_ip.into());
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
-        let key = self.get_agent_key(namespace, agent_ip);
+        let key = self.get_agent_key(namespace.clone(), agent_ip.clone());
         let val = conn.get(key.clone()).await?;
 
         if val == redis::Value::Nil {
-            anyhow::bail!("Agent not registered, please deploy first");
+            anyhow::bail!("Agent {agent_ip}:{namespace} not registered, please deploy first");
         }
 
         Ok((key.clone(), LinkPair::from_redis_value(&val)?))
