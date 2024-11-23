@@ -30,6 +30,7 @@ use anyhow::Result;
 
 use super::job::types::InstanceStatSummary;
 use super::types;
+use super::user::UserLogic;
 
 #[derive(Debug, FromQueryResult)]
 struct InstanceStatusCount {
@@ -110,6 +111,10 @@ impl<'a> InstanceLogic<'a> {
                 .one(&self.ctx.db)
                 .await?
             {
+                if UserLogic::encry_password(assign_user.1, u.salt) != u.password {
+                    anyhow::bail!("invalid assign user password")
+                }
+
                 UserServer::insert(user_server::ActiveModel {
                     user_id: Set(u.user_id),
                     instance_id: Set(ins.id),

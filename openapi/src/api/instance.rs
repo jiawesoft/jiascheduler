@@ -160,9 +160,12 @@ impl InstanceApi {
             validator(maximum(value = "10000"))
         )]
         Query(page): Query<u64>,
-        _user_info: Data<&logic::types::UserInfo>,
+        user_info: Data<&logic::types::UserInfo>,
     ) -> Result<ApiStdResponse<types::QueryInstanceResp>> {
         let svc = state.service();
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
 
         let ret = match role_id {
             Some(role_id) if role_id > 0 && !svc.role.is_admin(role_id).await? => {
@@ -339,10 +342,13 @@ impl InstanceApi {
         &self,
         state: Data<&AppState>,
         _session: &Session,
-        _user_info: Data<&logic::types::UserInfo>,
+        user_info: Data<&logic::types::UserInfo>,
         Json(req): Json<types::SaveInstanceReq>,
     ) -> Result<ApiStdResponse<types::SaveInstanceResp>> {
         let svc = state.service();
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
 
         let password = req
             .password
@@ -381,7 +387,9 @@ impl InstanceApi {
         Json(req): Json<types::SaveInstanceGroupReq>,
     ) -> Result<ApiStdResponse<types::SaveInstanceGroupResp>> {
         let svc = state.service();
-        // let user_id = user_info.user_id.clone();
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
         svc.instance
             .save_group(instance_group::ActiveModel {
                 id: req.id.filter(|&v| v != 0).map_or(NotSet, |v| Set(v)),
@@ -414,9 +422,12 @@ impl InstanceApi {
             validator(maximum(value = "10000"))
         )]
         Query(page): Query<u64>,
-        _user_info: Data<&logic::types::UserInfo>,
+        user_info: Data<&logic::types::UserInfo>,
     ) -> api_response!(types::QueryInstanceGroupResp) {
         let svc = state.service();
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
 
         let ret = if let Some(role_id) = role_id {
             svc.instance
@@ -462,9 +473,13 @@ impl InstanceApi {
         &self,
         state: Data<&AppState>,
         _session: &Session,
+        user_info: Data<&logic::types::UserInfo>,
         Json(req): Json<types::DeleteInstanceGroupReq>,
     ) -> api_response!(types::DeleteInstanceGroupResp) {
         let svc = state.service();
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
         let ret = svc.instance.delete_group(req.id).await?;
         return_ok!(types::DeleteInstanceGroupResp { result: ret })
     }
