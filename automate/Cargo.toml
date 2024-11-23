@@ -39,3 +39,4 @@ russh.workspace = true
 russh-keys.workspace = true
 russh-sftp.workspace = true
 serde_repr.workspace = true
+mac_address.workspace = true

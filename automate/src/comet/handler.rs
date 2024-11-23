@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use futures::SinkExt;
 use futures_util::{
@@ -87,6 +87,7 @@ pub mod middleware {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SecretHeader {
+    pub mac_address: String,
     pub assign_user: Option<(String, String)>,
     pub ssh_connection_params: Option<SshConnectionOption>,
 }
@@ -95,6 +96,11 @@ pub struct SecretHeader {
 impl<'a> FromRequest<'a> for SecretHeader {
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         let header = req.headers();
+
+        let mac_address = header
+            .get("X-Mac-Address")
+            .and_then(|value| value.to_str().ok())
+            .ok_or(anyhow!("mac address not found"))?;
         let username = header
             .get("X-Assign-Username")
             .and_then(|value| value.to_str().ok());
@@ -121,10 +127,12 @@ impl<'a> FromRequest<'a> for SecretHeader {
             (Some(u), Some(p)) => SecretHeader {
                 assign_user: Some((u.to_string(), p.to_string())),
                 ssh_connection_params: None,
+                mac_address: mac_address.to_string(),
             },
             _ => SecretHeader {
                 assign_user: None,
                 ssh_connection_params: None,
+                mac_address: mac_address.to_string(),
             },
         };
 

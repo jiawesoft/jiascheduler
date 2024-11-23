@@ -10,7 +10,7 @@ use crate::{
         SftpRemoveParams, SftpUploadParams, UpdateJobParams,
     },
     comet::types::SshLoginParams,
-    get_comet_addr, get_local_ip,
+    get_comet_addr, get_local_ip, get_mac_address,
     scheduler::types::JobAction,
     set_comet_addr,
     ssh::{self, ConnectParams, Session},
@@ -158,6 +158,7 @@ impl React {
 pub struct Scheduler<T> {
     comet_addr: Vec<String>,
     comet_secret: String,
+    mac_address: String,
     output_dir: String,
     is_initialized: bool,
     client: Option<T>,
@@ -188,6 +189,7 @@ impl
             comet_secret,
             output_dir,
             client: None,
+            mac_address: get_mac_address().expect("failed get mac address"),
             is_initialized: false,
             namespace,
             bridge: Bridge::new(),
@@ -320,7 +322,8 @@ impl
         let mut client = WsClient::new(Some(self.bridge.clone()))
             .set_namespace(self.namespace.clone())
             .set_local_ip(local_ip.clone())
-            .set_comet_secret(self.comet_secret.clone());
+            .set_comet_secret(self.comet_secret.clone())
+            .set_mac_address(self.mac_address.clone());
 
         if let Some(ref opt) = self.assign_user_option {
             client = client.set_assign_user(opt.to_owned());

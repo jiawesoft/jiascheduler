@@ -1,3 +1,4 @@
+use anyhow::Result;
 use local_ip_address::local_ip;
 use nanoid::nanoid;
 use std::net::IpAddr;
@@ -59,6 +60,19 @@ pub fn set_comet_addr(addr: impl Into<String>) {
 
 pub fn get_comet_addr() -> Option<String> {
     unsafe { COMET_ADDR.get().cloned() }
+}
+
+pub fn get_mac_address() -> Result<String> {
+    match mac_address::get_mac_address()? {
+        Some(ma) => Ok(ma.to_string()),
+        None => anyhow::bail!("No MAC address found."),
+    }
+}
+
+#[test]
+fn test_get_mac_address() {
+    let ret = get_mac_address();
+    assert_eq!(ret.is_ok(), true);
 }
 
 /// convert DateTime<Utc> to local time(String)

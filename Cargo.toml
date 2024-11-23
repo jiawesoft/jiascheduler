@@ -115,7 +115,7 @@ russh-keys = "0.44.0"
 termion = "*"
 redis-macros = "0.4.0"
 config = "*"
-chrono = "*"
+chrono = { version = "0.4.38", features = ["serde"] }
 rust-crypto = "*"
 automate = { path = "automate" }
 openapi = { path = "openapi" }
@@ -136,3 +136,4 @@ users = "0.11.0"
 rand = "0.8.5"
 http = "1.1.0"
 sql-builder = "3.1.1"
+mac_address = "1.1.7"

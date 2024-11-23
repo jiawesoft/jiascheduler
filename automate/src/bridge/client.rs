@@ -42,6 +42,7 @@ pub struct WsClient<W, R> {
     ws_writer: Option<W>,
     ws_reader: Option<R>,
     comet_secret: Option<String>,
+    mac_address: Option<String>,
     local_ip: Option<IpAddr>,
     namespace: Option<String>,
     is_initialized: Option<bool>,
@@ -64,6 +65,7 @@ impl<W, R> WsClient<W, R> {
             bridge,
             local_ip: None,
             namespace: None,
+            mac_address: None,
             comet_secret: None,
             is_initialized: None,
             msg_box: cache,
@@ -87,6 +89,11 @@ impl<W, R> WsClient<W, R> {
 
     pub fn set_comet_secret(mut self, comet_secret: String) -> Self {
         self.comet_secret = Some(comet_secret);
+        self
+    }
+
+    pub fn set_mac_address(mut self, mac_address: String) -> Self {
+        self.mac_address = Some(mac_address);
         self
     }
 
@@ -325,6 +332,9 @@ impl
         } else {
             ClientRequestBuilder::new(u)
         };
+        if let Some(ref mac_address) = self.mac_address {
+            req = req.with_header("X-Mac-Address", mac_address)
+        }
 
         if let Some(ref assign_user) = self.assign_user_option {
             req = req
