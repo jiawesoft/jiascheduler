@@ -65,7 +65,7 @@ impl Bridge {
             None => return Err(anyhow::anyhow!("not found client {}", key)),
         }
 
-        let resp = timeout(Duration::from_secs(10), rx.recv()).await?.unwrap();
+        let resp = timeout(Duration::from_secs(90), rx.recv()).await?.unwrap();
 
         return match resp {
             MsgState::Completed(v) => Ok(v),

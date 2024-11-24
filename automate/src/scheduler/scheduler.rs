@@ -158,7 +158,7 @@ impl React {
 pub struct Scheduler<T> {
     comet_addr: Vec<String>,
     comet_secret: String,
-    mac_address: String,
+    mac_addr: String,
     output_dir: String,
     is_initialized: bool,
     client: Option<T>,
@@ -189,7 +189,7 @@ impl
             comet_secret,
             output_dir,
             client: None,
-            mac_address: get_mac_address().expect("failed get mac address"),
+            mac_addr: get_mac_address().expect("failed get mac address"),
             is_initialized: false,
             namespace,
             bridge: Bridge::new(),
@@ -199,7 +199,7 @@ impl
     }
 
     pub fn client_key(&self) -> String {
-        get_endpoint(get_local_ip().to_string(), self.mac_address.clone())
+        get_endpoint(get_local_ip().to_string(), self.mac_addr.clone())
     }
 
     pub fn get_comet_addr(&mut self) -> String {
@@ -212,7 +212,7 @@ impl
 
     pub async fn ssh_poll(&mut self) {
         let comet_secret = self.comet_secret.clone();
-        let mac_addr = self.mac_address.clone();
+        let mac_addr = self.mac_addr.clone();
 
         tokio::spawn(async move {
             loop {
@@ -249,7 +249,7 @@ impl
         let (mut sink, mut stream) = ws_stream.split();
 
         let login_params = loop {
-            let next_stream = match timeout(Duration::from_secs(60), stream.next()).await {
+            let next_stream = match timeout(Duration::from_secs(90), stream.next()).await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!("timeout {e}, retry!");
@@ -319,18 +319,20 @@ impl
         let addr = self.get_comet_addr();
         let local_ip = get_local_ip();
 
-        let mut client = WsClient::new(Some(self.bridge.clone()))
+        let mut client = WsClient::new(Some(self.bridge.clone()));
+
+        client
             .set_namespace(self.namespace.clone())
             .set_local_ip(local_ip.clone())
             .set_comet_secret(self.comet_secret.clone())
-            .set_mac_address(self.mac_address.clone());
+            .set_mac_address(self.mac_addr.clone());
 
         if let Some(ref opt) = self.assign_user_option {
-            client = client.set_assign_user(opt.to_owned());
+            client.set_assign_user(opt.to_owned());
         }
 
         if let Some(ref opt) = self.ssh_connection_option {
-            client = client.set_ssh_connection(opt.to_owned());
+            client.set_ssh_connection(opt.to_owned());
         }
 
         let ws_addr = format!("{}/evt/{}", addr, self.namespace);
@@ -740,10 +742,9 @@ impl
         let client_key = self.client_key();
         let namespace = self.namespace.clone();
         let source_ip = get_local_ip().to_string();
-        let mac_addr = self.mac_address.clone();
+        let mac_addr = self.mac_addr.clone();
         tokio::spawn(async move {
             loop {
-                sleep(Duration::from_secs(5)).await;
                 match bridge
                     .send_msg(
                         &client_key,
@@ -758,6 +759,7 @@ impl
                     Ok(_v) => {}
                     Err(e) => error!("failed heartbeat {e}, client_key:{client_key}"),
                 }
+                sleep(Duration::from_secs(60)).await;
                 debug!("heartbeat!")
             }
         });

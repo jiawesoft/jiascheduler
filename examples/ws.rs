@@ -73,7 +73,8 @@ fn ws(ws: WebSocket, mut bridge: Data<&Bridge>) -> impl IntoResponse {
         let mut client: WsClient<
             SplitSink<WebSocketStream, Message>,
             SplitStream<WebSocketStream>,
-        > = WsClient::new(Some(bridge.clone()))
+        > = WsClient::new(Some(bridge.clone()));
+        client
             .set_namespace(String::from("default"))
             .set_local_ip(local_ip().expect("failed get local ip"));
         bridge

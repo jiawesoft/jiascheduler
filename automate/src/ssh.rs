@@ -57,7 +57,7 @@ impl Session {
         }: ConnectParams<A, U, P>,
     ) -> Result<Self> {
         let config = client::Config {
-            inactivity_timeout: Some(Duration::from_secs(60)),
+            inactivity_timeout: Some(Duration::from_secs(90)),
             keepalive_interval: Some(Duration::from_secs(10)),
             ..Default::default()
         };

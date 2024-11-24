@@ -51,7 +51,7 @@ impl Logic {
                     comet_addr: format!("{}:{}", self.local_ip.to_string(), port),
                     namespace: namespace.into(),
                 },
-                10,
+                90,
             )
             .await?;
         Ok(ret)

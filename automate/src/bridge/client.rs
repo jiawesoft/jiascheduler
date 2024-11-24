@@ -42,7 +42,7 @@ pub struct WsClient<W, R> {
     ws_writer: Option<W>,
     ws_reader: Option<R>,
     comet_secret: Option<String>,
-    mac_address: Option<String>,
+    mac_addr: Option<String>,
     local_ip: Option<IpAddr>,
     namespace: Option<String>,
     is_initialized: Option<bool>,
@@ -65,7 +65,7 @@ impl<W, R> WsClient<W, R> {
             bridge,
             local_ip: None,
             namespace: None,
-            mac_address: None,
+            mac_addr: None,
             comet_secret: None,
             is_initialized: None,
             msg_box: cache,
@@ -77,32 +77,32 @@ impl<W, R> WsClient<W, R> {
         }
     }
 
-    pub fn set_namespace(mut self, namespace: String) -> Self {
+    pub fn set_namespace(&mut self, namespace: String) -> &mut Self {
         self.namespace = Some(namespace);
         self
     }
 
-    pub fn set_local_ip(mut self, local_ip: IpAddr) -> Self {
+    pub fn set_local_ip(&mut self, local_ip: IpAddr) -> &mut Self {
         self.local_ip = Some(local_ip);
         self
     }
 
-    pub fn set_comet_secret(mut self, comet_secret: String) -> Self {
+    pub fn set_comet_secret(&mut self, comet_secret: String) -> &mut Self {
         self.comet_secret = Some(comet_secret);
         self
     }
 
-    pub fn set_mac_address(mut self, mac_address: String) -> Self {
-        self.mac_address = Some(mac_address);
+    pub fn set_mac_address(&mut self, mac_addr: String) -> &mut Self {
+        self.mac_addr = Some(mac_addr);
         self
     }
 
-    pub fn set_assign_user(mut self, assign_user: AssignUserOption) -> Self {
+    pub fn set_assign_user(&mut self, assign_user: AssignUserOption) -> &mut Self {
         self.assign_user_option = Some(assign_user);
         self
     }
 
-    pub fn set_ssh_connection(mut self, ssh_option: SshConnectionOption) -> Self {
+    pub fn set_ssh_connection(&mut self, ssh_option: SshConnectionOption) -> &mut Self {
         self.ssh_connection_option = Some(ssh_option);
         self
     }
@@ -130,7 +130,7 @@ impl<W, R> WsClient<W, R> {
     pub fn key(&self) -> String {
         get_endpoint(
             self.local_ip.clone().unwrap().to_string(),
-            self.mac_address.clone().unwrap(),
+            self.mac_addr.clone().unwrap(),
         )
     }
 
@@ -301,9 +301,10 @@ impl WsClient<SplitSink<PWebSocketStream, PMessage>, SplitStream<PWebSocketStrea
         &mut self,
         write: SplitSink<PWebSocketStream, PMessage>,
         read: SplitStream<PWebSocketStream>,
-    ) {
+    ) -> &mut Self {
         self.ws_reader = Some(read);
         self.ws_writer = Some(write);
+        self
     }
 }
 
@@ -332,8 +333,8 @@ impl
         } else {
             ClientRequestBuilder::new(u)
         };
-        if let Some(ref mac_address) = self.mac_address {
-            req = req.with_header("X-Mac-Address", mac_address)
+        if let Some(ref mac_addr) = self.mac_addr {
+            req = req.with_header("X-Mac-Address", mac_addr)
         }
 
         if let Some(ref assign_user) = self.assign_user_option {
@@ -431,7 +432,7 @@ impl
     {
         loop {
             let msg = match timeout(
-                Duration::from_secs(45),
+                Duration::from_secs(90),
                 self.ws_reader.as_mut().unwrap().next(),
             )
             .await
@@ -507,7 +508,8 @@ impl
 async fn test_client() {
     use local_ip_address::local_ip;
 
-    let mut client = WsClient::new(Some(Bridge::new()))
+    let mut client = WsClient::new(Some(Bridge::new()));
+    client
         .set_namespace("default".to_string())
         .set_local_ip(local_ip().expect("failed get local ip"));
 

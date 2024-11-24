@@ -5,18 +5,13 @@ use automate::{
 };
 use tracing::{error, info};
 
-use crate::{entity::instance, AppState};
+use crate::AppState;
 
 async fn heartbeat(state: AppState, msg: HeartbeatParams) -> Result<()> {
     state
         .service()
         .instance
-        .update_instance(instance::Model {
-            ip: msg.source_ip,
-            namespace: msg.namespace,
-            status: 1,
-            ..Default::default()
-        })
+        .update_instance(msg.mac_addr, msg.source_ip)
         .await?;
     Ok(())
 }

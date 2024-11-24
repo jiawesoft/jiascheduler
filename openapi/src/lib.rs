@@ -47,8 +47,6 @@ mod state;
 #[macro_use]
 pub mod utils;
 
-const APP: &'static str = "jiascheduler";
-
 #[derive(Clone)]
 pub struct WebapiOptions {
     pub database_url: Option<String>,

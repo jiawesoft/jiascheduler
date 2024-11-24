@@ -84,9 +84,9 @@ impl Comet {
         ip: String,
         client: Sender<(Msg, Option<Sender<MsgState>>)>,
     ) {
-        let mac_address = secret_header.mac_address.clone();
+        let mac_address = secret_header.mac_addr.clone();
         let key = get_endpoint(ip.clone(), mac_address.clone());
-        info!("{ip}:{namespace}:{} online", secret_header.mac_address);
+        info!("{ip}:{namespace}:{} online", secret_header.mac_addr);
 
         self.bridge.append_client(key, client).await;
         let ret = self

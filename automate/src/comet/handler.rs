@@ -87,7 +87,7 @@ pub mod middleware {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SecretHeader {
-    pub mac_address: String,
+    pub mac_addr: String,
     pub assign_user: Option<(String, String)>,
     pub ssh_connection_params: Option<SshConnectionOption>,
 }
@@ -97,7 +97,7 @@ impl<'a> FromRequest<'a> for SecretHeader {
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         let header = req.headers();
 
-        let mac_address = header
+        let mac_addr = header
             .get("X-Mac-Address")
             .and_then(|value| value.to_str().ok())
             .ok_or(anyhow!("mac address not found"))?;
@@ -127,12 +127,12 @@ impl<'a> FromRequest<'a> for SecretHeader {
             (Some(u), Some(p)) => SecretHeader {
                 assign_user: Some((u.to_string(), p.to_string())),
                 ssh_connection_params: None,
-                mac_address: mac_address.to_string(),
+                mac_addr: mac_addr.to_string(),
             },
             _ => SecretHeader {
                 assign_user: None,
                 ssh_connection_params: None,
-                mac_address: mac_address.to_string(),
+                mac_addr: mac_addr.to_string(),
             },
         };
 
@@ -162,13 +162,15 @@ pub fn ws(
 
     ws.on_upgrade(|socket| async move {
         let (mut sink, mut stream) = socket.split();
-
+        let mac_addr = secret_header.mac_addr.clone();
         let mut client: WsClient<
             SplitSink<WebSocketStream, Message>,
             SplitStream<WebSocketStream>,
         > = WsClient::new(Some(bridge.clone()));
 
-        client.set_rw(sink, stream);
+        client
+            .set_mac_address(mac_addr.clone())
+            .set_rw(sink, stream);
 
         if let Err(e) = client.auth(namespace, comet.secret.clone()).await {
             error!("failed to auth incoming connection - {e}");
@@ -179,7 +181,6 @@ pub fn ws(
 
         let (namespace, agent_ip) = (client.get_namespace(), client.get_local_ip());
 
-        let mac_address = secret_header.mac_address.clone();
         comet
             .client_online(
                 secret_header,
@@ -195,7 +196,7 @@ pub fn ws(
             .recv(|msg| async move { ncomet.handle(msg).await })
             .await;
 
-        comet.client_offline(agent_ip, mac_address).await;
+        comet.client_offline(agent_ip, mac_addr).await;
 
         client.drop().await;
     })

@@ -1,8 +1,6 @@
 use automate::scheduler::types::SshConnectionOption;
 use chrono::Local;
 
-use redis::Commands;
-
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
 use sea_orm::DbBackend;
@@ -26,7 +24,6 @@ use crate::entity::{self, instance, instance_group, prelude::*, user_server};
 use crate::state::AppContext;
 use crate::state::AppState;
 use crate::IdGenerator;
-use crate::APP;
 use anyhow::Result;
 
 use super::job::types::InstanceStatSummary;
@@ -146,63 +143,17 @@ impl<'a> InstanceLogic<'a> {
         Ok(())
     }
 
-    pub async fn update_instance(&mut self, model: instance::Model) -> Result<u64> {
-        let key = format!("{}:ins:status", APP);
-        let member = format!("{}:{}", model.namespace.clone(), model.ip.clone());
-        let is_insert: i32 =
-            self.ctx
-                .redis()
-                .zadd(key.clone(), member, Local::now().timestamp())?;
-
-        let now_timestamp = Local::now().timestamp();
-
-        let min_val: Vec<String> = self.ctx.redis().zrangebyscore_limit_withscores(
-            key.clone(),
-            0,
-            now_timestamp - 30,
-            0,
-            1,
-        )?;
-
-        if min_val.len() > 1 {
-            self.ctx.redis().zpopmin::<_, ()>(key.clone(), 1)?;
-            let v: Vec<&str> = min_val.get(0).unwrap().split(":").collect();
-            Instance::insert(instance::ActiveModel {
-                ip: Set(v.get(1).unwrap().to_string().clone()),
-                namespace: Set(v.get(0).unwrap().to_string().clone()),
-                status: Set(0),
-                ..Default::default()
-            })
-            .on_conflict(
-                OnConflict::columns([instance::Column::Namespace, instance::Column::Ip])
-                    .value(instance::Column::UpdatedTime, Local::now())
-                    .value(instance::Column::Status, 0)
-                    .to_owned(),
-            )
-            .exec(&self.ctx.db)
-            .await?;
-        }
-
-        if is_insert == 1 {
-            let record = instance::ActiveModel {
-                ip: Set(model.ip.clone()),
-                namespace: Set(model.namespace),
+    pub async fn update_instance(&mut self, mac_addr: String, ip: String) -> Result<u64> {
+        let ret = Instance::update_many()
+            .set(instance::ActiveModel {
                 status: Set(1),
                 ..Default::default()
-            };
-
-            Instance::insert(record)
-                .on_conflict(
-                    OnConflict::columns([instance::Column::Namespace, instance::Column::Ip])
-                        .value(instance::Column::UpdatedTime, Local::now())
-                        .value(instance::Column::Status, 1)
-                        .to_owned(),
-                )
-                .exec(&self.ctx.db)
-                .await?;
-        }
-
-        Ok(1)
+            })
+            .filter(instance::Column::MacAddr.eq(mac_addr))
+            .filter(instance::Column::Ip.eq(ip))
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
     }
 
     pub async fn query_instance_by_role_id(
