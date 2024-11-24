@@ -382,6 +382,7 @@ impl<'a> InstanceLogic<'a> {
 
     pub async fn query_admin_server(
         &self,
+        instance_id: Option<String>,
         instance_group_id: Option<u64>,
         status: Option<u8>,
         ip: Option<String>,
@@ -410,6 +411,9 @@ impl<'a> InstanceLogic<'a> {
             )
             .apply_if(status, |query, v| {
                 query.filter(instance::Column::Status.eq(v))
+            })
+            .apply_if(instance_id, |query, v| {
+                query.filter(instance::Column::InstanceId.eq(v))
             })
             .apply_if(ip, |query, v| {
                 query.filter(instance::Column::Ip.contains(v))
@@ -532,6 +536,7 @@ impl<'a> InstanceLogic<'a> {
     pub async fn query_user_server(
         &self,
         user_id: String,
+        instance_id: Option<String>,
         instance_group_id: Option<u64>,
         status: Option<u8>,
         ip: Option<String>,
@@ -584,6 +589,9 @@ impl<'a> InstanceLogic<'a> {
             .apply_if(status, |query, v| {
                 query.filter(instance::Column::Status.eq(v))
             })
+            .apply_if(instance_id.clone(), |query, v| {
+                query.filter(instance::Column::InstanceId.eq(v))
+            })
             .apply_if(instance_group_id, |query, v| {
                 query.filter(instance_group::Column::Id.eq(v))
             })
@@ -629,6 +637,9 @@ impl<'a> InstanceLogic<'a> {
                 .filter(user_server::Column::UserId.eq(user_id.clone()))
                 .apply_if(status, |query, v| {
                     query.filter(instance::Column::Status.eq(v))
+                })
+                .apply_if(instance_id, |query, v| {
+                    query.filter(instance::Column::InstanceId.eq(v))
                 })
                 .as_query()
                 .clone(),
@@ -863,7 +874,7 @@ impl<'a> InstanceLogic<'a> {
                             .and(Expr::col((b, instance::Column::InstanceGroupId)).gt(0))
                             .into_condition()
                     })
-                    .from(instance::Column::Id)
+                    .from(instance::Column::InstanceId)
                     .to(instance_role::Column::InstanceId)
                     .into(),
             )
@@ -889,7 +900,9 @@ impl<'a> InstanceLogic<'a> {
             UserServer::find()
                 .select_only()
                 .column(instance::Column::Id)
+                .column(instance::Column::InstanceId)
                 .column(instance::Column::Ip)
+                .column(instance::Column::MacAddr)
                 .column(instance::Column::Namespace)
                 .column(instance::Column::Info)
                 .column(instance::Column::SysUser)
@@ -910,7 +923,7 @@ impl<'a> InstanceLogic<'a> {
                                 .and(Expr::col((b, instance::Column::InstanceGroupId)).gt(0))
                                 .into_condition()
                         })
-                        .from(instance::Column::Id)
+                        .from(instance::Column::InstanceId)
                         .to(user_server::Column::InstanceId)
                         .into(),
                 )
@@ -926,7 +939,7 @@ impl<'a> InstanceLogic<'a> {
                     query.filter(instance::Column::Namespace.eq(v))
                 })
                 .apply_if(instance_id.clone(), |query, v| {
-                    query.filter(instance::Column::InstanceId.eq(v))
+                    query.filter(user_server::Column::InstanceId.eq(v))
                 })
                 .as_query()
                 .clone(),

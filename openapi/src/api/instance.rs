@@ -246,6 +246,7 @@ impl InstanceApi {
         user_info: Data<&logic::types::UserInfo>,
 
         Query(ip): Query<Option<String>>,
+        Query(instance_id): Query<Option<String>>,
         Query(instance_group_id): Query<Option<u64>>,
         Query(tag_id): Query<Option<Vec<u64>>>,
         Query(status): Query<Option<u8>>,
@@ -293,6 +294,7 @@ impl InstanceApi {
                 let query_result = svc
                     .instance
                     .query_admin_server(
+                        instance_id.filter(|v| v != ""),
                         instance_group_id.filter(|&v| v != 0),
                         status,
                         ip.filter(|v| v != ""),
@@ -307,6 +309,7 @@ impl InstanceApi {
                     .instance
                     .query_user_server(
                         user_id,
+                        instance_id.filter(|v| v != ""),
                         instance_group_id.filter(|&v| v != 0),
                         status,
                         ip.filter(|v| v != ""),
@@ -497,22 +500,22 @@ impl InstanceApi {
         let (online_num, offline_num) = if can_manage_instance {
             (
                 svc.instance
-                    .query_admin_server(None, Some(1), None, 0, 1)
+                    .query_admin_server(None, None, Some(1), None, 0, 1)
                     .await?
                     .1,
                 svc.instance
-                    .query_admin_server(None, Some(0), None, 0, 1)
+                    .query_admin_server(None, None, Some(0), None, 0, 1)
                     .await?
                     .1,
             )
         } else {
             (
                 svc.instance
-                    .query_user_server(user_info.user_id.clone(), None, Some(1), None, 0, 1)
+                    .query_user_server(user_info.user_id.clone(), None, None, Some(1), None, 0, 1)
                     .await?
                     .1,
                 svc.instance
-                    .query_user_server(user_info.user_id.clone(), None, Some(0), None, 0, 1)
+                    .query_user_server(user_info.user_id.clone(), None, None, Some(0), None, 0, 1)
                     .await?
                     .1,
             )

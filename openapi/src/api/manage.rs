@@ -169,6 +169,7 @@ impl ManageApi {
         user_info: Data<&logic::types::UserInfo>,
 
         Query(ip): Query<Option<String>>,
+        Query(instance_id): Query<Option<String>>,
         Query(instance_group_id): Query<Option<u64>>,
         Query(tag_id): Query<Option<Vec<u64>>>,
         Query(status): Query<Option<u8>>,
@@ -232,6 +233,7 @@ impl ManageApi {
                 let query_result = svc
                     .instance
                     .query_admin_server(
+                        instance_id.filter(|v| v != ""),
                         instance_group_id.filter(|&v| v != 0),
                         status,
                         ip.filter(|v| v != ""),
@@ -246,6 +248,7 @@ impl ManageApi {
                     .instance
                     .query_user_server(
                         user_id,
+                        instance_id.filter(|v| v != ""),
                         instance_group_id.filter(|&v| v != 0),
                         status,
                         ip.filter(|v| v != ""),
