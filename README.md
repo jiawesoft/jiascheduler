@@ -8,14 +8,13 @@ The nodes where jiascheduler executes scripts do not need to be on the same netw
 
 In order to facilitate node management, jiascheduler also provides a powerful webssh terminal that supports multi session operations, screen splitting, uploading, downloading, and more.
 
-
 ## Architecture
 
 ![Architecture](./assets/jiascheduler-arch.png)
 
-## 
+##
 
-[https://jiascheduler.iwannay.cn](https://jiascheduler.iwannay.cn) 
+[https://jiascheduler.iwannay.cn](https://jiascheduler.iwannay.cn)
 guest account：guest Password：guest
 
 At this time, there are no online nodes under the guest account. You can deploy the agent yourself, and the successfully deployed agent will automatically connect to the jiascheduler online console. You can check the status of the agent, execute scripts, and view the execution results in the console.
@@ -33,6 +32,7 @@ If you need to log off the node, simply exit the agent
 **Complete installation**
 
 1. Install jiascheduler-console
+
 ```bash
 # Usage: jiascheduler-console [OPTIONS]
 
@@ -47,9 +47,8 @@ If you need to log off the node, simply exit the agent
 ./jiascheduler-console --bind-addr 0.0.0.0:9090
 ```
 
-
-
 2. Install jiaschduler-comet
+
 ```bash
 # Usage: jiascheduler-comet [OPTIONS]
 
@@ -105,9 +104,8 @@ If you need to log off the node, simply exit the agent
 
 ```
 
-
-
 ## Screenshot
+
 <table style="border-collapse: collapse; border: 1px solid black;">
   <tr>
     <td style="padding: 5px;background-color:#fff;"><img src= "./assets/job-edit.png" alt="Jiascheduler job edit"   /></td>
@@ -126,6 +124,10 @@ If you need to log off the node, simply exit the agent
 
 </table>
 
+## Help video
 
 ## Buy me a coffee
 
+**wechat:** cg1472580369
+
+<img src="./assets/good.jpg" width="200px" height="200px"/>
