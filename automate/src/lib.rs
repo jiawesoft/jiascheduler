@@ -1,6 +1,5 @@
 use anyhow::Result;
 use local_ip_address::local_ip;
-use nanoid::nanoid;
 use std::net::IpAddr;
 use std::sync::OnceLock;
 

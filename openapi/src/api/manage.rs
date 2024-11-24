@@ -261,9 +261,9 @@ impl ManageApi {
         let list = list
             .into_iter()
             .map(|v| super::instance::types::UserServerRecord {
-                id: v.id,
                 ip: v.ip,
                 info: v.info,
+                instance_id: v.instance_id,
                 tag_key: v.tag_key,
                 tag_val: v.tag_val,
                 namespace: v.namespace,

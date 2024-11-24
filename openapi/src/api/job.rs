@@ -3,10 +3,7 @@ use crate::{
     entity::{job, job_bundle_script},
     error::NoPermission,
     local_time,
-    logic::{
-        self,
-        job::types::{BundleScriptRecord, DispatchTarget},
-    },
+    logic::{self, job::types::BundleScriptRecord},
     response::{std_into_error, ApiStdResponse},
     return_ok, AppState, IdGenerator,
 };
@@ -105,6 +102,7 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct RunRecord {
         pub id: u64,
+        pub instance_id: String,
         pub bind_ip: String,
         pub bind_namespace: String,
         pub schedule_type: String,
@@ -134,8 +132,7 @@ mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct Endpoint {
-        pub ip: String,
-        pub namespace: String,
+        pub instance_id: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -591,13 +588,7 @@ impl JobApi {
             .job
             .dispatch_job(
                 secret,
-                req.endpoints
-                    .into_iter()
-                    .map(|v| DispatchTarget {
-                        ip: v.ip,
-                        namespace: v.namespace,
-                    })
-                    .collect(),
+                req.endpoints.into_iter().map(|v| v.instance_id).collect(),
                 req.eid,
                 req.is_sync,
                 req.schedule_name,
@@ -629,7 +620,7 @@ impl JobApi {
                     ip: v.bind_ip,
                     response: v.response,
                     has_err: v.has_err,
-                    call_err: v.call_err,
+                    call_err: v.err,
                 },
                 Err(_) => unreachable!(),
             })
@@ -688,6 +679,7 @@ impl JobApi {
             .into_iter()
             .map(|v| types::RunRecord {
                 id: v.id,
+                instance_id: v.instance_id,
                 eid: v.eid,
                 updated_user: v.updated_user,
                 updated_time: local_time!(v.updated_time),

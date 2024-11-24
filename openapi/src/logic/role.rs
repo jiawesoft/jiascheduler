@@ -10,7 +10,7 @@ use sea_query::Expr;
 
 use super::types::Permission;
 use crate::{
-    entity::{instance_role, prelude::*, role, user},
+    entity::{instance, instance_role, prelude::*, role, user},
     state::AppContext,
 };
 
@@ -198,12 +198,20 @@ impl<'a> RoleLogic<'a> {
         instance_group_ids: Option<Vec<u64>>,
         instance_ids: Option<Vec<String>>,
     ) -> Result<u64> {
+        if Role::find_by_id(role_id).one(&self.ctx.db).await?.is_none() {
+            anyhow::bail!("invalid role");
+        }
+
         if let Some(instance_ids) = instance_ids {
-            let data = instance_ids
+            let instance_list = Instance::find()
+                .filter(instance::Column::InstanceId.is_in(instance_ids))
+                .all(&self.ctx.db)
+                .await?;
+            let data = instance_list
                 .into_iter()
                 .map(|v| instance_role::ActiveModel {
                     role_id: Set(role_id),
-                    instance_id: Set(v),
+                    instance_id: Set(v.instance_id),
                     ..Default::default()
                 })
                 .collect::<Vec<instance_role::ActiveModel>>();
@@ -237,7 +245,7 @@ impl<'a> RoleLogic<'a> {
         &self,
         role_id: u64,
         instance_group_ids: Option<Vec<u64>>,
-        instance_ids: Option<Vec<u64>>,
+        instance_ids: Option<Vec<String>>,
     ) -> Result<u64> {
         Ok(InstanceRole::delete_many()
             .filter(instance_role::Column::RoleId.eq(role_id))
@@ -252,7 +260,7 @@ impl<'a> RoleLogic<'a> {
                 query.filter(
                     Condition::all()
                         .add(instance_role::Column::InstanceGroupId.is_in(v))
-                        .add(instance_role::Column::InstanceId.eq(0)),
+                        .add(instance_role::Column::InstanceId.eq("")),
                 )
             })
             .exec(&self.ctx.db)

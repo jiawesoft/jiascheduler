@@ -226,7 +226,8 @@ CREATE TABLE `job_exec_history` (
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
     KEY `idx_eid` (`eid`),
-    KEY `idx_ip` (`bind_namespace`, `bind_ip`)
+    KEY `idx_ip` (`instance_id`),
+    KEY `idx_schedule_id` (`schedule_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业执行历史';
 
 DROP TABLE IF EXISTS `job_running_status`;

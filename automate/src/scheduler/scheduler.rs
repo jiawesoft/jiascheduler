@@ -199,7 +199,7 @@ impl
     }
 
     pub fn client_key(&self) -> String {
-        get_endpoint(self.namespace.clone(), get_local_ip().to_string())
+        get_endpoint(get_local_ip().to_string(), self.mac_address.clone())
     }
 
     pub fn get_comet_addr(&mut self) -> String {
@@ -212,7 +212,7 @@ impl
 
     pub async fn ssh_poll(&mut self) {
         let comet_secret = self.comet_secret.clone();
-        let namespace = self.namespace.clone();
+        let mac_addr = self.mac_address.clone();
 
         tokio::spawn(async move {
             loop {
@@ -224,7 +224,7 @@ impl
                 };
 
                 if let Err(e) =
-                    Self::ssh_keepalive(namespace.clone(), addr.clone(), comet_secret.clone()).await
+                    Self::ssh_keepalive(addr.clone(), mac_addr.clone(), comet_secret.clone()).await
                 {
                     error!("failed ssh keepalive {e}");
                     sleep(Duration::from_secs(1)).await;
@@ -234,13 +234,13 @@ impl
     }
 
     pub async fn ssh_keepalive(
-        namespace: String,
         addr: String,
+        mac_addr: String,
         comet_secret: String,
     ) -> anyhow::Result<()> {
         let local_ip = get_local_ip();
-        let endpoint = get_endpoint(namespace, local_ip.to_string());
-        info!("current_point {}", endpoint);
+        let endpoint = get_endpoint(local_ip.to_string(), mac_addr.clone());
+        info!("ssh keepalive current_point {}", endpoint);
         let addr = format!("{}/ssh/register/{}", addr, endpoint);
         let u = addr.parse::<poem::http::Uri>()?;
         let req = ClientRequestBuilder::new(u)
@@ -380,6 +380,7 @@ impl
                 schedule_type: schedule_type.clone(),
                 created_user: job_params.created_user.clone(),
                 start_time: Some(start_time.clone()),
+                instance_id: job_params.instance_id.clone(),
                 ..Default::default()
             })
             .await?;
@@ -402,6 +403,7 @@ impl
                         prev_time,
                         next_time,
                         bind_namespace: react.namespace.clone(),
+                        instance_id: job_params.instance_id.clone(),
                         bind_ip: react.local_ip.clone(),
                         start_time: Some(start_time),
                         schedule_type: schedule_type.clone(),
@@ -424,6 +426,7 @@ impl
                 schedule_id: schedule_id.clone(),
                 exit_status: output.get_exit_status(),
                 exit_code: output.get_exit_code(),
+                instance_id: job_params.instance_id.clone(),
                 prev_time,
                 next_time,
                 bind_namespace: react.namespace.clone(),
@@ -450,6 +453,7 @@ impl
         let react_clone = react.clone();
         let created_user = dispatch_params.created_user.clone();
         let schedule_id = dispatch_params.schedule_id.clone();
+        let instance_id = dispatch_params.instance_id.clone();
 
         let job = Job::new_cron_job_async_tz(
             timer_expr.as_str(),
@@ -500,9 +504,11 @@ impl
                 run_status: Some(types::RunStatus::Prepare),
                 schedule_status: Some(types::ScheduleStatus::Scheduling),
                 schedule_id,
+                instance_id,
                 exit_status: None,
                 exit_code: None,
                 stdout: None,
+
                 stderr: None,
                 next_time,
                 bind_namespace: react.namespace.clone(),
@@ -527,6 +533,7 @@ impl
                 schedule_status: Some(types::ScheduleStatus::Unscheduled),
                 run_status: None,
                 schedule_id: dispatch_params.schedule_id,
+                instance_id: dispatch_params.instance_id.clone(),
                 exit_status: None,
                 exit_code: None,
                 stdout: None,

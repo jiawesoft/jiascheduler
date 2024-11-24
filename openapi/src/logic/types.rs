@@ -45,6 +45,7 @@ pub struct UserRecord {
 pub struct UserServer {
     pub id: u64,
     pub ip: String,
+    pub instance_id: String,
     pub mac_addr: String,
     pub info: String,
     pub namespace: String,
@@ -78,6 +79,7 @@ impl UserRoleCountList {
 #[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
 pub struct InstanceRecord {
     pub id: u64,
+    pub instance_id: String,
     pub ip: String,
     pub namespace: String,
     pub info: String,

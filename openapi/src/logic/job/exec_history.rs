@@ -41,7 +41,7 @@ impl<'a> JobLogic<'a> {
             .join_rev(
                 JoinType::LeftJoin,
                 Instance::belongs_to(JobExecHistory)
-                    .from(instance::Column::Id)
+                    .from(instance::Column::InstanceId)
                     .to(job_exec_history::Column::InstanceId)
                     .into(),
             )

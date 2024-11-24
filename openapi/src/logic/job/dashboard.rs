@@ -193,7 +193,6 @@ impl<'a> JobLogic<'a> {
 
         let ret = JobScheduleHistory::find()
             .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
-            .filter(job_schedule_history::Column::Action.is_in(vec!["start_timer", "exec"]))
             .one(&self.ctx.db)
             .await?
             .map(|v| (v, latest_exec_time, run_time));

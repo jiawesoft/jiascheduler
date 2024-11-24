@@ -71,7 +71,7 @@ mod types {
     pub struct UnbindInsanceReq {
         pub role_id: u64,
         pub instance_group_ids: Option<Vec<u64>>,
-        pub instance_ids: Option<Vec<u64>>,
+        pub instance_ids: Option<Vec<String>>,
     }
 
     #[derive(Object, Serialize, Deserialize)]

@@ -98,6 +98,7 @@ pub struct Msg {
 pub struct DispatchJobParams {
     pub base_job: BaseJob,
     pub schedule_id: String,
+    pub instance_id: String,
     pub fields: Option<HashMap<String, serde_json::Value>>,
     pub timer_expr: Option<String>,
     pub is_sync: bool,

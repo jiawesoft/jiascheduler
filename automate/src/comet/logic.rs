@@ -79,7 +79,7 @@ impl Logic {
     }
 
     pub async fn dispath(&self, req: types::DispatchJobRequest) -> Result<(String, MsgReqKind)> {
-        let pair = self.get_link_pair(&req.namespace, &req.agent_ip).await?;
+        let pair = self.get_link_pair(&req.agent_ip, &req.mac_addr).await?;
         Ok((pair.0, MsgReqKind::DispatchJobRequest(req.dispatch_params)))
     }
 
@@ -93,7 +93,7 @@ impl Logic {
     }
 
     pub async fn sftp_upload(&self, req: types::SftpUploadRequest) -> Result<(String, MsgReqKind)> {
-        let key = self.get_agent_key(&req.namespace, &req.agent_ip);
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
         let msg = MsgReqKind::SftpUploadRequest(req.params);
         Ok((key, msg))
     }
@@ -102,13 +102,13 @@ impl Logic {
         &self,
         req: types::SftpDownloadRequest,
     ) -> Result<(String, MsgReqKind)> {
-        let key = self.get_agent_key(&req.namespace, &req.agent_ip);
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
         let msg = MsgReqKind::SftpDownloadRequest(req.params);
         Ok((key, msg))
     }
 
     pub async fn sftp_remove(&self, req: types::SftpRemoveRequest) -> Result<(String, MsgReqKind)> {
-        let key = self.get_agent_key(&req.namespace, &req.agent_ip);
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
         let msg = MsgReqKind::SftpRemoveRequest(req.params);
         Ok((key, msg))
     }
@@ -117,7 +117,7 @@ impl Logic {
         &self,
         req: types::RuntimeActionRequest,
     ) -> Result<(String, MsgReqKind)> {
-        let pair = self.get_link_pair(&req.namespace, &req.agent_ip).await?;
+        let pair = self.get_link_pair(&req.agent_ip, &req.mac_addr).await?;
         Ok((pair.0, MsgReqKind::RuntimeActionRequest(req.action_params)))
     }
 

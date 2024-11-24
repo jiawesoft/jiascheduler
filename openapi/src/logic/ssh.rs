@@ -311,6 +311,7 @@ impl<'a> SshLogic<'a> {
         &self,
         namespace: String,
         ip: String,
+        mac_addr: String,
         port: u16,
         user: String,
         password: String,
@@ -318,12 +319,13 @@ impl<'a> SshLogic<'a> {
         remove_type: String,
     ) -> Result<String> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
-        let pair = logic.get_link_pair(namespace.clone(), ip.clone()).await?;
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
         let api_url = format!("http://{}/sftp/tunnel/remove", pair.1.comet_addr);
 
         let body = automate::SftpRemoveRequest {
             agent_ip: ip.clone(),
             namespace: namespace.clone(),
+            mac_addr,
             params: SftpRemoveParams {
                 ip,
                 port,

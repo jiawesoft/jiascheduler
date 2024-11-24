@@ -6,6 +6,7 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct RunStatusRelatedScheduleJobModel {
     pub id: u64,
+    pub instance_id: String,
     pub bind_ip: String,
     pub bind_namespace: String,
     pub schedule_type: String,
@@ -109,6 +110,8 @@ pub struct JobTimerRelatedJobModel {
 pub struct DispatchTarget {
     pub ip: String,
     pub namespace: String,
+    pub mac_addr: String,
+    pub instance_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,9 +167,10 @@ pub struct BundleScriptRecord {
 pub struct DispatchResult {
     pub namespace: String,
     pub bind_ip: String,
+    pub instance_id: String,
     pub response: serde_json::Value,
     pub has_err: bool,
-    pub call_err: Option<String>,
+    pub err: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]

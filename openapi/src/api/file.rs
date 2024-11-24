@@ -210,7 +210,6 @@ impl FileApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Query(namespace): Query<String>,
         Query(instance_id): Query<String>,
         Query(dir): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
@@ -500,7 +499,8 @@ impl FileApi {
             .ssh
             .sftp_remove(
                 instance_record.namespace,
-                instance_record.ip.clone(),
+                instance_record.ip,
+                instance_record.mac_addr,
                 port,
                 user,
                 password,

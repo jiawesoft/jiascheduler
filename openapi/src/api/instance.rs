@@ -24,6 +24,7 @@ pub mod types {
     #[derive(Object, Serialize, Default)]
     pub struct InstanceRecord {
         pub id: u64,
+        pub instance_id: String,
         pub ip: String,
         pub namespace: String,
         pub instance_group: String,
@@ -55,7 +56,7 @@ pub mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct UserServerRecord {
-        pub id: u64,
+        pub instance_id: String,
         pub ip: String,
         pub namespace: String,
         pub instance_group_id: u64,
@@ -198,6 +199,7 @@ impl InstanceApi {
             .into_iter()
             .map(|v| types::InstanceRecord {
                 id: v.id,
+                instance_id: v.instance_id,
                 ip: v.ip,
                 role_id: v.role_id.unwrap_or_default(),
                 role_name: v.role_name.unwrap_or_default(),
@@ -320,7 +322,7 @@ impl InstanceApi {
         let list = list
             .into_iter()
             .map(|v| types::UserServerRecord {
-                id: v.id,
+                instance_id: v.instance_id,
                 ip: v.ip,
                 info: v.info,
                 tag_key: v.tag_key,

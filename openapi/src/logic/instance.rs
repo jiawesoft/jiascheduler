@@ -219,6 +219,7 @@ impl<'a> InstanceLogic<'a> {
             .column_as(instance_group::Column::Name, "instance_group")
             .columns([
                 instance::Column::Id,
+                instance::Column::InstanceId,
                 instance::Column::Ip,
                 instance::Column::Namespace,
                 instance::Column::Info,
@@ -233,7 +234,7 @@ impl<'a> InstanceLogic<'a> {
             .join_rev(
                 JoinType::LeftJoin,
                 Instance::belongs_to(InstanceRole)
-                    .from(instance::Column::Id)
+                    .from(instance::Column::InstanceId)
                     .to(instance_role::Column::InstanceId)
                     .into(),
             )
@@ -370,6 +371,7 @@ impl<'a> InstanceLogic<'a> {
             .select_only()
             .column(instance::Column::Id)
             .column(instance::Column::Ip)
+            .column(instance::Column::InstanceId)
             .column(instance::Column::Namespace)
             .column(instance::Column::InstanceGroupId)
             .column(instance::Column::Info)
@@ -438,9 +440,11 @@ impl<'a> InstanceLogic<'a> {
         let model = Instance::find()
             .select_only()
             .column(instance::Column::Id)
+            .column(instance::Column::InstanceId)
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
+            .column(instance::Column::MacAddr)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -589,6 +593,8 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
+            .column(instance::Column::MacAddr)
+            .column(instance::Column::InstanceId)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -611,7 +617,7 @@ impl<'a> InstanceLogic<'a> {
                             .and(Expr::col((b, instance::Column::InstanceGroupId)).gt(0))
                             .into_condition()
                     })
-                    .from(instance::Column::Id)
+                    .from(instance::Column::InstanceId)
                     .to(instance_role::Column::InstanceId)
                     .into(),
             )
@@ -641,6 +647,8 @@ impl<'a> InstanceLogic<'a> {
                 .column(instance::Column::Ip)
                 .column(instance::Column::Namespace)
                 .column(instance::Column::Info)
+                .column(instance::Column::MacAddr)
+                .column(instance::Column::InstanceId)
                 .column(instance::Column::InstanceGroupId)
                 .column_as(instance_group::Column::Name, "instance_group_name")
                 .column(instance::Column::Status)
@@ -656,7 +664,7 @@ impl<'a> InstanceLogic<'a> {
                                 .and(Expr::col((b, instance::Column::InstanceGroupId)).gt(0))
                                 .into_condition()
                         })
-                        .from(instance::Column::Id)
+                        .from(instance::Column::InstanceId)
                         .to(user_server::Column::InstanceId)
                         .into(),
                 )
@@ -830,6 +838,7 @@ impl<'a> InstanceLogic<'a> {
         let model = Instance::find()
             .select_only()
             .column(instance::Column::Id)
+            .column(instance::Column::InstanceId)
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
@@ -873,6 +882,7 @@ impl<'a> InstanceLogic<'a> {
         let mut model = User::find()
             .select_only()
             .column(instance::Column::Id)
+            .column(instance::Column::InstanceId)
             .column(instance::Column::Ip)
             .column(instance::Column::MacAddr)
             .column(instance::Column::Namespace)

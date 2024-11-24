@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 mod bundle_script;
 mod dashboard;
@@ -7,8 +7,8 @@ mod schedule;
 mod timer;
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Select, Set,
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait, Set,
 };
 use sea_query::Expr;
 
@@ -121,6 +121,8 @@ impl<'a> JobLogic<'a> {
         page_size: u64,
     ) -> Result<(Vec<types::RunStatusRelatedScheduleJobModel>, u64)> {
         let model = JobRunningStatus::find()
+            .column_as(instance::Column::Ip, "bind_ip")
+            .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
             .column_as(
                 job_schedule_history::Column::SnapshotData,
@@ -136,7 +138,7 @@ impl<'a> JobLogic<'a> {
             .join_rev(
                 JoinType::LeftJoin,
                 Instance::belongs_to(JobRunningStatus)
-                    .from(instance::Column::Id)
+                    .from(instance::Column::InstanceId)
                     .to(job_running_status::Column::InstanceId)
                     .into(),
             )

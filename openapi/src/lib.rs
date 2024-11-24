@@ -307,11 +307,11 @@ pub async fn run(opts: WebapiOptions) -> Result<()> {
         .at("/", EmbeddedFileEndpoint::<Dist>::new("index.html"))
         .nest("/", EmbeddedFilesEndpoint::<Dist>::new())
         .at(
-            "/terminal/webssh/:ip",
+            "/terminal/webssh/:instance_id",
             get(terminal::webssh).with(AuthMiddleware),
         )
         .at(
-            "/terminal/tunnel/:ip",
+            "/terminal/tunnel/:instance_id",
             get(terminal::proxy_webssh).with(AuthMiddleware),
         )
         .nest("/api", api_service.with(AuthMiddleware))

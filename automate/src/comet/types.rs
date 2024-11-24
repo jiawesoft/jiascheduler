@@ -10,14 +10,14 @@ use serde_repr::*;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DispatchJobRequest {
     pub agent_ip: String,
-    pub namespace: String,
+    pub mac_addr: String,
     pub dispatch_params: DispatchJobParams,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RuntimeActionRequest {
     pub agent_ip: String,
-    pub namespace: String,
+    pub mac_addr: String,
     pub action_params: RuntimeActionParams,
 }
 
@@ -40,6 +40,7 @@ pub struct SftpUploadRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SftpRemoveRequest {
     pub agent_ip: String,
+    pub mac_addr: String,
     pub namespace: String,
     pub params: SftpRemoveParams,
 }

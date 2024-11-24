@@ -9,7 +9,7 @@ use automate::{
 };
 
 use evalexpr::eval_boolean;
-use poem_openapi::param;
+
 use sea_orm::{
     ActiveValue::NotSet, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, QueryTrait, Set,
@@ -169,7 +169,6 @@ impl<'a> JobLogic<'a> {
             schedule_id: Set(params.schedule_id.clone()),
             schedule_status,
             run_status,
-
             start_time: Set(params.start_time),
             job_type: Set(params
                 .base_job
@@ -249,7 +248,7 @@ impl<'a> JobLogic<'a> {
     pub async fn dispatch_job(
         &self,
         secret: String,
-        endpoints: Vec<DispatchTarget>,
+        instance_ids: Vec<String>,
         eid: String,
         is_sync: bool,
         schedule_name: String,
@@ -259,6 +258,14 @@ impl<'a> JobLogic<'a> {
         created_user: String,
     ) -> Result<u64> {
         let schedule_id = IdGenerator::get_schedule_uid();
+
+        let endpoints = Instance::find()
+            .filter(instance::Column::InstanceId.is_in(instance_ids))
+            .all(&self.ctx.db)
+            .await?;
+        if endpoints.len() == 0 {
+            anyhow::bail!("cannot found valid instance");
+        }
 
         let job_record = Job::find()
             .filter(entity::job::Column::Eid.eq(eid.clone()))
@@ -341,6 +348,7 @@ impl<'a> JobLogic<'a> {
                 max_parallel: job_record.max_parallel as u8,
                 read_code_from_stdin: false,
             },
+            instance_id: "".to_string(),
             fields: None,
             created_user: created_user.clone(),
             schedule_id: schedule_id.clone(),
@@ -355,32 +363,39 @@ impl<'a> JobLogic<'a> {
         };
 
         endpoints.into_iter().for_each(|v| {
-            dispatch_data.target.push(v);
+            dispatch_data.target.push(DispatchTarget {
+                ip: v.ip.clone(),
+                mac_addr: v.mac_addr.clone(),
+                namespace: v.namespace.clone(),
+                instance_id: v.instance_id.clone(),
+            });
         });
 
         let logic = automate::Logic::new(self.ctx.redis().clone());
         let http_client = self.ctx.http_client.clone();
 
         let batch_push_ret = utils::async_batch_do(dispatch_data.target.clone(), move |v| {
-            let dispatch_params = dispatch_params.clone();
+            let mut dispatch_params = dispatch_params.clone();
             let logic = logic.clone();
             let http_client = http_client.clone();
             let secret = secret.clone();
+            dispatch_params.instance_id = v.instance_id.clone();
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
-                    namespace: v.namespace.clone(),
+                    mac_addr: v.mac_addr.clone(),
                     dispatch_params: dispatch_params.clone(),
                 };
-                let pair = match logic.get_link_pair(v.namespace.clone(), v.ip.clone()).await {
+                let pair = match logic.get_link_pair(v.ip.clone(), v.mac_addr.clone()).await {
                     Ok(v) => v,
-                    Err(_) => {
+                    Err(e) => {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
+                            instance_id: v.instance_id.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
                             has_err: true,
-                            call_err: None,
+                            err: Some(e.to_string()),
                         })
                     }
                 };
@@ -395,9 +410,10 @@ impl<'a> JobLogic<'a> {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
                             bind_ip: v.ip.clone(),
+                            instance_id: v.instance_id.clone(),
                             response: json!(null),
                             has_err: true,
-                            call_err: Some(e.to_string()),
+                            err: Some(e.to_string()),
                         });
                     }
                 };
@@ -408,9 +424,10 @@ impl<'a> JobLogic<'a> {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
                             bind_ip: v.ip.clone(),
+                            instance_id: v.instance_id.clone(),
                             response: json!(null),
                             has_err: true,
-                            call_err: Some(e.to_string()),
+                            err: Some(e.to_string()),
                         });
                     }
                 };
@@ -422,19 +439,26 @@ impl<'a> JobLogic<'a> {
                             namespace: v.namespace.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
+                            instance_id: v.instance_id.clone(),
                             has_err: true,
-                            call_err: Some(e.to_string()),
+                            err: Some(e.to_string()),
                         })
                     }
                 };
-                let has_err = if ret["code"] != 20000 { true } else { false };
+
+                let (has_err, err) = if ret["code"] != 20000 {
+                    (true, Some(ret["msg"].to_string()))
+                } else {
+                    (false, None)
+                };
 
                 Ok(DispatchResult {
                     namespace: v.namespace.clone(),
                     bind_ip: v.ip.clone(),
                     response: ret.clone(),
+                    instance_id: v.instance_id.clone(),
                     has_err,
-                    call_err: None,
+                    err,
                 })
             })
         })
@@ -493,9 +517,17 @@ impl<'a> JobLogic<'a> {
             .await?
             .ok_or(anyhow!("cannot found instance"))?;
 
-        let runnable: Vec<Option<serde_json::Value>> = JobRunningStatus::find()
+        let runnable: Vec<(serde_json::Value, String)> = JobRunningStatus::find()
             .select_only()
             .column(job_schedule_history::Column::DispatchData)
+            .column(instance::Column::MacAddr)
+            .join_rev(
+                JoinType::LeftJoin,
+                Instance::belongs_to(JobRunningStatus)
+                    .from(instance::Column::InstanceId)
+                    .to(job_running_status::Column::InstanceId)
+                    .into(),
+            )
             .join_rev(
                 JoinType::LeftJoin,
                 JobScheduleHistory::belongs_to(JobRunningStatus)
@@ -515,15 +547,13 @@ impl<'a> JobLogic<'a> {
         let http_client = self.ctx.http_client.clone();
         let logic = automate::Logic::new(self.ctx.redis().clone());
 
-        for data in runnable {
-            let dispatch_data: DispatchData = data
-                .ok_or(anyhow!("cannot found job dispatch data"))?
-                .try_into()?;
+        for (dispatch_data_val, mac_addr) in runnable {
+            let dispatch_data: DispatchData = dispatch_data_val.try_into()?;
 
             let body = automate::DispatchJobRequest {
                 agent_ip: bind_ip.clone(),
-                namespace: bind_namespace.clone(),
                 dispatch_params: dispatch_data.params.clone(),
+                mac_addr,
             };
             let pair = match logic
                 .get_link_pair(bind_ip.clone(), ins.mac_addr.clone())
@@ -601,26 +631,28 @@ impl<'a> JobLogic<'a> {
 
         let http_client = self.ctx.http_client.clone();
 
-        let ret = utils::async_batch_do(dispatch_data.target, move |v| {
+        let batch_push_ret = utils::async_batch_do(dispatch_data.target, move |v| {
             let mut dispatch_params = dispatch_data.params.clone();
             let logic = logic.clone();
             let http_client = http_client.clone();
             dispatch_params.action = action;
+            dispatch_params.instance_id = v.instance_id.clone();
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
-                    namespace: v.namespace.clone(),
+                    mac_addr: v.mac_addr.clone(),
                     dispatch_params: dispatch_params.clone(),
                 };
-                let pair = match logic.get_link_pair(v.namespace.clone(), v.ip.clone()).await {
+                let pair = match logic.get_link_pair(v.ip.clone(), v.mac_addr.clone()).await {
                     Ok(v) => v,
-                    Err(_) => {
+                    Err(e) => {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
+                            instance_id: v.instance_id.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
-                            has_err: false,
-                            call_err: None,
+                            has_err: true,
+                            err: Some(e.to_string()),
                         })
                     }
                 };
@@ -634,8 +666,9 @@ impl<'a> JobLogic<'a> {
                             namespace: v.namespace.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
-                            has_err: false,
-                            call_err: Some(e.to_string()),
+                            has_err: true,
+                            err: Some(e.to_string()),
+                            instance_id: v.instance_id.clone(),
                         })
                     }
                 };
@@ -647,34 +680,56 @@ impl<'a> JobLogic<'a> {
                             namespace: v.namespace.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
-                            has_err: false,
-                            call_err: Some(e.to_string()),
+                            has_err: true,
+                            instance_id: v.instance_id.clone(),
+                            err: Some(e.to_string()),
                         })
                     }
                 };
-                let has_err = if ret["code"] != 20000 { true } else { false };
+                let (has_err, err) = if ret["code"] != 20000 {
+                    (true, Some(ret["msg"].to_string()))
+                } else {
+                    (false, None)
+                };
 
                 Ok(DispatchResult {
                     namespace: v.namespace.clone(),
                     bind_ip: v.ip.clone(),
                     response: ret.clone(),
+                    instance_id: v.instance_id.clone(),
                     has_err,
-                    call_err: None,
+                    err,
                 })
             })
         })
         .await;
 
+        let mut dispatch_result = Vec::new();
+
+        let mut has_err = false;
+        batch_push_ret.iter().for_each(|v| {
+            let v = v.as_ref().unwrap().to_owned();
+            if v.has_err {
+                has_err = true;
+            }
+            dispatch_result.push(v)
+        });
+
         JobScheduleHistory::update_many()
             .set(job_schedule_history::ActiveModel {
                 action: Set(action.to_string()),
+                dispatch_result: Set(Some(serde_json::to_value(&dispatch_result)?)),
                 ..Default::default()
             })
             .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id.to_string()))
             .exec(&self.ctx.db)
             .await?;
 
-        Ok(ret)
+        if has_err {
+            anyhow::bail!("Partial job scheduling failed");
+        }
+
+        Ok(batch_push_ret)
     }
 
     pub async fn query_schedule(
@@ -739,7 +794,7 @@ impl<'a> JobLogic<'a> {
             .dispatch_data
             .ok_or(anyhow!("cannot get dispatch data"))?;
 
-        let dispatch_data = serde_json::from_value::<DispatchData>(dispatch_data)?;
+        let mut dispatch_data = serde_json::from_value::<DispatchData>(dispatch_data)?;
 
         // if dispatch_data.params.base_job.upload_file.is_some() {
         //     let job_record = Job::find()
@@ -760,10 +815,12 @@ impl<'a> JobLogic<'a> {
 
         let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
+        dispatch_data.params.instance_id = ins.instance_id.clone();
+        dispatch_data.params.created_user = updated_user;
 
         let mut body = automate::DispatchJobRequest {
             agent_ip: ins.ip.clone(),
-            namespace: pair.1.namespace.clone(),
+            mac_addr: ins.mac_addr.clone(),
             dispatch_params: dispatch_data.params.clone(),
         };
         body.dispatch_params.action = action.clone();
@@ -782,30 +839,30 @@ impl<'a> JobLogic<'a> {
             anyhow::bail!("failed to dispatch job");
         }
 
-        JobRunningStatus::update_many()
-            .set(job_running_status::ActiveModel {
-                dispatch_result: Set(Some(ret.clone())),
-                // schedule_status: match action {
-                //     JobAction::Exec | JobAction::Kill => NotSet,
-                //     JobAction::StartTimer | JobAction::StopTimer => {
-                //         Set(ScheduleStatus::Prepare.to_string())
-                //     }
-                //     JobAction::StartSupervisor => todo!(),
-                //     JobAction::StopSupervisor => todo!(),
-                // },
-                run_status: match action {
-                    JobAction::Exec | JobAction::Kill => Set(RunStatus::Prepare.to_string()),
-                    JobAction::StartTimer | JobAction::StopTimer => NotSet,
-                    JobAction::StartSupervisor => todo!(),
-                    JobAction::StopSupervisor => todo!(),
-                },
-                updated_user: Set(updated_user),
-                ..Default::default()
-            })
-            .filter(job_running_status::Column::ScheduleId.eq(schedule_id.clone()))
-            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
-            .exec(&self.ctx.db)
-            .await?;
+        // JobRunningStatus::update_many()
+        //     .set(job_running_status::ActiveModel {
+        //         dispatch_result: Set(Some(ret.clone())),
+        //         // schedule_status: match action {
+        //         //     JobAction::Exec | JobAction::Kill => NotSet,
+        //         //     JobAction::StartTimer | JobAction::StopTimer => {
+        //         //         Set(ScheduleStatus::Prepare.to_string())
+        //         //     }
+        //         //     JobAction::StartSupervisor => todo!(),
+        //         //     JobAction::StopSupervisor => todo!(),
+        //         // },
+        //         run_status: match action {
+        //             JobAction::Exec | JobAction::Kill => Set(RunStatus::Prepare.to_string()),
+        //             JobAction::StartTimer | JobAction::StopTimer => NotSet,
+        //             JobAction::StartSupervisor => todo!(),
+        //             JobAction::StopSupervisor => todo!(),
+        //         },
+        //         updated_user: Set(updated_user),
+        //         ..Default::default()
+        //     })
+        //     .filter(job_running_status::Column::ScheduleId.eq(schedule_id.clone()))
+        //     .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
+        //     .exec(&self.ctx.db)
+        //     .await?;
 
         Ok(ret)
     }

@@ -129,8 +129,8 @@ impl<W, R> WsClient<W, R> {
 
     pub fn key(&self) -> String {
         get_endpoint(
-            self.local_ip.as_ref().unwrap().to_string(),
-            self.mac_address.as_ref().unwrap(),
+            self.local_ip.clone().unwrap().to_string(),
+            self.mac_address.clone().unwrap(),
         )
     }
 
@@ -382,10 +382,10 @@ impl
                     }
                     Protocol::pack_request(v.0)
                 };
-                ws_writer
-                    .send(Message::Binary(buf))
-                    .await
-                    .expect("failed send message");
+                if let Err(e) = ws_writer.send(Message::Binary(buf)).await {
+                    error!("failed send message - {e}");
+                    return;
+                }
             }
         });
     }
