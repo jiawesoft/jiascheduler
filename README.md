@@ -129,6 +129,8 @@ If you need to log off the node, simply exit the agent
 
 ## Help video
 
+https://www.bilibili.com/video/BV19wzKYVEHL
+
 ## Buy me a coffee
 
 **wechat:** cg1472580369

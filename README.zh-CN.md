@@ -130,7 +130,7 @@ Github 地址：https://github.com/jiawesoft/jiascheduler
 
 ## 帮助视频
 
-## 赞助
+## 请杯咖啡
 
 **wechat:** cg1472580369
 
