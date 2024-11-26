@@ -133,4 +133,4 @@ If you need to log off the node, simply exit the agent
 
 **wechat:** cg1472580369
 
-![by me a coffee](./assets/good.jpg)
+<img src="./assets/good.jpg" width="400px" />

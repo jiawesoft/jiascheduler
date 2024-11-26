@@ -8,7 +8,7 @@ jiascheduler 执行脚本的节点不需要都在同一个网络，其内部设�
 
 为了方便对节点进行管理，jiascheduler 同时提供了一个功能强大的 webssh 终端，支持多会话操作，分屏，上传，下载等。
 
-Github地址：https://github.com/jiawesoft/jiascheduler
+Github 地址：https://github.com/jiawesoft/jiascheduler
 
 ## 架构图
 
@@ -134,4 +134,4 @@ Github地址：https://github.com/jiawesoft/jiascheduler
 
 **wechat:** cg1472580369
 
-![by me a coffee](./assets/good.jpg)
+<img src="./assets/good.jpg" width="400px" />
