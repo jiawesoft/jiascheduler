@@ -16,6 +16,8 @@ Github地址：https://github.com/jiawesoft/jiascheduler
 
 ## 快速开始
 
+### [💖 jiascheduler 下载点击这里 💖 ](https://github.com/jiawesoft/jiascheduler/releases)
+
 [https://jiascheduler.iwannay.cn](https://jiascheduler.iwannay.cn)
 访客账号：guest 密码：guest
 
@@ -132,4 +134,4 @@ Github地址：https://github.com/jiawesoft/jiascheduler
 
 **wechat:** cg1472580369
 
-<img src="./assets/good.jpg" width="200px" height="200px"/>
+![by me a coffee](./assets/good.jpg)

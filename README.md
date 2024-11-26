@@ -12,9 +12,12 @@ In order to facilitate node management, jiascheduler also provides a powerful we
 
 ![Architecture](./assets/jiascheduler-arch.png)
 
-##
+## Quick start
+
+### [💖 Jiascheduler download click here 💖 ](https://github.com/jiawesoft/jiascheduler/releases)
 
 [https://jiascheduler.iwannay.cn](https://jiascheduler.iwannay.cn)
+
 guest account：guest Password：guest
 
 At this time, there are no online nodes under the guest account. You can deploy the agent yourself, and the successfully deployed agent will automatically connect to the jiascheduler online console. You can check the status of the agent, execute scripts, and view the execution results in the console.
@@ -130,4 +133,4 @@ If you need to log off the node, simply exit the agent
 
 **wechat:** cg1472580369
 
-<img src="./assets/good.jpg" width="200px" height="200px"/>
+![by me a coffee](./assets/good.jpg)
