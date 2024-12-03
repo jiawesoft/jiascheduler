@@ -8,7 +8,7 @@ use tokio::{
     process::Command,
     sync::mpsc::{Receiver, UnboundedSender},
 };
-use tracing::error;
+use tracing::{error, info};
 
 async fn read_to_end<A: AsyncRead + Unpin>(
     io: &mut Option<A>,
@@ -81,7 +81,8 @@ impl<'a> Cmd<'a> {
         tx: UnboundedSender<String>,
         mut kill_signal_rx: Receiver<()>,
     ) -> Result<Output> {
-        let mut child = self.inner.spawn()?;
+        // kill process group See https://github.com/rust-lang/rust/issues/115241
+        let mut child = self.inner.process_group(0).spawn()?;
 
         if self.read_code_from_stdin.0 {
             if let Some(mut stdin_pipe) = child.stdin.take() {
@@ -104,9 +105,24 @@ impl<'a> Cmd<'a> {
             });
         tokio::pin!(sleep);
 
+        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
         tokio::select! {
-            _ = &mut sleep => child.kill().await?,
-            _ = kill_signal_rx.recv() => child.kill().await?,
+            _ = &mut sleep =>  {
+                info!("timeout kill");
+                child.kill().await?;
+                nix::sys::signal::killpg(
+                    pid,
+                    nix::sys::signal::SIGKILL,
+                )?;
+            },
+            _ = kill_signal_rx.recv() => {
+                info!("manual kill");
+                child.kill().await?;
+                nix::sys::signal::killpg(
+                    pid,
+                    nix::sys::signal::SIGKILL,
+                )?;
+            },
             ret = child.wait() =>{
                 ret?;
             },

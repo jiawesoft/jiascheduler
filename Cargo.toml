@@ -137,3 +137,4 @@ rand = "0.8.5"
 http = "1.1.0"
 sql-builder = "3.1.1"
 mac_address = "1.1.7"
+nix = { version = "0.29.0", features = ["signal"] }

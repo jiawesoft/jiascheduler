@@ -206,24 +206,39 @@ impl Executor {
 #[tokio::test]
 async fn test_command_exec() {
     use nanoid::nanoid;
+    use std::time::Duration;
+    use tokio::time::sleep;
+    use tracing::info;
+    std::env::set_var("RUST_LOG", "debug");
+    tracing_subscriber::fmt::init();
     let c = Executor::builder()
         .job(BaseJob {
             bundle_script: None,
             eid: nanoid!(),
             cmd_name: "bash".to_string(),
-            code: "ls -alh".into(),
+            code: "ls -alh;sleep 20;echo hello".into(),
             args: vec!["-c".to_string()],
             upload_file: None,
             read_code_from_stdin: false,
-            timeout: 1,
+            timeout: 2,
             work_dir: None,
             work_user: None,
             max_retry: 1,
             max_parallel: 1,
         })
         .build();
-    let (_kill_sinal_tx, kill_signal_rx) = mpsc::channel::<()>(1);
+
+    let (kill_signal_tx, kill_signal_rx) = mpsc::channel::<()>(1);
+    tokio::spawn(async move {
+        sleep(Duration::from_secs(1)).await;
+        info!("start manual kill");
+        kill_signal_tx.send(()).await.unwrap();
+        info!("end manual kill");
+    });
     let output = c.run(Ctx { kill_signal_rx }).await.unwrap();
+
     println!("stdout: {:?}", output.get_stdout());
     println!("stderr: {:?}", output.get_stderr());
+    println!("exit_status: {:?}", output.get_exit_status());
+    println!("exit_code: {:?}", output.get_exit_code())
 }
