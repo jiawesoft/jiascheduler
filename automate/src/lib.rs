@@ -1,7 +1,7 @@
 use anyhow::Result;
 use local_ip_address::local_ip;
 use std::net::IpAddr;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 pub mod bridge;
 pub mod comet;
@@ -21,7 +21,7 @@ pub mod bus;
 
 static LOCAL_IP: OnceLock<IpAddr> = OnceLock::new();
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
-static mut COMET_ADDR: OnceLock<String> = OnceLock::new();
+static COMET_ADDR: Mutex<Option<String>> = Mutex::new(None);
 
 pub fn get_local_ip() -> IpAddr {
     let ip = LOCAL_IP.get_or_init(|| local_ip().expect("failed get local ip"));
@@ -39,17 +39,11 @@ pub fn get_http_client() -> Client {
 }
 
 pub fn set_comet_addr(addr: impl Into<String>) {
-    unsafe {
-        if let Some(v) = COMET_ADDR.get_mut() {
-            *v = addr.into()
-        } else {
-            COMET_ADDR.set(addr.into()).expect("failed set comet addr");
-        }
-    }
+    COMET_ADDR.lock().unwrap().replace(addr.into());
 }
 
 pub fn get_comet_addr() -> Option<String> {
-    unsafe { COMET_ADDR.get().cloned() }
+    COMET_ADDR.lock().unwrap().clone()
 }
 
 pub fn get_mac_address() -> Result<String> {
