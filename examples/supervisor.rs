@@ -7,14 +7,19 @@ use watchexec_supervisor::{
 };
 
 async fn supervisor_test() {
+    let code = r#"date;
+    echo hello world
+    sleep 5 &
+    echo end"#;
+
     let (job, task) = start_job(Arc::new(Command {
         program: Program::Exec {
             prog: "/usr/bin/bash".into(),
-            args: vec!["-c".into(), r#"date;echo hello;sleep 10 &"#.into()],
+            args: vec!["-c".into(), code.into()],
         }
         .into(),
         options: SpawnOptions {
-            grouped: false,
+            grouped: true,
             reset_sigmask: true,
         },
     }));
@@ -31,6 +36,9 @@ async fn supervisor_test() {
         loop {
             select! {
                 _v = clone_job.to_wait() => {
+                    if clone_job.is_dead() {
+                        return;
+                    }
                     sleep(Duration::from_secs(1)).await;
                     clone_job.start().await;
                 }
@@ -38,9 +46,12 @@ async fn supervisor_test() {
         }
     });
 
-    job.to_wait().await;
+    sleep(Duration::from_secs(10)).await;
+    job.stop();
+    job.delete_now();
 
     let _ = task.await.expect("failed to wait join finished");
+    sleep(Duration::from_secs(5)).await;
 }
 
 #[tokio::main]
