@@ -9,8 +9,8 @@ pub enum JobAction {
     Kill,
     StartTimer,
     StopTimer,
-    StartSupervisor,
-    StopSupervisor,
+    BeginSupervising,
+    StopSupervising,
 }
 
 impl TryFrom<&str> for JobAction {
@@ -36,8 +36,8 @@ impl fmt::Display for JobAction {
             JobAction::Kill => write!(f, "kill"),
             JobAction::StartTimer => write!(f, "start_timer"),
             JobAction::StopTimer => write!(f, "stop_timer"),
-            JobAction::StartSupervisor => write!(f, "start_supervisor"),
-            JobAction::StopSupervisor => write!(f, "stop_supervisor"),
+            JobAction::BeginSupervising => write!(f, "begin_supervising"),
+            JobAction::StopSupervising => write!(f, "stop_supervising"),
         }
     }
 }
