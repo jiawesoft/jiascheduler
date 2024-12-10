@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::Error;
 use chrono::{DateTime, Utc};
@@ -101,6 +101,7 @@ pub struct DispatchJobParams {
     pub instance_id: String,
     pub fields: Option<HashMap<String, serde_json::Value>>,
     pub timer_expr: Option<String>,
+    pub restart_interval: Option<Duration>,
     pub is_sync: bool,
     pub created_user: String,
     pub action: JobAction,

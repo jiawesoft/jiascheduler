@@ -81,6 +81,7 @@ impl fmt::Display for RunStatus {
 pub enum ScheduleStatus {
     #[default]
     Prepare,
+    Supervising,
     Scheduling,
     Unscheduled,
 }
@@ -91,6 +92,7 @@ impl fmt::Display for ScheduleStatus {
             ScheduleStatus::Prepare => write!(f, "prepare"),
             ScheduleStatus::Scheduling => write!(f, "scheduling"),
             ScheduleStatus::Unscheduled => write!(f, "unscheduled"),
+            ScheduleStatus::Supervising => write!(f, "supervising"),
         }
     }
 }
@@ -151,6 +153,7 @@ pub enum ScheduleType {
     Once,
     Timer,
     Flow,
+    Daemon,
 }
 
 impl TryFrom<&str> for ScheduleType {
@@ -161,6 +164,7 @@ impl TryFrom<&str> for ScheduleType {
             "once" => ScheduleType::Once,
             "flow" => ScheduleType::Flow,
             "timer" => ScheduleType::Timer,
+            "daemon" => ScheduleType::Daemon,
             _ => return Err(anyhow!("invalid schedule type").into()),
         };
         Ok(schedule_type)
@@ -173,6 +177,7 @@ impl fmt::Display for ScheduleType {
             ScheduleType::Once => write!(f, "once"),
             ScheduleType::Timer => write!(f, "timer"),
             ScheduleType::Flow => write!(f, "flow"),
+            ScheduleType::Daemon => write!(f, "daemon"),
         }
     }
 }

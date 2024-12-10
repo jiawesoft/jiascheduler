@@ -5,8 +5,8 @@ use chrono::{DateTime, Local, Utc};
 use futures::{SinkExt, StreamExt};
 use watchexec_supervisor::{
     command::{Command, Program, SpawnOptions},
-    job::start_job,
-    job::Job as SupervisorJob,
+    job::{start_job, CommandState, Job as SupervisorJob},
+    Signal,
 };
 
 use crate::{
@@ -163,8 +163,10 @@ impl React {
         Ok(())
     }
 
-    async fn begin_supervising(&mut self, job: BaseJob, interval: Duration) -> Result<()> {
+    async fn begin_supervising(&mut self, dispatch_params: DispatchJobParams) -> Result<()> {
+        let job = dispatch_params.base_job.clone();
         let mut args = job.args.clone();
+        let interval = dispatch_params.restart_interval.unwrap_or_default();
         args.push(job.code.clone());
         let (supervisor_job, _) = start_job(Arc::new(Command {
             program: Program::Exec {
@@ -178,17 +180,87 @@ impl React {
         }));
         supervisor_job.start().await;
 
+        let update_job_params = UpdateJobParams {
+            schedule_id: dispatch_params.schedule_id,
+            schedule_type: Some(ScheduleType::Daemon),
+            base_job: dispatch_params.base_job.clone(),
+            instance_id: dispatch_params.instance_id.clone(),
+            bind_ip: self.local_ip.clone(),
+            bind_namespace: self.namespace.clone(),
+            run_status: None,
+            schedule_status: Some(types::ScheduleStatus::Scheduling),
+            exit_code: None,
+            exit_status: None,
+            stdout: None,
+            stderr: None,
+            created_user: dispatch_params.created_user,
+            bundle_output: None,
+            start_time: Some(Utc::now()),
+            end_time: None,
+            prev_time: None,
+            next_time: None,
+        };
+
+        self.send_update_job_msg(update_job_params.clone()).await?;
+
         let job_clone = job.clone();
         supervisor_job.set_error_handler(move |v| {
             let e = v.get().unwrap();
-            println!("eid: {}, error: {e}", job_clone.eid);
+            error!("eid: {}, error: {e}", job_clone.eid);
         });
         let supervisor_job_clone = supervisor_job.clone();
+
+        supervisor_job_clone
+            .run_async(move |ctx| {
+                if let CommandState::Finished {
+                    status,
+                    started,
+                    finished,
+                } = ctx.current
+                {
+                    let exit_status = status.into_exitstatus();
+                    
+                    todo!();
+                }
+                Box::new(async { () })
+            })
+            .await;
+
         tokio::spawn(async move {
             loop {
+                let mut update_job_params_clone = update_job_params.clone();
+
                 select! {
                     _v = supervisor_job_clone.to_wait() => {
-                        if supervisor_job_clone.is_dead() {
+                        let is_dead = supervisor_job_clone.is_dead();
+
+                        supervisor_job_clone.run_async(move |ctx| {
+                            if let CommandState::Finished {
+                                status,
+                                started,
+                                finished,
+                            } = ctx.current
+                            {
+
+                                let exit_status = status.into_exitstatus();
+
+                                update_job_params_clone.stdout = None;
+                            }
+
+
+
+                          
+
+                            println!(
+                                "end a task, current: {:?}, prev: {:?}",
+                                ctx.current, ctx.previous
+                            );
+                            Box::new(async { () })
+                        })
+                        .await;
+
+
+                        if is_dead {
                             return;
                         }
                         sleep(interval).await;
@@ -220,7 +292,9 @@ impl React {
         let jobs = self.supervisor_jobs.lock().await;
         let val = jobs.get(&eid);
         if let Some(supervisor_job) = val {
-            supervisor_job.stop().await;
+            supervisor_job
+                .stop_with_signal(Signal::ForceStop, Duration::from_secs(1))
+                .await;
             Ok(())
         } else {
             anyhow::bail!("supervisor job is not found")
@@ -231,7 +305,9 @@ impl React {
         let jobs = self.supervisor_jobs.lock().await;
         let val = jobs.get(&eid);
         if let Some(supervisor_job) = val {
-            supervisor_job.restart().await;
+            supervisor_job
+                .restart_with_signal(Signal::ForceStop, Duration::from_secs(1))
+                .await;
             Ok(())
         } else {
             anyhow::bail!("supervisor job is not found")

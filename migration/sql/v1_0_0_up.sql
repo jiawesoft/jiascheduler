@@ -191,7 +191,8 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES (
+VALUES
+    (
         'bash',
         'bash -c',
         'linux',
@@ -267,7 +268,7 @@ CREATE TABLE `job_schedule_history` (
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型 default, bundle',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `dispatch_result` json DEFAULT NULL COMMENT '调度派送结果',
-    `schedule_type` varchar(20) NOT NULL DEFAULT '' COMMENT '调度类型 once flow timer',
+    `schedule_type` varchar(20) NOT NULL DEFAULT '' COMMENT '调度类型 once flow timer daemon',
     `action` varchar(20) NOT NULL DEFAULT '' COMMENT '动作 exec kill start_timer stop_timer',
     `dispatch_data` json DEFAULT NULL COMMENT '调度派送数据',
     `snapshot_data` json DEFAULT NULL COMMENT '快照数据',

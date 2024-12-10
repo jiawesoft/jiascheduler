@@ -350,6 +350,7 @@ impl<'a> JobLogic<'a> {
             },
             instance_id: "".to_string(),
             fields: None,
+            restart_interval: None,
             created_user: created_user.clone(),
             schedule_id: schedule_id.clone(),
             timer_expr: timer_expr.clone(),
