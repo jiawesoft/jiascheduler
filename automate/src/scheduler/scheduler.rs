@@ -28,8 +28,8 @@ use tokio::{
     net::TcpStream,
     select,
     sync::{
-        mpsc::{channel, Receiver, Sender},
-        Mutex,
+        mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedSender},
+        oneshot, Mutex,
     },
     task,
     time::{sleep, timeout},
@@ -70,7 +70,7 @@ pub struct React {
     local_ip: String,
     client_key: String,
     schedule_uuid_mapping: Arc<Mutex<HashMap<String, Uuid>>>,
-    supervisor_jobs: Arc<Mutex<HashMap<String, SupervisorJob>>>,
+    supervisor_jobs: Arc<Mutex<HashMap<String, UnboundedSender<()>>>>,
     kill_signal_mapping: Arc<Mutex<HashMap<String, Vec<Sender<()>>>>>,
 }
 
@@ -142,20 +142,20 @@ impl React {
         }
     }
 
-    async fn kill_job(&mut self, job_id: String) {
+    async fn kill_job(&mut self, eid: String) {
         let mut locked_map = self.kill_signal_mapping.lock().await;
-        locked_map.remove(&job_id).map(|v| async {
+        locked_map.remove(&eid).map(|v| async {
             for tx in v {
                 if let Err(_) = tx.send(()).await {
-                    error!("failed send kill signal, job_id: {job_id}");
+                    error!("failed send kill signal, eid: {eid}");
                 }
             }
         });
     }
 
-    async fn remove_job(&mut self, job_id: String) {
+    async fn remove_job(&mut self, eid: String) {
         let mut locked_map = self.kill_signal_mapping.lock().await;
-        locked_map.remove(&job_id);
+        locked_map.remove(&eid);
     }
 
     async fn start(&mut self) -> Result<()> {
@@ -163,151 +163,24 @@ impl React {
         Ok(())
     }
 
-    async fn begin_supervising(&mut self, dispatch_params: DispatchJobParams) -> Result<()> {
-        let job = dispatch_params.base_job.clone();
-        let mut args = job.args.clone();
-        let interval = dispatch_params.restart_interval.unwrap_or_default();
-        args.push(job.code.clone());
-        let (supervisor_job, _) = start_job(Arc::new(Command {
-            program: Program::Exec {
-                prog: job.cmd_name.clone().into(),
-                args,
-            },
-            options: SpawnOptions {
-                grouped: true,
-                reset_sigmask: true,
-            },
-        }));
-        supervisor_job.start().await;
-
-        let update_job_params = UpdateJobParams {
-            schedule_id: dispatch_params.schedule_id,
-            schedule_type: Some(ScheduleType::Daemon),
-            base_job: dispatch_params.base_job.clone(),
-            instance_id: dispatch_params.instance_id.clone(),
-            bind_ip: self.local_ip.clone(),
-            bind_namespace: self.namespace.clone(),
-            run_status: None,
-            schedule_status: Some(types::ScheduleStatus::Scheduling),
-            exit_code: None,
-            exit_status: None,
-            stdout: None,
-            stderr: None,
-            created_user: dispatch_params.created_user,
-            bundle_output: None,
-            start_time: Some(Utc::now()),
-            end_time: None,
-            prev_time: None,
-            next_time: None,
-        };
-
-        self.send_update_job_msg(update_job_params.clone()).await?;
-
-        let job_clone = job.clone();
-        supervisor_job.set_error_handler(move |v| {
-            let e = v.get().unwrap();
-            error!("eid: {}, error: {e}", job_clone.eid);
-        });
-        let supervisor_job_clone = supervisor_job.clone();
-
-        supervisor_job_clone
-            .run_async(move |ctx| {
-                if let CommandState::Finished {
-                    status,
-                    started,
-                    finished,
-                } = ctx.current
-                {
-                    let exit_status = status.into_exitstatus();
-                    
-                    todo!();
-                }
-                Box::new(async { () })
-            })
-            .await;
-
-        tokio::spawn(async move {
-            loop {
-                let mut update_job_params_clone = update_job_params.clone();
-
-                select! {
-                    _v = supervisor_job_clone.to_wait() => {
-                        let is_dead = supervisor_job_clone.is_dead();
-
-                        supervisor_job_clone.run_async(move |ctx| {
-                            if let CommandState::Finished {
-                                status,
-                                started,
-                                finished,
-                            } = ctx.current
-                            {
-
-                                let exit_status = status.into_exitstatus();
-
-                                update_job_params_clone.stdout = None;
-                            }
-
-
-
-                          
-
-                            println!(
-                                "end a task, current: {:?}, prev: {:?}",
-                                ctx.current, ctx.previous
-                            );
-                            Box::new(async { () })
-                        })
-                        .await;
-
-
-                        if is_dead {
-                            return;
-                        }
-                        sleep(interval).await;
-                        supervisor_job_clone.start().await;
-                    }
-                }
-            }
-        });
-
-        self.supervisor_jobs
-            .lock()
-            .await
-            .insert(job.eid, supervisor_job);
-
-        Ok(())
+    async fn start_supervising(&mut self, eid: String, tx: UnboundedSender<()>) -> bool {
+        if self.supervisor_jobs.lock().await.insert(eid, tx).is_some() {
+            false
+        } else {
+            true
+        }
     }
-    async fn stop_supervising(&mut self, eid: String) -> Result<()> {
+
+    #[allow(unused)]
+    async fn is_supervising(&self, eid: &String) -> bool {
+        self.supervisor_jobs.lock().await.contains_key(eid)
+    }
+
+    async fn stop_supervising(&mut self, eid: &String) -> Result<()> {
         let mut jobs = self.supervisor_jobs.lock().await;
-        let val = jobs.remove(&eid);
+        let val = jobs.remove(eid);
         if let Some(supervisor_job) = val {
-            supervisor_job.delete_now().await;
-            Ok(())
-        } else {
-            anyhow::bail!("supervisor job is not found")
-        }
-    }
-
-    async fn stop_job_of_supervising(&mut self, eid: String) -> Result<()> {
-        let jobs = self.supervisor_jobs.lock().await;
-        let val = jobs.get(&eid);
-        if let Some(supervisor_job) = val {
-            supervisor_job
-                .stop_with_signal(Signal::ForceStop, Duration::from_secs(1))
-                .await;
-            Ok(())
-        } else {
-            anyhow::bail!("supervisor job is not found")
-        }
-    }
-
-    async fn restart_job_of_supervising(&mut self, eid: String) -> Result<()> {
-        let jobs = self.supervisor_jobs.lock().await;
-        let val = jobs.get(&eid);
-        if let Some(supervisor_job) = val {
-            supervisor_job
-                .restart_with_signal(Signal::ForceStop, Duration::from_secs(1))
-                .await;
+            let _ = supervisor_job.send(());
             Ok(())
         } else {
             anyhow::bail!("supervisor job is not found")
@@ -712,23 +585,67 @@ impl
         Ok(json!(null))
     }
 
-    async fn begin_supervising(
+    async fn start_supervising(
         dispatch_params: DispatchJobParams,
         mut react: React,
     ) -> Result<Value> {
-        todo!();
+        let eid = dispatch_params.base_job.eid.clone();
+        let (tx, mut rx) = unbounded_channel();
+        if !react.start_supervising(eid.clone(), tx).await {
+            return Ok(json!(null));
+        }
+
+        tokio::spawn(async move {
+            'main: loop {
+                select! {
+                    ret =  Scheduler::exec(dispatch_params.clone(), react.clone()) => {
+                        if let Err(e) = ret {
+                            error!("supervising: failed exec job - {e}");
+                        }
+                        if let Some(ref d) = dispatch_params.restart_interval {
+                            sleep(d.to_owned()).await;
+                        }
+                        continue 'main;
+                    }
+                    _ = rx.recv() => {
+                       let _= react.stop_supervising(&eid).await;
+                    }
+                };
+            }
+        });
+        Ok(json!(null))
     }
 
     async fn stop_supervising(
         dispatch_params: DispatchJobParams,
         mut react: React,
     ) -> Result<Value> {
-        todo!();
+        let eid = dispatch_params.base_job.eid.clone();
+        react.stop_supervising(&eid).await?;
+        react.kill_job(eid).await;
+        Ok(json!(null))
+    }
+
+    async fn restart_supervising(
+        dispatch_params: DispatchJobParams,
+        react: React,
+    ) -> Result<Value> {
+        Scheduler::start_supervising(dispatch_params.clone(), react.clone()).await?;
+        Scheduler::start_supervising(dispatch_params.clone(), react).await
     }
 
     async fn exec(dispatch_params: DispatchJobParams, mut react: React) -> Result<Value> {
-        let base_job = dispatch_params.base_job.clone();
+        let mut base_job = dispatch_params.base_job.clone();
         let (kill_signal_tx, kill_signal_rx) = channel::<()>(1);
+
+        let schedule_type = match dispatch_params.action {
+            JobAction::StartSupervising => {
+                base_job.timeout = 0;
+                ScheduleType::Daemon
+            }
+            JobAction::Exec => ScheduleType::Once,
+            _ => unreachable!(),
+        };
 
         let e = Executor::builder()
             .job(base_job.clone())
@@ -744,7 +661,7 @@ impl
             let output = Self::exec_job(
                 e,
                 react.clone(),
-                Some(ScheduleType::Once),
+                Some(schedule_type),
                 kill_signal_rx,
                 None,
                 None,
@@ -764,7 +681,7 @@ impl
             match Self::exec_job(
                 e,
                 react.clone(),
-                Some(ScheduleType::Once),
+                Some(schedule_type),
                 kill_signal_rx,
                 None,
                 None,
@@ -803,8 +720,13 @@ impl
         match dispatch_params.action {
             JobAction::StartTimer => Scheduler::start_timer(dispatch_params, react).await,
             JobAction::StopTimer => Scheduler::stop_timer(dispatch_params, react).await,
-            JobAction::BeginSupervising => todo!(),
-            JobAction::StopSupervising => todo!(),
+            JobAction::StartSupervising => {
+                Scheduler::start_supervising(dispatch_params, react).await
+            }
+            JobAction::RestartSupervising => {
+                Scheduler::restart_supervising(dispatch_params, react).await
+            }
+            JobAction::StopSupervising => Scheduler::stop_supervising(dispatch_params, react).await,
             JobAction::Exec => Scheduler::exec(dispatch_params, react).await,
             JobAction::Kill => Scheduler::kill(dispatch_params, react).await,
         }
@@ -816,8 +738,9 @@ impl
     ) -> Result<Value> {
         match action_params.action {
             RuntimeAction::StopTimer => react.remove_job_schedule(&action_params.eid).await?,
-            RuntimeAction::StopSupervisor => todo!(),
-            RuntimeAction::Kill => react.kill_job(action_params.eid).await,
+            RuntimeAction::StopSupervising => react.stop_supervising(&action_params.eid).await?,
+            RuntimeAction::Kill => react.kill_job(action_params.eid.clone()).await,
+            _ => unimplemented!(),
         };
         Ok(json!(null))
     }

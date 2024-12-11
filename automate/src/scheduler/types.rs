@@ -9,7 +9,8 @@ pub enum JobAction {
     Kill,
     StartTimer,
     StopTimer,
-    BeginSupervising,
+    StartSupervising,
+    RestartSupervising,
     StopSupervising,
 }
 
@@ -22,6 +23,9 @@ impl TryFrom<&str> for JobAction {
             "kill" => JobAction::Kill,
             "start_timer" => JobAction::StartTimer,
             "stop_timer" => JobAction::StopTimer,
+            "start_supervising" => JobAction::StartSupervising,
+            "stop_supervising" => JobAction::StopSupervising,
+            "restart_supervising" => JobAction::RestartSupervising,
             _ => return Err(anyhow!("invalid job action {value}")),
         };
 
@@ -36,7 +40,8 @@ impl fmt::Display for JobAction {
             JobAction::Kill => write!(f, "kill"),
             JobAction::StartTimer => write!(f, "start_timer"),
             JobAction::StopTimer => write!(f, "stop_timer"),
-            JobAction::BeginSupervising => write!(f, "begin_supervising"),
+            JobAction::StartSupervising => write!(f, "start_supervising"),
+            JobAction::RestartSupervising => write!(f, "restart_supervising"),
             JobAction::StopSupervising => write!(f, "stop_supervising"),
         }
     }
@@ -46,7 +51,9 @@ impl fmt::Display for JobAction {
 pub enum RuntimeAction {
     Kill,
     StopTimer,
-    StopSupervisor,
+    StartSupervising,
+    RestartSupervising,
+    StopSupervising,
 }
 
 impl fmt::Display for RuntimeAction {
@@ -54,7 +61,9 @@ impl fmt::Display for RuntimeAction {
         match self {
             RuntimeAction::Kill => write!(f, "kill"),
             RuntimeAction::StopTimer => write!(f, "stop_timer"),
-            RuntimeAction::StopSupervisor => write!(f, "stop_supervisor"),
+            RuntimeAction::StartSupervising => write!(f, "start_supervising"),
+            RuntimeAction::RestartSupervising => write!(f, "restart_supervising"),
+            RuntimeAction::StopSupervising => write!(f, "stop_supervising"),
         }
     }
 }
@@ -82,6 +91,7 @@ pub enum ScheduleStatus {
     #[default]
     Prepare,
     Supervising,
+    Unsupervised,
     Scheduling,
     Unscheduled,
 }
@@ -93,6 +103,7 @@ impl fmt::Display for ScheduleStatus {
             ScheduleStatus::Scheduling => write!(f, "scheduling"),
             ScheduleStatus::Unscheduled => write!(f, "unscheduled"),
             ScheduleStatus::Supervising => write!(f, "supervising"),
+            ScheduleStatus::Unsupervised => write!(f, "unsupervised"),
         }
     }
 }
