@@ -8,7 +8,7 @@ use crate::{
     get_endpoint, LinkPair,
 };
 use anyhow::{Ok, Result};
-use local_ip_address::linux::local_ip;
+use local_ip_address::local_ip;
 use redis::{AsyncCommands, FromRedisValue, RedisResult};
 
 use serde_json::{json, Value};
