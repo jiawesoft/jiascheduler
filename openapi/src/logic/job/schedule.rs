@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, Result};
 
@@ -255,6 +255,7 @@ impl<'a> JobLogic<'a> {
         schedule_type: ScheduleType,
         action: automate::JobAction,
         timer_expr: Option<String>,
+        restart_interval: Option<Duration>,
         created_user: String,
     ) -> Result<u64> {
         let schedule_id = IdGenerator::get_schedule_uid();
@@ -350,7 +351,7 @@ impl<'a> JobLogic<'a> {
             },
             instance_id: "".to_string(),
             fields: None,
-            restart_interval: None,
+            restart_interval,
             created_user: created_user.clone(),
             schedule_id: schedule_id.clone(),
             timer_expr: timer_expr.clone(),

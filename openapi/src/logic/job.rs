@@ -4,6 +4,7 @@ mod bundle_script;
 mod dashboard;
 mod exec_history;
 mod schedule;
+mod supervisor;
 mod timer;
 
 use sea_orm::{
@@ -53,6 +54,7 @@ impl<'a> JobLogic<'a> {
         let model = Job::find()
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
+            .column_as(executor::Column::Platform, "executor_platform")
             .join_rev(
                 JoinType::LeftJoin,
                 Executor::belongs_to(Job)

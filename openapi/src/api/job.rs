@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     default_local_time,
     entity::{job, job_bundle_script},
@@ -79,6 +81,7 @@ mod types {
         pub eid: String,
         pub executor_id: u64,
         pub executor_name: String,
+        pub executor_platform: String,
         pub name: String,
         pub code: String,
         pub info: String,
@@ -142,6 +145,7 @@ mod types {
         pub endpoints: Vec<Endpoint>,
         pub eid: String,
         pub timer_expr: Option<TimerExpr>,
+        pub restart_interval: Option<u64>,
         pub is_sync: bool,
         pub action: String,
     }
@@ -289,11 +293,14 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct JobTimerRecord {
         pub id: u64,
-        pub name: String,
-        pub job_name: String,
         pub eid: String,
+        pub name: String,
+        pub job_eid: String,
+        pub job_name: String,
         pub job_type: String,
         pub executor_id: u64,
+        pub executor_name: String,
+        pub executor_platform: String,
         pub timer_expr: serde_json::Value,
         pub info: String,
         pub created_user: String,
@@ -399,6 +406,45 @@ mod types {
         pub check_succ_num: i64,
         pub check_fail_num: i64,
         pub eval_fail_num: i64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct JobSupervisorRecord {
+        pub id: u64,
+        pub name: String,
+        pub job_name: String,
+        pub job_eid: String,
+        pub eid: String,
+        pub executor_id: u64,
+        pub executor_name: String,
+        pub executor_platform: String,
+        pub restart_interval: u64,
+        pub info: String,
+        pub created_user: String,
+        pub updated_user: String,
+        pub created_time: String,
+        pub updated_time: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct QueryJobSupervisorResp {
+        pub total: u64,
+        pub list: Vec<JobSupervisorRecord>,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    #[oai(skip_serializing_if_is_none)]
+    pub struct SaveJobSupervisorReq {
+        pub id: Option<u64>,
+        pub job_eid: String,
+        #[oai(validator(min_length = 1, max_length = 50))]
+        pub name: String,
+        pub info: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct SaveJobSupervisorResp {
+        pub result: u64,
     }
 }
 
@@ -536,6 +582,7 @@ impl JobApi {
                 eid: v.eid,
                 executor_id: v.executor_id,
                 executor_name: v.executor_name,
+                executor_platform: v.executor_platform,
                 name: v.name,
                 code: v.code,
                 info: v.info,
@@ -595,6 +642,7 @@ impl JobApi {
                 schedule_type,
                 action,
                 req.timer_expr.map(|v| v.into()),
+                req.restart_interval.map(|v| Duration::from_secs(v)),
                 user_info.username.clone(),
             )
             .await?;
@@ -1039,13 +1087,16 @@ impl JobApi {
             .into_iter()
             .map(|v| types::JobTimerRecord {
                 id: v.id,
+                eid: v.eid,
                 name: v.name,
                 job_name: v.job_name,
-                eid: v.eid,
+                job_eid: v.job_eid,
                 timer_expr: v.timer_expr.map_or(json!("null"), |v| v),
                 job_type: v.job_type,
                 info: v.info,
                 executor_id: v.executor_id,
+                executor_name: v.executor_name,
+                executor_platform: v.executor_platform,
                 created_user: v.created_user,
                 updated_user: v.updated_user,
                 created_time: local_time!(v.created_time),
@@ -1151,5 +1202,73 @@ impl JobApi {
             exec_succ_num: job_summary.exec_succ_num,
             exec_fail_num: job_summary.exec_fail_num,
         });
+    }
+
+    #[oai(path = "/supervisor-list", method = "get")]
+    pub async fn query_supervisor(
+        &self,
+        state: Data<&AppState>,
+        _session: &Session,
+        user_info: Data<&logic::types::UserInfo>,
+
+        #[oai(default)] Query(name): Query<Option<String>>,
+        #[oai(default)] Query(job_type): Query<Option<String>>,
+
+        Query(team_id): Query<Option<u64>>,
+        Query(eid): Query<Option<String>>,
+        Query(job_eid): Query<Option<String>>,
+
+        /// Search based on time range
+        #[oai(validator(max_items = 2, min_items = 2))]
+        Query(updated_time_range): Query<Option<Vec<String>>>,
+
+        #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
+        Query(page): Query<u64>,
+
+        #[oai(
+            default = "types::default_page_size",
+            validator(maximum(value = "10000"))
+        )]
+        Query(page_size): Query<u64>,
+    ) -> Result<ApiStdResponse<types::QueryJobSupervisorResp>> {
+        let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
+        let svc = state.service();
+        let ret = svc
+            .job
+            .query_job_supervisor(
+                Some(&user_info.username),
+                name.filter(|v| v != ""),
+                eid,
+                job_eid,
+                updated_time_range,
+                page - 1,
+                page_size,
+            )
+            .await?;
+
+        let list: Vec<types::JobSupervisorRecord> = ret
+            .0
+            .into_iter()
+            .map(|v| types::JobSupervisorRecord {
+                id: v.id,
+                name: v.name,
+                job_name: v.job_name,
+                eid: v.eid,
+                info: v.info,
+                executor_id: v.executor_id,
+                created_user: v.created_user,
+                updated_user: v.updated_user,
+                created_time: local_time!(v.created_time),
+                updated_time: local_time!(v.updated_time),
+                job_eid: v.job_eid,
+                executor_name: v.executor_name,
+                restart_interval: v.restart_interval,
+                executor_platform: v.executor_platform,
+            })
+            .collect();
+        return_ok!(types::QueryJobSupervisorResp {
+            total: ret.1,
+            list: list,
+        })
     }
 }

@@ -119,6 +119,23 @@ CREATE TABLE `job_timer` (
     UNIQUE KEY `uk_name` (`name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业定时器';
 
+DROP TABLE IF EXISTS `job_timer`;
+
+CREATE TABLE `job_supervisor` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `name` varchar(100) NOT NULL DEFAULT '' COMMENT 'supervisor名称',
+    `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
+    `restart_interval` BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '重启间隔,单位秒',
+    `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+    `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT '修改人',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_eid` (`eid`),
+    UNIQUE KEY `uk_name` (`name`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'job supervisor';
+
 DROP TABLE IF EXISTS `job`;
 
 CREATE TABLE `job` (
@@ -191,8 +208,7 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES
-    (
+VALUES (
         'bash',
         'bash -c',
         'linux',

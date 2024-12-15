@@ -20,6 +20,7 @@ pub mod job_organizer_task;
 pub mod job_organizer_task_result;
 pub mod job_running_status;
 pub mod job_schedule_history;
+pub mod job_supervisor;
 pub mod job_timer;
 pub mod role;
 pub mod tag;

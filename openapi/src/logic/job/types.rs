@@ -53,6 +53,7 @@ pub struct JobRelatedExecutorModel {
     pub eid: String,
     pub executor_id: u64,
     pub executor_name: String,
+    pub executor_platform: String,
     pub executor_command: String,
     pub job_type: String,
     pub name: String,
@@ -93,11 +94,14 @@ pub struct BundleScriptRelatedExecutorModel {
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct JobTimerRelatedJobModel {
     pub id: u64,
+    pub eid: String,
     pub name: String,
+    pub job_eid: String,
     pub job_name: String,
     pub job_type: String,
     pub executor_id: u64,
-    pub eid: String,
+    pub executor_name: String,
+    pub executor_platform: String,
     pub timer_expr: Option<serde_json::Value>,
     pub info: String,
     pub created_user: String,
@@ -208,4 +212,22 @@ pub struct JobStatSummary {
 pub struct InstanceStatSummary {
     pub online: u64,
     pub offline: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct JobSupervisorRelatedJobModel {
+    pub id: u64,
+    pub name: String,
+    pub job_name: String,
+    pub job_eid: String,
+    pub restart_interval: u64,
+    pub executor_id: u64,
+    pub executor_name: String,
+    pub executor_platform: String,
+    pub eid: String,
+    pub info: String,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeUtc,
+    pub updated_time: DateTimeUtc,
 }

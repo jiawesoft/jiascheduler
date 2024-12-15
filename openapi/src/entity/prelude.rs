@@ -18,6 +18,7 @@ pub use super::job_organizer_task::Entity as JobOrganizerTask;
 pub use super::job_organizer_task_result::Entity as JobOrganizerTaskResult;
 pub use super::job_running_status::Entity as JobRunningStatus;
 pub use super::job_schedule_history::Entity as JobScheduleHistory;
+pub use super::job_supervisor::Entity as JobSupervisor;
 pub use super::job_timer::Entity as JobTimer;
 pub use super::role::Entity as Role;
 pub use super::tag::Entity as Tag;
