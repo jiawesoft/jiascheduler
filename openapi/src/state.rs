@@ -1,6 +1,7 @@
 use crate::config::Conf;
 use crate::logic::role;
 use crate::logic::ssh::SshLogic;
+use crate::logic::team::TeamLogic;
 use crate::logic::types::Permission;
 use crate::logic::{
     executor::ExecutorLogic, instance::InstanceLogic, job::JobLogic, migration::MigrationLogic,
@@ -27,6 +28,7 @@ pub struct Service<'a> {
     pub migration: MigrationLogic<'a>,
     pub role: RoleLogic<'a>,
     pub ssh: SshLogic<'a>,
+    pub team: TeamLogic<'a>,
 }
 
 #[derive(Clone)]
@@ -83,7 +85,8 @@ impl AppContextBuilder {
         self
     }
 
-    pub fn enforcer(mut self, enforcer: Enforcer) -> Self {
+    pub fn enforcer(mut self, mut enforcer: Enforcer) -> Self {
+        enforcer.enable_auto_build_role_links(true);
         self.enforcer = Some(Arc::new(RwLock::new(enforcer)));
         self
     }
@@ -136,6 +139,7 @@ impl AppContext {
             role: RoleLogic::new(self),
             migration: MigrationLogic::new(self),
             ssh: SshLogic::new(self),
+            team: TeamLogic::new(self),
         }
     }
 
@@ -192,7 +196,8 @@ impl AppContext {
 
     pub async fn delete_role(&self, role_id: u64) -> Result<()> {
         let mut e = self.enforcer.write().await;
-        e.delete_role(role_id.to_string().as_str()).await?;
+        e.remove_filtered_policy(0, vec![role_id.to_string()])
+            .await?;
         Ok(())
     }
 
@@ -225,6 +230,7 @@ impl AppContext {
     pub async fn init_admin_permission(&self) -> Result<()> {
         self.set_permission_manage_instance("1").await?;
         self.set_permission_manage_user("1").await?;
+        self.set_permission_manage_job("1").await?;
         self.load_policy().await?;
         Ok(())
     }
@@ -237,6 +243,9 @@ impl AppContext {
         Ok(self.enforce((user_id, "user", "manage")).await?)
     }
 
+    pub async fn can_manage_job(&self, user_id: &str) -> Result<bool> {
+        Ok(self.enforce((user_id, "job", "manage")).await?)
+    }
     pub async fn is_change_forbid(&self, user_id: &str) -> Result<bool> {
         Ok(self.enforce((user_id, "change", "forbid")).await?)
     }
@@ -264,11 +273,15 @@ impl AppContext {
             if got.is_none() {
                 anyhow::bail!("invalid permission key")
             }
-
             self.set_policy(role_id.to_string().as_str(), object, action)
                 .await?;
         }
+        self.load_policy().await?;
         Ok(())
+    }
+
+    pub async fn set_permission_manage_job(&self, role: &str) -> Result<()> {
+        self.set_policy(role, "job", "manage").await
     }
 
     pub async fn set_permission_manage_user(&self, role: &str) -> Result<()> {

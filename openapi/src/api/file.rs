@@ -18,6 +18,7 @@ use tokio::{
 };
 
 use crate::{
+    error::NoPermission,
     local_time,
     logic::{
         self,
@@ -116,10 +117,14 @@ impl FileApi {
     #[oai(path = "/upload", method = "post")]
     async fn upload(
         &self,
-        _state: Data<&AppState>,
+        state: Data<&AppState>,
         _session: &Session,
         upload: types::UploadPayload,
+        user_info: Data<&logic::types::UserInfo>,
     ) -> Result<ApiStdResponse<types::UploadFileRes>> {
+        if state.is_change_forbid(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
         let filename = upload.file.file_name().map(ToString::to_string);
         let data = upload.file.into_vec().await.map_err(std_into_error)?;
 

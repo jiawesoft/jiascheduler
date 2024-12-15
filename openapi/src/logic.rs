@@ -6,6 +6,7 @@ pub mod job;
 pub mod migration;
 pub(crate) mod role;
 pub mod ssh;
+pub mod team;
 pub mod types;
 pub(crate) mod user;
 

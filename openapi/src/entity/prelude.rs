@@ -23,5 +23,7 @@ pub use super::job_timer::Entity as JobTimer;
 pub use super::role::Entity as Role;
 pub use super::tag::Entity as Tag;
 pub use super::tag_resource::Entity as TagResource;
+pub use super::team::Entity as Team;
+pub use super::team_member::Entity as TeamMember;
 pub use super::user::Entity as User;
 pub use super::user_server::Entity as UserServer;

@@ -4,7 +4,7 @@ pub mod response;
 use anyhow::{anyhow, Context, Result};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
-    migration::MigrationApi, role::RoleApi, terminal, user::UserApi,
+    migration::MigrationApi, role::RoleApi, team::TeamApi, terminal, user::UserApi,
 };
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
@@ -272,6 +272,7 @@ pub async fn run(opts: WebapiOptions) -> Result<()> {
     let api_service = OpenApiService::new(
         (
             UserApi,
+            TeamApi,
             JobApi,
             ExecutorApi,
             InstanceApi,

@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! api_response {
     ($type:ty) => {
-        Result<ApiStdResponse<$type>>
+        poem::Result<crate::response::ApiStdResponse<$type>>
     };
 }
 

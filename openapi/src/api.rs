@@ -5,6 +5,7 @@ pub mod job;
 pub mod manage;
 pub mod migration;
 pub mod role;
+pub mod team;
 pub mod terminal;
 pub mod user;
 mod utils;
@@ -32,6 +33,7 @@ pub fn default_option_page_size() -> Option<u64> {
 #[derive(Tags)]
 pub enum Tag {
     User,
+    Team,
     Job,
     Executor,
     Instance,

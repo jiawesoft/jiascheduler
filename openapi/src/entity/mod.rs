@@ -25,5 +25,7 @@ pub mod job_timer;
 pub mod role;
 pub mod tag;
 pub mod tag_resource;
+pub mod team;
+pub mod team_member;
 pub mod user;
 pub mod user_server;

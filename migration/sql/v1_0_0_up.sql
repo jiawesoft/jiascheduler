@@ -22,6 +22,32 @@ CREATE TABLE `user` (
     UNIQUE KEY `uqe_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户角色';
 
+DROP TABLE IF EXISTS `team`;
+
+CREATE TABLE `team` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `name` varchar(100) NOT NULL DEFAULT '' COMMENT '团队名称',
+    `info` varchar(200) NOT NULL DEFAULT '' COMMENT '介绍',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+    `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT '修改人',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_name` (`name`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '团队';
+
+DROP TABLE IF EXISTS `team_member`;
+
+CREATE TABLE `team_member` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `team_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '团队id',
+    `user_id` varchar(10) not null COMMENT '用户id',
+    `is_admin` BOOLEAN NOT NULL DEFAULT false COMMENT '是否是管理员',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`, `team_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户团队成员';
+
 DROP TABLE IF EXISTS `instance`;
 
 CREATE TABLE `instance` (
@@ -119,7 +145,7 @@ CREATE TABLE `job_timer` (
     UNIQUE KEY `uk_name` (`name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业定时器';
 
-DROP TABLE IF EXISTS `job_timer`;
+DROP TABLE IF EXISTS `job_supervisor`;
 
 CREATE TABLE `job_supervisor` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
@@ -143,6 +169,7 @@ CREATE TABLE `job` (
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `executor_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '执行器',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
+    `team_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队id',
     `name` varchar(100) NOT NULL DEFAULT '' COMMENT '作业名称',
     `code` text NOT NULL COMMENT '代码',
     `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',

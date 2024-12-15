@@ -32,6 +32,12 @@ const POLICY_DO_NOT_ALLOW_CHANGE_DATA: Permission = Permission {
     action: "forbid",
 };
 
+const POLICY_ALLOW_CHANGE_ALL_JOB: Permission = Permission {
+    name: "Allow manage all job",
+    object: "job",
+    action: "manage",
+};
+
 pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
     // vec![
     //     Permission {
@@ -54,6 +60,7 @@ pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
         POLICY_ALLOW_MANAGE_ALL_INSTANCE,
         POLICY_ALLOW_MANAGE_ALL_USER,
         POLICY_DO_NOT_ALLOW_CHANGE_DATA,
+        POLICY_ALLOW_CHANGE_ALL_JOB,
     ]
 });
 
