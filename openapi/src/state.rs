@@ -243,6 +243,10 @@ impl AppContext {
         Ok(self.enforce((user_id, "user", "manage")).await?)
     }
 
+    pub async fn can_upload_file(&self, user_id: &str) -> Result<bool> {
+        Ok(self.enforce((user_id, "file", "upload")).await?)
+    }
+
     pub async fn can_manage_job(&self, user_id: &str) -> Result<bool> {
         Ok(self.enforce((user_id, "job", "manage")).await?)
     }

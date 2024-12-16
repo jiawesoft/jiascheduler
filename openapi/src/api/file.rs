@@ -50,6 +50,8 @@ pub mod types {
     pub enum GetFileResponse {
         #[oai(status = 200)]
         Ok(Attachment<Vec<u8>>),
+        #[oai(status = 403)]
+        NotAllow,
         /// File not found
         #[oai(status = 404)]
         NotFound,
@@ -122,7 +124,7 @@ impl FileApi {
         upload: types::UploadPayload,
         user_info: Data<&logic::types::UserInfo>,
     ) -> Result<ApiStdResponse<types::UploadFileRes>> {
-        if state.is_change_forbid(&user_info.user_id).await? {
+        if !state.can_upload_file(&user_info.user_id).await? {
             return Err(NoPermission().into());
         }
         let filename = upload.file.file_name().map(ToString::to_string);
@@ -148,7 +150,16 @@ impl FileApi {
     }
 
     #[oai(path = "/get/:filename", method = "get")]
-    async fn get(&self, Path(filename): Path<String>) -> types::GetFileResponse {
+    async fn get(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        Path(filename): Path<String>,
+    ) -> types::GetFileResponse {
+        if !unwrap_or_response!(state.can_upload_file(&user_info.user_id).await) {
+            return types::GetFileResponse::NotAllow;
+        }
+
         let buf = PathBuf::from(filename);
         let name = buf.file_name();
 

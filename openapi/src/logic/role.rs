@@ -38,6 +38,12 @@ const POLICY_ALLOW_CHANGE_ALL_JOB: Permission = Permission {
     action: "manage",
 };
 
+const POLICY_ALLOW_UPLOAD_FILE: Permission = Permission {
+    name: "Allow upload file",
+    object: "file",
+    action: "upload",
+};
+
 pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
     // vec![
     //     Permission {
@@ -61,6 +67,7 @@ pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
         POLICY_ALLOW_MANAGE_ALL_USER,
         POLICY_DO_NOT_ALLOW_CHANGE_DATA,
         POLICY_ALLOW_CHANGE_ALL_JOB,
+        POLICY_ALLOW_UPLOAD_FILE,
     ]
 });
 
