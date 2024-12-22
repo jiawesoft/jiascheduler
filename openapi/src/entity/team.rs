@@ -11,7 +11,6 @@ pub struct Model {
     #[sea_orm(unique)]
     pub name: String,
     pub info: String,
-    pub is_admin: bool,
     pub created_user: String,
     pub updated_user: String,
     pub created_time: DateTimeUtc,

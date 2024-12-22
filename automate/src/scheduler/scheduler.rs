@@ -3,11 +3,6 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local, Utc};
 use futures::{SinkExt, StreamExt};
-use watchexec_supervisor::{
-    command::{Command, Program, SpawnOptions},
-    job::{start_job, CommandState, Job as SupervisorJob},
-    Signal,
-};
 
 use crate::{
     bridge::msg::{
@@ -19,7 +14,6 @@ use crate::{
     scheduler::types::JobAction,
     set_comet_addr,
     ssh::{self, ConnectParams, Session},
-    BaseJob,
 };
 use futures_util::stream::{SplitSink, SplitStream};
 
@@ -29,7 +23,7 @@ use tokio::{
     select,
     sync::{
         mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedSender},
-        oneshot, Mutex,
+        Mutex,
     },
     task,
     time::{sleep, timeout},

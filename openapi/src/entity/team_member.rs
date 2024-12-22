@@ -11,6 +11,7 @@ pub struct Model {
     pub team_id: u64,
     pub user_id: String,
     pub is_admin: bool,
+    pub created_user: String,
     pub created_time: DateTimeUtc,
 }
 

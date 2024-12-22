@@ -96,7 +96,6 @@ pub struct JobTimerRelatedJobModel {
     pub id: u64,
     pub eid: String,
     pub name: String,
-    pub job_eid: String,
     pub job_name: String,
     pub job_type: String,
     pub executor_id: u64,
@@ -219,7 +218,6 @@ pub struct JobSupervisorRelatedJobModel {
     pub id: u64,
     pub name: String,
     pub job_name: String,
-    pub job_eid: String,
     pub restart_interval: u64,
     pub executor_id: u64,
     pub executor_name: String,
@@ -230,4 +228,12 @@ pub struct JobSupervisorRelatedJobModel {
     pub updated_user: String,
     pub created_time: DateTimeUtc,
     pub updated_time: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TeamMemberModel {
+    pub user_id: String,
+    pub username: String,
+    pub is_admin: bool,
+    pub created_time: DateTimeUtc,
 }

@@ -43,6 +43,7 @@ CREATE TABLE `team_member` (
     `team_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '团队id',
     `user_id` varchar(10) not null COMMENT '用户id',
     `is_admin` BOOLEAN NOT NULL DEFAULT false COMMENT '是否是管理员',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_id` (`user_id`, `team_id`)

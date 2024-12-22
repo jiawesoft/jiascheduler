@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, QueryTrait, Set,
 };
 use sea_query::Expr;
 
@@ -10,7 +10,7 @@ use crate::{
     state::AppContext,
 };
 
-use super::types;
+use super::{job::types::TeamMemberModel, types};
 
 #[derive(Clone)]
 pub struct TeamLogic<'a> {
@@ -21,9 +21,18 @@ impl<'a> TeamLogic<'a> {
         Self { ctx }
     }
 
-    pub async fn get_team_member(&self, team_id: u64) -> Result<Vec<team_member::Model>> {
+    pub async fn get_team_member(&self, team_id: u64) -> Result<Vec<TeamMemberModel>> {
         Ok(TeamMember::find()
+            .column(user::Column::Username)
             .filter(team_member::Column::TeamId.eq(team_id))
+            .join_rev(
+                JoinType::LeftJoin,
+                User::belongs_to(TeamMember)
+                    .from(user::Column::UserId)
+                    .to(team_member::Column::UserId)
+                    .into(),
+            )
+            .into_model()
             .all(&self.ctx.db)
             .await?)
     }
@@ -73,20 +82,8 @@ impl<'a> TeamLogic<'a> {
         Ok(false)
     }
 
-    pub async fn get_team(
-        &self,
-        team_id: u64,
-    ) -> Result<Option<(team::Model, Vec<team_member::Model>)>> {
-        let team_record = Team::find_by_id(team_id).one(&self.ctx.db).await?;
-        if let Some(team_record) = team_record {
-            let team_member = TeamMember::find()
-                .filter(team_member::Column::TeamId.eq(team_id))
-                .all(&self.ctx.db)
-                .await?;
-
-            return Ok(Some((team_record, team_member)));
-        }
-        Ok(None)
+    pub async fn get_team(&self, team_id: u64) -> Result<Option<team::Model>> {
+        Ok(Team::find_by_id(team_id).one(&self.ctx.db).await?)
     }
 
     pub async fn save_team(
@@ -184,31 +181,40 @@ impl<'a> TeamLogic<'a> {
         Ok(ret.rows_affected)
     }
 
-    pub async fn append_member(&self, team_id: u64, user_ids: Option<Vec<String>>) -> Result<u64> {
+    pub async fn add_member(
+        &self,
+        team_id: u64,
+        members: Vec<team_member::ActiveModel>,
+    ) -> Result<u64> {
         if Team::find_by_id(team_id).one(&self.ctx.db).await?.is_none() {
             anyhow::bail!("invalid team");
         }
 
-        if let Some(user_ids) = user_ids {
-            let user_list = User::find()
-                .filter(user::Column::UserId.is_in(user_ids))
-                .all(&self.ctx.db)
-                .await?;
-            let data = user_list
-                .into_iter()
-                .map(|v| team_member::ActiveModel {
-                    team_id: Set(team_id),
-                    user_id: Set(v.user_id),
-                    ..Default::default()
-                })
-                .collect::<Vec<team_member::ActiveModel>>();
+        let user_ids = members
+            .iter()
+            .filter(|v| v.user_id.is_set())
+            .map(|v| v.user_id.clone().unwrap())
+            .collect::<Vec<String>>();
 
-            return Ok(TeamMember::insert_many(data)
-                .exec(&self.ctx.db)
-                .await?
-                .last_insert_id);
-        }
-        Ok(0)
+        let user_list = User::find()
+            .filter(user::Column::UserId.is_in(user_ids))
+            .all(&self.ctx.db)
+            .await?;
+
+        let members = members
+            .into_iter()
+            .filter(|v| {
+                let ActiveValue::Set(user_id) = v.user_id.clone() else {
+                    return false;
+                };
+                user_list.iter().any(|v| v.user_id == user_id)
+            })
+            .collect::<Vec<team_member::ActiveModel>>();
+
+        return Ok(TeamMember::insert_many(members)
+            .exec(&self.ctx.db)
+            .await?
+            .last_insert_id);
     }
 
     pub async fn remove_member(&self, team_id: u64, user_ids: Option<Vec<String>>) -> Result<u64> {

@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use crate::{
-    default_local_time,
-    entity::{job, job_bundle_script},
+    api_response, default_local_time,
+    entity::{job, job_bundle_script, job_supervisor},
     error::NoPermission,
     local_time,
     logic::{self, job::types::BundleScriptRecord},
@@ -295,7 +295,6 @@ mod types {
         pub id: u64,
         pub eid: String,
         pub name: String,
-        pub job_eid: String,
         pub job_name: String,
         pub job_type: String,
         pub executor_id: u64,
@@ -413,7 +412,6 @@ mod types {
         pub id: u64,
         pub name: String,
         pub job_name: String,
-        pub job_eid: String,
         pub eid: String,
         pub executor_id: u64,
         pub executor_name: String,
@@ -436,9 +434,11 @@ mod types {
     #[oai(skip_serializing_if_is_none)]
     pub struct SaveJobSupervisorReq {
         pub id: Option<u64>,
-        pub job_eid: String,
+        pub eid: String,
+        pub restart_interval: u64,
         #[oai(validator(min_length = 1, max_length = 50))]
         pub name: String,
+        #[oai(validator(min_length = 0, max_length = 500))]
         pub info: String,
     }
 
@@ -1052,6 +1052,7 @@ impl JobApi {
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
 
+        Query(team_id): Query<Option<u64>>,
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<Option<String>>,
 
@@ -1073,6 +1074,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_job_timer(
+                team_id,
                 Some(&user_info.username),
                 name.filter(|v| v != ""),
                 job_type.filter(|v| v != ""),
@@ -1090,7 +1092,6 @@ impl JobApi {
                 eid: v.eid,
                 name: v.name,
                 job_name: v.job_name,
-                job_eid: v.job_eid,
                 timer_expr: v.timer_expr.map_or(json!("null"), |v| v),
                 job_type: v.job_type,
                 info: v.info,
@@ -1205,19 +1206,15 @@ impl JobApi {
     }
 
     #[oai(path = "/supervisor-list", method = "get")]
-    pub async fn query_supervisor(
+    pub async fn query_job_supervisor(
         &self,
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
 
         #[oai(default)] Query(name): Query<Option<String>>,
-        #[oai(default)] Query(job_type): Query<Option<String>>,
-
         Query(team_id): Query<Option<u64>>,
         Query(eid): Query<Option<String>>,
-        Query(job_eid): Query<Option<String>>,
-
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -1239,7 +1236,7 @@ impl JobApi {
                 Some(&user_info.username),
                 name.filter(|v| v != ""),
                 eid,
-                job_eid,
+                team_id,
                 updated_time_range,
                 page - 1,
                 page_size,
@@ -1260,7 +1257,6 @@ impl JobApi {
                 updated_user: v.updated_user,
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
-                job_eid: v.job_eid,
                 executor_name: v.executor_name,
                 restart_interval: v.restart_interval,
                 executor_platform: v.executor_platform,
@@ -1270,5 +1266,40 @@ impl JobApi {
             total: ret.1,
             list: list,
         })
+    }
+
+    #[oai(path = "/save-supervisor", method = "post")]
+    pub async fn save_job_supervisor(
+        &self,
+        state: Data<&AppState>,
+        _session: &Session,
+        user_info: Data<&logic::types::UserInfo>,
+        Json(req): Json<types::SaveJobSupervisorReq>,
+    ) -> api_response!(types::SaveJobSupervisorResp) {
+        let svc = state.service();
+
+        let ret = svc
+            .job
+            .save_job_supervisor(job_supervisor::ActiveModel {
+                id: req.id.map_or(NotSet, |v| Set(v)),
+                name: Set(req.name),
+                eid: Set(req.eid),
+                restart_interval: Set({
+                    if req.restart_interval == 0 {
+                        1
+                    } else {
+                        req.restart_interval
+                    }
+                }),
+                info: Set(req.info),
+                created_user: Set(user_info.username.clone()),
+                updated_user: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .await?;
+
+        return_ok!(types::SaveJobSupervisorResp {
+            result: ret.id.as_ref().to_owned()
+        });
     }
 }

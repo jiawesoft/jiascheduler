@@ -17,6 +17,7 @@ impl<'a> JobLogic<'a> {
 
     pub async fn query_job_timer(
         &self,
+        team_id: Option<u64>,
         created_user: Option<&String>,
         name: Option<String>,
         job_type: Option<String>,
@@ -26,7 +27,6 @@ impl<'a> JobLogic<'a> {
     ) -> Result<(Vec<JobTimerRelatedJobModel>, u64)> {
         let model = job_timer::Entity::find()
             .column_as(job::Column::Name, "job_name")
-            .column_as(job::Column::Eid, "job_eid")
             .column(job::Column::ExecutorId)
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Platform, "executor_platform")
@@ -59,7 +59,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_timer::Column::UpdatedTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 

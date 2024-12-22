@@ -247,6 +247,7 @@ impl AppContext {
         Ok(self.enforce((user_id, "file", "upload")).await?)
     }
 
+    // can manage job so can manage team
     pub async fn can_manage_job(&self, user_id: &str) -> Result<bool> {
         Ok(self.enforce((user_id, "job", "manage")).await?)
     }

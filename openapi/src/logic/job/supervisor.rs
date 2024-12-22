@@ -15,7 +15,7 @@ impl<'a> JobLogic<'a> {
         created_user: Option<&String>,
         name: Option<String>,
         eid: Option<String>,
-        job_eid: Option<String>,
+        team_id: Option<u64>,
         updated_time_range: Option<(String, String)>,
         page: u64,
         page_size: u64,
@@ -45,8 +45,8 @@ impl<'a> JobLogic<'a> {
             .apply_if(created_user, |query, v| {
                 query.filter(job_supervisor::Column::CreatedUser.eq(v))
             })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
             .apply_if(eid, |q, v| q.filter(job_supervisor::Column::Eid.eq(v)))
-            .apply_if(job_eid, |q, v| q.filter(job::Column::Eid.eq(v)))
             .apply_if(updated_time_range, |query, v| {
                 query.filter(
                     job_supervisor::Column::UpdatedTime
