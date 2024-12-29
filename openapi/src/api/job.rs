@@ -105,6 +105,8 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct RunRecord {
         pub id: u64,
+        pub executor_id: u64,
+        pub executor_name: String,
         pub instance_id: String,
         pub bind_ip: String,
         pub bind_namespace: String,
@@ -119,6 +121,7 @@ mod types {
         pub exit_status: String,
         pub exit_code: i32,
         pub dispatch_result: Option<serde_json::Value>,
+        pub dispatch_data: Option<serde_json::Value>,
         pub start_time: String,
         pub end_time: String,
         pub next_time: String,
@@ -227,10 +230,25 @@ mod types {
     #[derive(Serialize, Default, Enum)]
     pub enum JobAction {
         #[default]
-        StartTimer,
+        #[oai(rename = "exec")]
         Exec,
+        #[oai(rename = "kill")]
+        Kill,
+        #[oai(rename = "start_timer")]
+        StartTimer,
+        #[oai(rename = "stop_timer")]
         StopTimer,
-        Stop,
+        #[oai(rename = "start_supervising")]
+        StartSupervising,
+        #[oai(rename = "stop_supervising")]
+        StopSupervising,
+    }
+
+    #[test]
+    fn test() {
+        let m = JobAction::Exec;
+        let s = serde_json::to_string(&m).unwrap();
+        println!("{}", s);
     }
 
     #[derive(Object, Serialize, Default)]
@@ -687,7 +705,7 @@ impl JobApi {
         #[oai(default)] Query(bind_ip): Query<Option<String>>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
         #[oai(validator(
-            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\"])"
+            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
         Query(schedule_type): Query<String>,
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
@@ -729,10 +747,20 @@ impl JobApi {
                 id: v.id,
                 instance_id: v.instance_id,
                 eid: v.eid,
+                executor_id: v.executor_id,
+                executor_name: v.executor_name,
                 updated_user: v.updated_user,
                 updated_time: local_time!(v.updated_time),
                 bind_ip: v.bind_ip,
                 bind_namespace: v.bind_namespace,
+                dispatch_data: v.dispatch_data.map(|mut v| {
+                    if let Some(o) = v.as_object_mut() {
+                        o.remove("target");
+                        v
+                    } else {
+                        return v;
+                    }
+                }),
                 schedule_type: v.schedule_type,
                 schedule_id: v.schedule_id,
                 schedule_name: v.schedule_name,
@@ -837,7 +865,7 @@ impl JobApi {
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
 
         #[oai(validator(
-            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\"])"
+            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
         Query(schedule_type): Query<Option<String>>,
         #[oai(default)] Query(schedule_id): Query<Option<String>>,
@@ -916,7 +944,9 @@ impl JobApi {
             types::JobAction::StartTimer => JobAction::StartTimer,
             types::JobAction::Exec => JobAction::Exec,
             types::JobAction::StopTimer => JobAction::StopTimer,
-            types::JobAction::Stop => JobAction::Kill,
+            types::JobAction::Kill => JobAction::Kill,
+            types::JobAction::StartSupervising => JobAction::StartSupervising,
+            types::JobAction::StopSupervising => JobAction::StopSupervising,
         };
         let ret = svc
             .job

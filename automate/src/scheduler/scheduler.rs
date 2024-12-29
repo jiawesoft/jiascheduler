@@ -589,6 +589,10 @@ impl
             return Ok(json!(null));
         }
 
+        let dur = dispatch_params
+            .restart_interval
+            .filter(|v| v.as_millis() > 0);
+
         tokio::spawn(async move {
             'main: loop {
                 select! {
@@ -596,8 +600,10 @@ impl
                         if let Err(e) = ret {
                             error!("supervising: failed exec job - {e}");
                         }
-                        if let Some(ref d) = dispatch_params.restart_interval {
+                        if let Some(ref d) = dur {
                             sleep(d.to_owned()).await;
+                        } else {
+                            sleep(Duration::from_millis(200)).await;
                         }
                         continue 'main;
                     }

@@ -245,6 +245,42 @@ impl<'a> JobLogic<'a> {
         }
     }
 
+    pub fn check_schedule_type(
+        &self,
+        action: JobAction,
+        schedule_type: ScheduleType,
+    ) -> Result<()> {
+        match schedule_type {
+            ScheduleType::Once => {
+                if !matches!(action, JobAction::Exec | JobAction::Kill) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+            ScheduleType::Timer => {
+                if !matches!(
+                    action,
+                    JobAction::StartTimer
+                        | JobAction::StopTimer
+                        | JobAction::Exec
+                        | JobAction::Kill
+                ) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+            ScheduleType::Flow => unimplemented!("not support flow schedule type"),
+            ScheduleType::Daemon => {
+                if !matches!(
+                    action,
+                    JobAction::StartSupervising | JobAction::RestartSupervising
+                ) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn dispatch_job(
         &self,
         secret: String,
@@ -258,8 +294,8 @@ impl<'a> JobLogic<'a> {
         restart_interval: Option<Duration>,
         created_user: String,
     ) -> Result<u64> {
+        self.check_schedule_type(action.clone(), schedule_type.clone())?;
         let schedule_id = IdGenerator::get_schedule_uid();
-
         let endpoints = Instance::find()
             .filter(instance::Column::InstanceId.is_in(instance_ids))
             .all(&self.ctx.db)

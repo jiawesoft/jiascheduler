@@ -23,7 +23,7 @@ impl<'a> JobLogic<'a> {
         let model = job_supervisor::Entity::find()
             .column_as(job::Column::Name, "job_name")
             .column_as(executor::Column::Name, "executor_name")
-            .column_as(executor::Column::Platform, "platform")
+            .column_as(executor::Column::Platform, "executor_platform")
             .column(job::Column::ExecutorId)
             .join_rev(
                 JoinType::LeftJoin,

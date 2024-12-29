@@ -159,8 +159,7 @@ CREATE TABLE `job_supervisor` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    KEY `idx_eid` (`eid`),
-    UNIQUE KEY `uk_name` (`name`)
+    UNIQUE KEY `uk_eid` (`eid`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'job supervisor';
 
 DROP TABLE IF EXISTS `job`;

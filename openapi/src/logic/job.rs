@@ -126,6 +126,9 @@ impl<'a> JobLogic<'a> {
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
+            .column_as(job_schedule_history::Column::DispatchData, "dispatch_data")
+            .column_as(executor::Column::Name, "executor_name")
+            .column_as(job::Column::ExecutorId, "executor_id")
             .column_as(
                 job_schedule_history::Column::SnapshotData,
                 "schedule_snapshot_data",
@@ -142,6 +145,20 @@ impl<'a> JobLogic<'a> {
                 Instance::belongs_to(JobRunningStatus)
                     .from(instance::Column::InstanceId)
                     .to(job_running_status::Column::InstanceId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobRunningStatus)
+                    .from(job::Column::Eid)
+                    .to(job_running_status::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Executor::belongs_to(Job)
+                    .from(executor::Column::Id)
+                    .to(job::Column::ExecutorId)
                     .into(),
             )
             .apply_if(schedule_type, |query, v| {
