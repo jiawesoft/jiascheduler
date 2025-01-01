@@ -791,7 +791,7 @@ impl JobApi {
         user_info: Data<&logic::types::UserInfo>,
 
         #[oai(validator(
-            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\"])"
+            custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
         Query(schedule_type): Query<Option<String>>,
         /// Search based on time range

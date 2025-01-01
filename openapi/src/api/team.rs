@@ -63,6 +63,7 @@ mod types {
 
     #[derive(Object, Serialize, Deserialize)]
     pub struct AddTeamMemberReq {
+        #[oai(validator(minimum(value = "1")))]
         pub team_id: u64,
         pub members: Vec<AddTeamMember>,
     }
@@ -245,6 +246,7 @@ impl TeamApi {
                 req.members
                     .iter()
                     .map(|v| team_member::ActiveModel {
+                        team_id: Set(req.team_id),
                         user_id: Set(v.user_id.to_owned()),
                         is_admin: Set(v.is_admin),
                         created_user: Set(user_info.username.clone()),
