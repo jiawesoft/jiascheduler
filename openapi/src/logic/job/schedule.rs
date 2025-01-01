@@ -874,7 +874,7 @@ impl<'a> JobLogic<'a> {
             .await?;
 
         if ret["code"] != 20000 {
-            anyhow::bail!("failed to dispatch job");
+            anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 
         // JobRunningStatus::update_many()

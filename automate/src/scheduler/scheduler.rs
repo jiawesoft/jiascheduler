@@ -98,53 +98,52 @@ impl React {
         self.bridge.send_msg(&self.client_key, data).await
     }
 
-    async fn add_job_schedule(
-        &mut self,
-        job_id: String,
-        job: Job,
-    ) -> Result<Option<DateTime<Utc>>> {
-        self.remove_job_schedule(job_id.as_str()).await?;
+    async fn add_job_schedule(&mut self, eid: String, job: Job) -> Result<Option<DateTime<Utc>>> {
+        self.remove_job_schedule(eid.as_str()).await?;
 
         let mut locked_map = self.schedule_uuid_mapping.lock().await;
-        if locked_map.get(&job_id).is_some() {
-            anyhow::bail!("{job_id} is existed");
+        if locked_map.get(&eid).is_some() {
+            anyhow::bail!("{eid} is existed");
         }
 
         let uuid = self.sched.add(job).await?;
 
         let next_time = self.sched.next_tick_for_job(uuid).await?;
 
-        locked_map.insert(job_id, uuid);
+        locked_map.insert(eid, uuid);
         Ok(next_time)
     }
 
-    async fn remove_job_schedule(&mut self, job_id: &str) -> Result<()> {
+    async fn remove_job_schedule(&mut self, eid: &str) -> Result<()> {
         let mut locked_map = self.schedule_uuid_mapping.lock().await;
-        if let Some(uuid) = locked_map.get(job_id) {
+        if let Some(uuid) = locked_map.get(eid) {
             self.sched.remove(uuid).await?;
-            locked_map.remove(job_id);
+            locked_map.remove(eid);
         }
         Ok(())
     }
 
-    async fn add_kill_signal_tx(&mut self, job_id: String, kill_signal_tx: Sender<()>) {
+    async fn add_kill_signal_tx(&mut self, eid: String, kill_signal_tx: Sender<()>) {
         let mut locked_map = self.kill_signal_mapping.lock().await;
-        if let Some(val) = locked_map.get_mut(&job_id) {
+        if let Some(val) = locked_map.get_mut(&eid) {
             val.append(&mut vec![kill_signal_tx]);
         } else {
-            locked_map.insert(job_id, vec![kill_signal_tx]);
+            locked_map.insert(eid, vec![kill_signal_tx]);
         }
     }
 
-    async fn kill_job(&mut self, eid: String) {
+    async fn kill_job(&mut self, eid: &str) {
         let mut locked_map = self.kill_signal_mapping.lock().await;
-        locked_map.remove(&eid).map(|v| async {
-            for tx in v {
-                if let Err(_) = tx.send(()).await {
-                    error!("failed send kill signal, eid: {eid}");
-                }
+
+        let Some(senders) = locked_map.remove(eid) else {
+            return;
+        };
+
+        for tx in senders {
+            if let Err(e) = tx.send(()).await {
+                error!("failed send kill signal, eid: {eid} {}", e);
             }
-        });
+        }
     }
 
     async fn remove_job(&mut self, eid: String) {
@@ -158,9 +157,11 @@ impl React {
     }
 
     async fn start_supervising(&mut self, eid: String, tx: UnboundedSender<()>) -> bool {
-        if self.supervisor_jobs.lock().await.insert(eid, tx).is_some() {
+        let mut jobs = self.supervisor_jobs.lock().await;
+        if jobs.contains_key(&eid) {
             false
         } else {
+            jobs.insert(eid, tx);
             true
         }
     }
@@ -595,22 +596,28 @@ impl
 
         tokio::spawn(async move {
             'main: loop {
-                select! {
-                    ret =  Scheduler::exec(dispatch_params.clone(), react.clone()) => {
-                        if let Err(e) = ret {
-                            error!("supervising: failed exec job - {e}");
-                        }
-                        if let Some(ref d) = dur {
-                            sleep(d.to_owned()).await;
-                        } else {
-                            sleep(Duration::from_millis(200)).await;
-                        }
-                        continue 'main;
-                    }
-                    _ = rx.recv() => {
-                       let _= react.stop_supervising(&eid).await;
-                    }
+                let ret = Scheduler::wait_exec(dispatch_params.clone(), react.clone()).await;
+                if let Err(e) = ret {
+                    error!("supervising: failed exec job - {e}");
+                }
+                let sleep_time = if let Some(ref d) = dur {
+                    sleep(d.to_owned())
+                } else {
+                    sleep(Duration::from_millis(50))
                 };
+
+                tokio::pin!(sleep_time);
+
+                select! {
+                    _ = &mut sleep_time => {
+                        info!("supervising: sleep, waiting restart")
+                    },
+                    _ = rx.recv() => {
+                        info!("supervising: exited");
+                        return;
+                    },
+                }
+                continue 'main;
             }
         });
         Ok(json!(null))
@@ -621,8 +628,8 @@ impl
         mut react: React,
     ) -> Result<Value> {
         let eid = dispatch_params.base_job.eid.clone();
+        react.kill_job(&eid).await;
         react.stop_supervising(&eid).await?;
-        react.kill_job(eid).await;
         Ok(json!(null))
     }
 
@@ -630,8 +637,46 @@ impl
         dispatch_params: DispatchJobParams,
         react: React,
     ) -> Result<Value> {
-        Scheduler::start_supervising(dispatch_params.clone(), react.clone()).await?;
+        Scheduler::stop_supervising(dispatch_params.clone(), react.clone()).await?;
         Scheduler::start_supervising(dispatch_params.clone(), react).await
+    }
+
+    async fn wait_exec(dispatch_params: DispatchJobParams, mut react: React) -> Result<()> {
+        let mut base_job = dispatch_params.base_job.clone();
+        let (kill_signal_tx, kill_signal_rx) = channel::<()>(1);
+
+        let schedule_type = match dispatch_params.action {
+            JobAction::StartSupervising => {
+                base_job.timeout = 0;
+                ScheduleType::Daemon
+            }
+            JobAction::Exec => ScheduleType::Once,
+            _ => unreachable!(),
+        };
+
+        let e = Executor::builder()
+            .job(base_job.clone())
+            .output_dir(react.output_dir.clone())
+            .disable_write_log(true)
+            .build();
+
+        react
+            .add_kill_signal_tx(base_job.eid.clone(), kill_signal_tx)
+            .await;
+
+        Self::exec_job(
+            e,
+            react.clone(),
+            Some(schedule_type),
+            kill_signal_rx,
+            None,
+            None,
+            dispatch_params,
+        )
+        .await?;
+        react.remove_job(base_job.eid.clone()).await;
+
+        Ok(())
     }
 
     async fn exec(dispatch_params: DispatchJobParams, mut react: React) -> Result<Value> {
@@ -700,7 +745,7 @@ impl
     }
 
     async fn kill(dispatch_params: DispatchJobParams, mut react: React) -> Result<Value> {
-        react.kill_job(dispatch_params.base_job.eid.clone()).await;
+        react.kill_job(&dispatch_params.base_job.eid).await;
         Ok(json!(null))
     }
 
@@ -739,7 +784,7 @@ impl
         match action_params.action {
             RuntimeAction::StopTimer => react.remove_job_schedule(&action_params.eid).await?,
             RuntimeAction::StopSupervising => react.stop_supervising(&action_params.eid).await?,
-            RuntimeAction::Kill => react.kill_job(action_params.eid.clone()).await,
+            RuntimeAction::Kill => react.kill_job(&action_params.eid).await,
             _ => unimplemented!(),
         };
         Ok(json!(null))
