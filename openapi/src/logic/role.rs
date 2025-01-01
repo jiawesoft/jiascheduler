@@ -121,10 +121,12 @@ impl<'a> RoleLogic<'a> {
         F: FnOnce(String, String) -> T + Clone,
         T: Future<Output = Result<()>>,
     {
-        let role_record = Role::find_by_id(role_id)
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!("invalid role, role_id: {role_id}"))?;
+        if role_id != 0 {
+            Role::find_by_id(role_id)
+                .one(&self.ctx.db)
+                .await?
+                .ok_or(anyhow!("invalid role, role_id: {role_id}"))?;
+        }
 
         let affected = if let Some(user_ids) = user_ids {
             let affected = User::update_many()
@@ -146,7 +148,7 @@ impl<'a> RoleLogic<'a> {
 
             for v in user_records {
                 let update_role = update_role.clone();
-                update_role(v.user_id, role_record.id.to_string()).await?;
+                update_role(v.user_id, role_id.to_string()).await?;
             }
 
             affected
