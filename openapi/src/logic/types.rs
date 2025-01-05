@@ -127,3 +127,15 @@ impl TeamMemberCountList {
         self.0.iter().find(|&v| v.team_id == team_id)
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
+pub struct TeamRecord {
+    pub id: u64,
+    pub name: String,
+    pub info: String,
+    pub is_admin: Option<bool>,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeUtc,
+    pub updated_time: DateTimeUtc,
+}

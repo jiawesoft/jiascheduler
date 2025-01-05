@@ -33,7 +33,7 @@ CREATE TABLE `team` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name` (`name`)
+    UNIQUE KEY `uk_name` (`name`, `created_user`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '团队';
 
 DROP TABLE IF EXISTS `team_member`;

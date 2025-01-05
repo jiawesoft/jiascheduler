@@ -6,13 +6,18 @@ use crate::{
     error::NoPermission,
     local_time,
     logic::{self, job::types::BundleScriptRecord},
+    middleware,
     response::{std_into_error, ApiStdResponse},
     return_ok, AppState, IdGenerator,
 };
 
 use automate::JobAction;
-use poem::{session::Session, web::Data, Result};
-use poem_openapi::{param::Query, payload::Json, OpenApi};
+use poem::{session::Session, web::Data, Endpoint, EndpointExt, Result};
+use poem_openapi::{
+    param::{Header, Query},
+    payload::Json,
+    OpenApi,
+};
 use sea_orm::{ActiveValue::NotSet, Set};
 use serde_json::json;
 mod types {
@@ -466,30 +471,34 @@ mod types {
     }
 }
 
+fn set_middleware(ep: impl Endpoint) -> impl Endpoint {
+    ep.with(middleware::TeamPermissionMiddleware)
+}
+
 pub struct JobApi;
 
 #[OpenApi(prefix_path = "/job", tag = super::Tag::Job)]
 impl JobApi {
-    #[oai(path = "/save", method = "post")]
+    #[oai(path = "/save", method = "post", transform = "set_middleware")]
     pub async fn save_job(
         &self,
         state: Data<&AppState>,
         _session: &Session,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         user_info: Data<&logic::types::UserInfo>,
         Json(req): Json<types::SaveJobReq>,
     ) -> Result<ApiStdResponse<types::SaveJobResp>> {
         let ok = state.is_change_forbid(&user_info.user_id).await?;
-
         if ok {
             return Err(NoPermission().into());
         }
+        let svc = state.service();
+
         let args = req
             .args
             .map(|v| serde_json::to_value(&v))
             .transpose()
             .map_err(std_into_error)?;
-
-        let svc = state.service();
 
         let (job_type, bundle_script) = match req.bundle_script {
             Some(v) => {
@@ -543,6 +552,7 @@ impl JobApi {
                 created_user: Set(user_info.username.clone()),
                 updated_user: Set(user_info.username.clone()),
                 args: Set(args),
+                team_id: Set(team_id.unwrap_or_default()),
                 ..Default::default()
             })
             .await?;
@@ -552,7 +562,7 @@ impl JobApi {
         });
     }
 
-    #[oai(path = "/list", method = "get")]
+    #[oai(path = "/list", method = "get", transform = "set_middleware")]
     pub async fn query_job(
         &self,
         state: Data<&AppState>,
@@ -563,6 +573,7 @@ impl JobApi {
         Query(page): Query<u64>,
         Query(default_id): Query<Option<u64>>,
         Query(default_eid): Query<Option<String>>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -575,7 +586,6 @@ impl JobApi {
         Query(page_size): Query<u64>,
     ) -> Result<ApiStdResponse<types::QueryJobResp>> {
         let svc = state.service();
-
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
 
         let ret = svc
@@ -587,6 +597,7 @@ impl JobApi {
                 updated_time_range,
                 default_id,
                 default_eid,
+                team_id,
                 page - 1,
                 page_size,
             )

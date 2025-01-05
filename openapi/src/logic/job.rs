@@ -48,6 +48,7 @@ impl<'a> JobLogic<'a> {
         updated_time_range: Option<(String, String)>,
         default_id: Option<u64>,
         default_eid: Option<String>,
+        team_id: Option<u64>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
@@ -68,7 +69,8 @@ impl<'a> JobLogic<'a> {
             .apply_if(job_type, |query, v| {
                 query.filter(job::Column::JobType.eq(v))
             })
-            .apply_if(name, |query, v| query.filter(job::Column::Name.contains(v)))
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
+            .apply_if(name, |q, v| q.filter(job::Column::Name.contains(v)))
             .apply_if(updated_time_range, |query, v| {
                 query.filter(
                     job::Column::UpdatedTime

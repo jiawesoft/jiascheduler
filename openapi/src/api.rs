@@ -10,9 +10,8 @@ pub mod terminal;
 pub mod user;
 mod utils;
 
-use std::fmt::{self, Display, Formatter};
-
 use poem_openapi::{Tags, Validator};
+use std::fmt::{self, Display, Formatter};
 
 pub fn default_page() -> u64 {
     1

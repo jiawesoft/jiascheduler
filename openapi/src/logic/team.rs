@@ -10,7 +10,10 @@ use crate::{
     state::AppContext,
 };
 
-use super::{job::types::TeamMemberModel, types};
+use super::{
+    job::types::TeamMemberModel,
+    types::{self, TeamRecord},
+};
 
 #[derive(Clone)]
 pub struct TeamLogic<'a> {
@@ -37,7 +40,7 @@ impl<'a> TeamLogic<'a> {
             .await?)
     }
 
-    pub async fn can_write_job(&self, team_id: Option<u64>, user_id: String) -> Result<bool> {
+    pub async fn can_write_job(&self, team_id: Option<u64>, user_id: &str) -> Result<bool> {
         let ret = self.ctx.can_manage_job(&user_id).await?;
         if ret {
             return Ok(true);
@@ -62,22 +65,73 @@ impl<'a> TeamLogic<'a> {
     }
 
     pub async fn can_write_team(&self, team_id: Option<u64>, user_id: String) -> Result<bool> {
-        let team_id = if let Some(team_id) = team_id {
-            team_id
-        } else {
+        let Some(team_id) = team_id else {
             return Ok(true);
         };
-        let ret = self.ctx.can_manage_job(&user_id).await?;
-        if ret {
+        if self.ctx.can_manage_job(&user_id).await? {
             return Ok(true);
         }
+        if Team::find()
+            .join_rev(
+                JoinType::LeftJoin,
+                User::belongs_to(Team)
+                    .from(user::Column::Username)
+                    .to(team::Column::CreatedUser)
+                    .into(),
+            )
+            .filter(team::Column::Id.eq(team_id))
+            .filter(user::Column::UserId.eq(&user_id))
+            .one(&self.ctx.db)
+            .await?
+            .is_some()
+        {
+            return Ok(true);
+        }
+
         if let Some(member) = TeamMember::find()
             .filter(team_member::Column::TeamId.eq(team_id))
-            .filter(team_member::Column::UserId.eq(user_id))
+            .filter(team_member::Column::UserId.eq(&user_id))
             .one(&self.ctx.db)
             .await?
         {
             return Ok(member.is_admin);
+        }
+        Ok(false)
+    }
+
+    pub async fn can_read_team(&self, team_id: Option<u64>, user_id: String) -> Result<bool> {
+        let Some(team_id) = team_id else {
+            return Ok(true);
+        };
+        if self.ctx.can_manage_job(&user_id).await? {
+            return Ok(true);
+        }
+
+        if Team::find()
+            .join_rev(
+                JoinType::LeftJoin,
+                User::belongs_to(Team)
+                    .from(user::Column::Username)
+                    .to(team::Column::CreatedUser)
+                    .into(),
+            )
+            .filter(team::Column::Id.eq(team_id))
+            .filter(user::Column::UserId.eq(&user_id))
+            .one(&self.ctx.db)
+            .await?
+            .is_some()
+        {
+            return Ok(true);
+        }
+
+        if TeamMember::find()
+            .filter(team_member::Column::TeamId.eq(team_id))
+            .filter(team_member::Column::UserId.eq(&user_id))
+            .one(&self.ctx.db)
+            .await?
+            .is_some()
+        {
+            return Ok(true);
         }
         Ok(false)
     }
@@ -138,15 +192,34 @@ impl<'a> TeamLogic<'a> {
         default_id: Option<u64>,
         page: u64,
         page_size: u64,
-    ) -> Result<(Vec<team::Model>, u64)> {
+    ) -> Result<(Vec<TeamRecord>, u64)> {
         let model = Team::find()
+            .column(team_member::Column::IsAdmin)
+            .join_rev(
+                JoinType::LeftJoin,
+                TeamMember::belongs_to(Team)
+                    .from(team_member::Column::TeamId)
+                    .to(team::Column::Id)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                User::belongs_to(TeamMember)
+                    .from(user::Column::UserId)
+                    .to(team_member::Column::UserId)
+                    .into(),
+            )
             .apply_if(name, |query, v| {
                 query.filter(team::Column::Name.contains(v))
             })
             .apply_if(created_user, |query, v| {
-                query.filter(team::Column::CreatedUser.contains(v))
+                query.filter(
+                    team::Column::CreatedUser
+                        .eq(&v)
+                        .or(user::Column::Username.eq(&v)),
+                )
             })
-            .apply_if(id, |query, v| query.filter(role::Column::Id.eq(v)));
+            .apply_if(id, |query, v| query.filter(team::Column::Id.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 
@@ -155,6 +228,7 @@ impl<'a> TeamLogic<'a> {
                 query.order_by_desc(Expr::expr(team::Column::Id.eq(v)))
             })
             .order_by_desc(team::Column::UpdatedTime)
+            .into_model()
             .paginate(&self.ctx.db, page_size)
             .fetch_page(page)
             .await?;

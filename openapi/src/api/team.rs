@@ -57,6 +57,7 @@ mod types {
         pub name: String,
         pub info: String,
         pub user_total: i64,
+        pub is_admin: bool,
         pub created_time: String,
         pub created_user: String,
     }
@@ -131,7 +132,7 @@ impl TeamApi {
         Query(id): Query<Option<u64>>,
         Query(default_id): Query<Option<u64>>,
         /// Team adminitor can query all team
-        Query(user_id): Query<Option<String>>,
+        Query(username): Query<Option<String>>,
         Query(name): Query<Option<String>>,
         #[oai(
             default = "crate::api::default_page_size",
@@ -146,41 +147,39 @@ impl TeamApi {
         user_info: Data<&logic::types::UserInfo>,
     ) -> api_response!(types::QueryTeamResp) {
         let svc = state.service();
-        let user_id = if svc
-            .team
-            .can_write_job(None, user_info.user_id.clone())
-            .await?
-        {
-            user_id
+        let username = if svc.team.can_write_job(None, &user_info.user_id).await? {
+            username
         } else {
-            Some(user_info.user_id.clone())
+            Some(user_info.username.clone())
         };
 
         let team_member_count = svc.team.count_team_member().await?;
         let ret = svc
             .team
-            .query_team(name, user_id, id, default_id, page - 1, page_size)
+            .query_team(name, username, id, default_id, page - 1, page_size)
             .await?;
 
-        let mut list: Vec<types::TeamRecord> = Vec::new();
-
-        for v in ret.0 {
-            list.push(types::TeamRecord {
+        let list: Vec<types::TeamRecord> = ret
+            .0
+            .into_iter()
+            .map(|v| types::TeamRecord {
                 id: v.id,
                 name: v.name,
                 info: v.info,
+                is_admin: v.is_admin.unwrap_or(v.created_user == user_info.username),
                 user_total: team_member_count
                     .get_by_team_id(v.id)
                     .map_or(0, |v| v.total),
                 created_time: local_time!(v.created_time),
                 created_user: v.created_user,
-            });
-        }
+            })
+            .collect();
+
         return_ok!(types::QueryTeamResp { total: ret.1, list })
     }
 
     #[oai(path = "/detail", method = "get")]
-    pub async fn get_team_team(
+    pub async fn get_team_detail(
         &self,
         state: Data<&AppState>,
         _session: &Session,
@@ -190,7 +189,7 @@ impl TeamApi {
         let svc = state.service();
         if !svc
             .team
-            .can_write_team(Some(id), user_info.user_id.clone())
+            .can_read_team(Some(id), user_info.user_id.clone())
             .await?
         {
             return_err!("no permission");
