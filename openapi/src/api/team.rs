@@ -20,7 +20,6 @@ mod types {
         pub id: Option<u64>,
         pub name: String,
         pub info: Option<String>,
-        pub user_id: Option<Vec<String>>,
     }
 
     #[derive(Object, Serialize, Deserialize)]
@@ -110,15 +109,14 @@ impl TeamApi {
 
         let ret = svc
             .team
-            .save_team(
-                team::ActiveModel {
-                    name: Set(req.name),
-                    info: req.info.map_or(NotSet, |v| Set(v)),
-                    created_user: Set(user_info.username.clone()),
-                    ..Default::default()
-                },
-                req.user_id,
-            )
+            .save_team(team::ActiveModel {
+                name: Set(req.name),
+                id: req.id.map_or(NotSet, |v| Set(v)),
+                info: req.info.map_or(NotSet, |v| Set(v)),
+                created_user: req.id.map_or(Set(user_info.username.clone()), |_| NotSet),
+                updated_user: Set(user_info.username.clone()),
+                ..Default::default()
+            })
             .await?;
 
         return_ok!(types::SaveTeamResult { affected: ret })
