@@ -1,4 +1,4 @@
-use crate::entity::{instance, job_exec_history, job_schedule_history, prelude::*};
+use crate::entity::{instance, job, job_exec_history, job_schedule_history, prelude::*};
 use anyhow::Result;
 use sea_orm::{
     ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -16,6 +16,7 @@ impl<'a> JobLogic<'a> {
         job_type: String,
         schedule_id: Option<String>,
         schedule_type: Option<String>,
+        team_id: Option<u64>,
         eid: Option<String>,
         schedule_name: Option<String>,
         username: Option<String>,
@@ -31,6 +32,13 @@ impl<'a> JobLogic<'a> {
             .column(job_schedule_history::Column::CreatedUser)
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobExecHistory)
+                    .from(job::Column::Eid)
+                    .to(job_exec_history::Column::Eid)
+                    .into(),
+            )
             .join_rev(
                 JoinType::LeftJoin,
                 JobScheduleHistory::belongs_to(JobExecHistory)
@@ -74,7 +82,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_exec_history::Column::EndTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 

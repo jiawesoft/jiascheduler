@@ -10,6 +10,7 @@ pub struct Model {
     pub id: u64,
     pub eid: String,
     pub executor_id: u64,
+    pub team_id: u64,
     #[sea_orm(unique)]
     pub name: String,
     #[sea_orm(column_type = "Text")]

@@ -197,6 +197,7 @@ CREATE TABLE `job_bundle_script` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `executor_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '执行器',
+    `team_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队id',
     `name` varchar(100) NOT NULL DEFAULT '' COMMENT '作业名称',
     `code` text NOT NULL COMMENT '代码',
     `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',
@@ -235,7 +236,8 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES (
+VALUES
+    (
         'bash',
         'bash -c',
         'linux',

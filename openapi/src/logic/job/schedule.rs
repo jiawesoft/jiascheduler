@@ -776,6 +776,7 @@ impl<'a> JobLogic<'a> {
         created_user: String,
         job_type: String,
         name: Option<String>,
+        team_id: Option<u64>,
         updated_time_range: Option<(String, String)>,
         page: u64,
         page_size: u64,
@@ -783,6 +784,13 @@ impl<'a> JobLogic<'a> {
         let model = JobScheduleHistory::find()
             .filter(job_schedule_history::Column::CreatedUser.eq(created_user))
             .filter(job_schedule_history::Column::JobType.eq(job_type))
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobScheduleHistory)
+                    .from(job::Column::Eid)
+                    .to(job_schedule_history::Column::Eid)
+                    .into(),
+            )
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))
             })
@@ -795,7 +803,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_schedule_history::Column::UpdatedTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 

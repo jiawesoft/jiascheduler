@@ -721,7 +721,7 @@ impl JobApi {
         Query(schedule_type): Query<String>,
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
         Query(job_type): Query<String>,
-
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -742,6 +742,7 @@ impl JobApi {
             .query_run_list(
                 Some(user_info.username.clone()),
                 bind_ip.filter(|v| v != ""),
+                team_id,
                 schedule_name.filter(|v| v != ""),
                 Some(schedule_type),
                 Some(job_type),
@@ -811,7 +812,7 @@ impl JobApi {
 
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<String>,
-
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
         #[oai(
@@ -830,6 +831,7 @@ impl JobApi {
                 user_info.username.clone(),
                 job_type,
                 name,
+                team_id,
                 updated_time_range,
                 page - 1,
                 page_size,
@@ -874,7 +876,7 @@ impl JobApi {
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
         Query(job_type): Query<String>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
-
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(validator(
             custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
@@ -903,6 +905,7 @@ impl JobApi {
                 job_type,
                 schedule_id.filter(|v| v != ""),
                 schedule_type,
+                team_id,
                 eid,
                 schedule_name,
                 Some(user_info.username.clone()),
@@ -1038,7 +1041,7 @@ impl JobApi {
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
-
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
 
@@ -1054,6 +1057,7 @@ impl JobApi {
             .job
             .query_bundle_script(
                 Some(user_info.username.clone()),
+                team_id,
                 default_eid,
                 name,
                 updated_time_range,
@@ -1092,10 +1096,9 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
-
-        Query(team_id): Query<Option<u64>>,
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<Option<String>>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
 
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
@@ -1252,17 +1255,14 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
-
         #[oai(default)] Query(name): Query<Option<String>>,
-        Query(team_id): Query<Option<u64>>,
         Query(eid): Query<Option<String>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
-
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
-
         #[oai(
             default = "types::default_page_size",
             validator(maximum(value = "10000"))

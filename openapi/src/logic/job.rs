@@ -117,6 +117,7 @@ impl<'a> JobLogic<'a> {
         &self,
         created_user: Option<String>,
         bind_ip: Option<String>,
+        team_id: Option<u64>,
         schedule_name: Option<String>,
         schedule_type: Option<String>,
         job_type: Option<String>,
@@ -184,7 +185,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job::Column::UpdatedTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 
