@@ -3,8 +3,6 @@ use sea_orm::{prelude::DateTimeUtc, FromQueryResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::entity::{job, job_supervisor, job_timer};
-
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct RunStatusRelatedScheduleJobModel {
     pub id: u64,

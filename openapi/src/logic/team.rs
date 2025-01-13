@@ -6,10 +6,9 @@ use sea_orm::{
     QueryTrait, Set,
 };
 use sea_query::Expr;
-use tracing::info;
 
 use crate::{
-    entity::{job, prelude::*, role, team, team_member, user},
+    entity::{job, prelude::*, team, team_member, user},
     state::AppContext,
 };
 

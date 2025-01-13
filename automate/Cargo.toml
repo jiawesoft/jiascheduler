@@ -32,7 +32,6 @@ uuid.workspace = true
 chrono.workspace = true
 reqwest.workspace = true
 watchexec-supervisor.workspace = true
-users.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 russh.workspace = true
@@ -41,3 +40,6 @@ russh-sftp.workspace = true
 serde_repr.workspace = true
 mac_address.workspace = true
 nix.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+users = "0.11.0"
