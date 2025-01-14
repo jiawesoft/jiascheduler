@@ -43,6 +43,10 @@ where
             }
         };
 
+        if team_id.is_none() {
+            return self.ep.call(req).await.map(IntoResponse::into_response);
+        }
+
         let user_info: &logic::types::UserInfo =
             req.extensions().get().expect("not init user info");
         let state: &AppState = req.extensions().get().expect("not init state");

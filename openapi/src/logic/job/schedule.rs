@@ -193,13 +193,9 @@ impl<'a> JobLogic<'a> {
         match params.run_status {
             Some(RunStatus::Stop) => {
                 let (bundle_script_result, job_type) = if params.bundle_output.is_some() {
-                    let schedule_record = self
-                        .get_schedule(params.schedule_id.clone())
-                        .await?
-                        .ok_or(anyhow::format_err!(
-                            "cannot get schedule record {}",
-                            params.schedule_id
-                        ))?;
+                    let schedule_record = self.get_schedule(&params.schedule_id).await?.ok_or(
+                        anyhow::format_err!("cannot get schedule record {}", params.schedule_id),
+                    )?;
                     let job_record: job::Model = serde_json::from_value(
                         schedule_record
                             .snapshot_data
@@ -651,15 +647,8 @@ impl<'a> JobLogic<'a> {
         &self,
         schedule_id: &str,
         action: JobAction,
+        job_schedule_record: job_schedule_history::Model,
     ) -> Result<Vec<Result<DispatchResult>>> {
-        let job_schedule_record = JobScheduleHistory::find()
-            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!(
-                "cannot found job schedule by schedule_id: {schedule_id}"
-            ))?;
-
         let dispatch_data: DispatchData = job_schedule_record
             .dispatch_data
             .ok_or(anyhow!("cannot found job dispatch data"))?
@@ -829,13 +818,13 @@ impl<'a> JobLogic<'a> {
             .await?
             .ok_or(anyhow!("cannot found instance"))?;
 
-        let schedule_record =
-            self.get_schedule(schedule_id.clone())
-                .await?
-                .ok_or(anyhow::format_err!(
-                    "cannot get shedule by {}",
-                    schedule_id.clone()
-                ))?;
+        let schedule_record = self
+            .get_schedule(&schedule_id)
+            .await?
+            .ok_or(anyhow::format_err!(
+                "cannot get shedule by {}",
+                schedule_id.clone()
+            ))?;
 
         let dispatch_data = schedule_record
             .dispatch_data
@@ -916,7 +905,7 @@ impl<'a> JobLogic<'a> {
 
     pub async fn get_schedule(
         &self,
-        schedule_id: String,
+        schedule_id: &str,
     ) -> Result<Option<entity::job_schedule_history::Model>> {
         let ret = JobScheduleHistory::find()
             .filter(entity::job_schedule_history::Column::ScheduleId.eq(schedule_id))

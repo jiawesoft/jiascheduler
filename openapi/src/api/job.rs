@@ -494,6 +494,16 @@ impl JobApi {
         }
         let svc = state.service();
 
+        if let Some(job_id) = req.id {
+            if !svc
+                .job
+                .can_write_job_by_id(&user_info.username, team_id, job_id)
+                .await?
+            {
+                return Err(NoPermission().into());
+            }
+        }
+
         let args = req
             .args
             .map(|v| serde_json::to_value(&v))
@@ -638,21 +648,32 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/delete", method = "post")]
+    #[oai(path = "/delete", method = "post", transform = "set_middleware")]
     pub async fn delete_job(
         &self,
         state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::DeleteJobReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
         let ret = svc.job.delete_job(req.eid).await?;
         return_ok!(ret)
     }
 
-    #[oai(path = "/dispatch", method = "post")]
+    #[oai(path = "/dispatch", method = "post", transform = "set_middleware")]
     pub async fn dispatch(
         &self,
         state: Data<&AppState>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::DispatchJobReq>,
         user_info: Data<&logic::types::UserInfo>,
     ) -> Result<ApiStdResponse<types::DispatchJobResp>> {
@@ -660,6 +681,15 @@ impl JobApi {
         let action = req.action.as_str().try_into()?;
         let schedule_type = req.schedule_type.as_str().try_into()?;
         let secret = state.conf.comet_secret.clone();
+
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
         let ret = svc
             .job
             .dispatch_job(
@@ -682,12 +712,34 @@ impl JobApi {
     pub async fn redispatch(
         &self,
         state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::RedispatchJobReq>,
     ) -> Result<ApiStdResponse<types::RedispatchJobResp>> {
         let svc = state.service();
         let action: JobAction = req.action.as_str().try_into()?;
 
-        let ret = svc.job.redispatch_job(&req.schedule_id, action).await?;
+        let schedule_record =
+            svc.job
+                .get_schedule(&req.schedule_id)
+                .await?
+                .ok_or(anyhow::anyhow!(
+                    "cannot found job schedule by schedule_id: {}",
+                    req.schedule_id
+                ))?;
+
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &schedule_record.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
+        let ret = svc
+            .job
+            .redispatch_job(&req.schedule_id, action, schedule_record)
+            .await?;
 
         let ret = ret
             .into_iter()
@@ -981,6 +1033,7 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::SaveJobBundleScriptReq>,
     ) -> Result<ApiStdResponse<types::SaveJobBundleScriptResp>> {
         let args = match req.args {
@@ -988,6 +1041,17 @@ impl JobApi {
             None => None,
         };
         let svc = state.service();
+
+        if let Some(bundle_script_id) = req.id {
+            if !svc
+                .job
+                .can_write_bundle_script_by_id(&user_info.username, team_id, bundle_script_id)
+                .await?
+            {
+                return Err(NoPermission().into());
+            }
+        }
+
         let (eid, id) = match req.id {
             Some(v) => (NotSet, Set(v)),
             None => (Set(IdGenerator::get_job_bundle_script_uid()), NotSet),
@@ -1019,9 +1083,18 @@ impl JobApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::DeleteJobBundleScriptReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
+        if !svc
+            .job
+            .can_write_bundle_script(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
         let ret = svc
             .job
             .delete_bundle_script(user_info.username.clone(), req.eid)
@@ -1160,9 +1233,19 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::SaveJobTimerReq>,
     ) -> Result<ApiStdResponse<types::SaveJobTimerResp>> {
         let svc = state.service();
+
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
         let ret = svc
             .job
             .save_job_timer(crate::entity::job_timer::ActiveModel {
@@ -1189,9 +1272,20 @@ impl JobApi {
     pub async fn delete_timer(
         &self,
         state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::DeleteJobReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
+
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
+
         let ret = svc.job.delete_job(req.eid).await?;
         return_ok!(ret);
     }
@@ -1315,9 +1409,18 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::SaveJobSupervisorReq>,
     ) -> api_response!(types::SaveJobSupervisorResp) {
         let svc = state.service();
+
+        if !svc
+            .job
+            .can_write_job(&user_info.username, team_id, &req.eid)
+            .await?
+        {
+            return Err(NoPermission().into());
+        }
 
         let ret = svc
             .job

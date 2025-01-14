@@ -15,8 +15,8 @@ use sea_query::Expr;
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
-        prelude::*,
+        self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
+        job_schedule_history, prelude::*,
     },
     state::AppContext,
 };
@@ -38,6 +38,149 @@ impl<'a> JobLogic<'a> {
     ) -> Result<entity::job::ActiveModel> {
         let model = model.save(&self.ctx.db).await?;
         Ok(model)
+    }
+
+    pub async fn can_write_bundle_script(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = JobBundleScript::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::TeamId
+                            .eq(v)
+                            .and(job_bundle_script::Column::Eid.eq(eid)),
+                    )
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::Eid
+                            .eq(eid)
+                            .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                    )
+                })
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_bundle_script_by_id(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        id: u64,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = JobBundleScript::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::TeamId
+                            .eq(v)
+                            .and(job_bundle_script::Column::Id.eq(id)),
+                    )
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::Id
+                            .eq(id)
+                            .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                    )
+                })
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_job(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v)))
+                })
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_job_by_id(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        job_id: u64,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Id.eq(job_id)))
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(
+                        job::Column::Id
+                            .eq(job_id)
+                            .and(job::Column::CreatedUser.eq(v)),
+                    )
+                })
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn get_authorized_job(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<job::Model> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            let v = Job::find()
+                .filter(job::Column::Eid.eq(eid))
+                .one(&self.ctx.db)
+                .await?;
+            v.ok_or(anyhow::anyhow!("no permission to write job"))
+        } else {
+            Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v)))
+                })
+                .one(&self.ctx.db)
+                .await?
+                .ok_or(anyhow::anyhow!("no permission to write job"))
+        }
     }
 
     pub async fn query_job(
