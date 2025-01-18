@@ -583,6 +583,7 @@ impl JobApi {
         Query(page): Query<u64>,
         Query(default_id): Query<Option<u64>>,
         Query(default_eid): Query<Option<String>>,
+        Query(search_username): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
@@ -601,7 +602,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_job(
-                Some(user_info.username.clone()),
+                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
                 job_type.filter(|v| v != ""),
                 name.filter(|v| v != ""),
                 updated_time_range,
@@ -767,6 +768,7 @@ impl JobApi {
 
         #[oai(default)] Query(bind_ip): Query<Option<String>>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
+        Query(search_username): Query<Option<String>>,
         #[oai(validator(
             custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
@@ -792,7 +794,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_run_list(
-                Some(user_info.username.clone()),
+                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
                 bind_ip.filter(|v| v != ""),
                 team_id,
                 schedule_name.filter(|v| v != ""),
@@ -853,7 +855,7 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
-
+        Query(search_username): Query<Option<String>>,
         #[oai(validator(
             custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
@@ -880,7 +882,7 @@ impl JobApi {
             .job
             .query_schedule(
                 schedule_type,
-                user_info.username.clone(),
+                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
                 job_type,
                 name,
                 team_id,
@@ -925,6 +927,7 @@ impl JobApi {
         #[oai(default)] Query(bind_namespace): Query<Option<String>>,
         #[oai(default)] Query(bind_ip): Query<Option<String>>,
         #[oai(default)] Query(instance_id): Query<Option<String>>,
+        Query(search_username): Query<Option<String>>,
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
         Query(job_type): Query<String>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
@@ -960,7 +963,7 @@ impl JobApi {
                 team_id,
                 eid,
                 schedule_name,
-                Some(user_info.username.clone()),
+                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
                 instance_id.filter(|v| v != ""),
                 bind_namespace,
                 bind_ip,
@@ -1108,7 +1111,7 @@ impl JobApi {
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
-
+        Query(search_username): Query<Option<String>>,
         #[oai(default)] Query(name): Query<Option<String>>,
         Query(default_eid): Query<Option<String>>,
         /// Search based on time range
@@ -1129,7 +1132,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_bundle_script(
-                Some(user_info.username.clone()),
+                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
                 team_id,
                 default_eid,
                 name,
@@ -1172,7 +1175,7 @@ impl JobApi {
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
-
+        Query(search_username): Query<Option<String>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -1192,7 +1195,7 @@ impl JobApi {
             .job
             .query_job_timer(
                 team_id,
-                Some(&user_info.username),
+                team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref()),
                 name.filter(|v| v != ""),
                 job_type.filter(|v| v != ""),
                 updated_time_range,
@@ -1355,6 +1358,7 @@ impl JobApi {
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Query(search_username): Query<Option<String>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
         #[oai(
@@ -1368,7 +1372,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_job_supervisor(
-                Some(&user_info.username),
+                team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref()),
                 name.filter(|v| v != ""),
                 eid,
                 team_id,

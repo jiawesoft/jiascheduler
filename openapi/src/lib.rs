@@ -44,7 +44,6 @@ mod logic;
 pub mod middleware;
 mod migration;
 mod state;
-#[macro_use]
 pub mod utils;
 
 #[derive(Clone)]

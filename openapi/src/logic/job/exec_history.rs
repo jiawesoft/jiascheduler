@@ -53,8 +53,10 @@ impl<'a> JobLogic<'a> {
                     .to(job_exec_history::Column::InstanceId)
                     .into(),
             )
-            .filter(job_schedule_history::Column::CreatedUser.eq(username))
             .filter(job_exec_history::Column::JobType.eq(job_type))
+            .apply_if(username, |q, v| {
+                q.filter(job_schedule_history::Column::CreatedUser.eq(v))
+            })
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))
             })

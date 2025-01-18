@@ -8,6 +8,7 @@ pub mod role;
 pub mod team;
 pub mod terminal;
 pub mod user;
+
 mod utils;
 
 use poem_openapi::{Tags, Validator};

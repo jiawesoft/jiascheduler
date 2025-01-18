@@ -381,7 +381,7 @@ impl<'a> JobLogic<'a> {
                 max_parallel: job_record.max_parallel as u8,
                 read_code_from_stdin: false,
             },
-            instance_id: "".to_string(),
+            instance_id: None,
             fields: None,
             restart_interval,
             created_user: created_user.clone(),
@@ -413,7 +413,7 @@ impl<'a> JobLogic<'a> {
             let logic = logic.clone();
             let http_client = http_client.clone();
             let secret = secret.clone();
-            dispatch_params.instance_id = v.instance_id.clone();
+            dispatch_params.instance_id = Some(v.instance_id.clone());
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
@@ -573,7 +573,7 @@ impl<'a> JobLogic<'a> {
                 ScheduleStatus::Scheduling.to_string(),
                 ScheduleStatus::Prepare.to_string(),
             ]))
-            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
+            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id.clone()))
             .into_tuple()
             .all(&self.ctx.db)
             .await?;
@@ -582,7 +582,8 @@ impl<'a> JobLogic<'a> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
 
         for (dispatch_data_val, mac_addr) in runnable {
-            let dispatch_data: DispatchData = dispatch_data_val.try_into()?;
+            let mut dispatch_data: DispatchData = dispatch_data_val.try_into()?;
+            dispatch_data.params.instance_id = Some(ins.instance_id.clone());
 
             let body = automate::DispatchJobRequest {
                 agent_ip: bind_ip.clone(),
@@ -662,8 +663,9 @@ impl<'a> JobLogic<'a> {
             let mut dispatch_params = dispatch_data.params.clone();
             let logic = logic.clone();
             let http_client = http_client.clone();
+            let instance_id = v.instance_id.clone();
             dispatch_params.action = action;
-            dispatch_params.instance_id = v.instance_id.clone();
+            dispatch_params.instance_id = Some(instance_id.clone());
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
@@ -675,7 +677,7 @@ impl<'a> JobLogic<'a> {
                     Err(e) => {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
-                            instance_id: v.instance_id.clone(),
+                            instance_id: instance_id.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
                             has_err: true,
@@ -762,7 +764,7 @@ impl<'a> JobLogic<'a> {
     pub async fn query_schedule(
         &self,
         schedule_type: Option<String>,
-        created_user: String,
+        created_user: Option<String>,
         job_type: String,
         name: Option<String>,
         team_id: Option<u64>,
@@ -771,7 +773,6 @@ impl<'a> JobLogic<'a> {
         page_size: u64,
     ) -> Result<(Vec<job_schedule_history::Model>, u64)> {
         let model = JobScheduleHistory::find()
-            .filter(job_schedule_history::Column::CreatedUser.eq(created_user))
             .filter(job_schedule_history::Column::JobType.eq(job_type))
             .join_rev(
                 JoinType::LeftJoin,
@@ -780,6 +781,9 @@ impl<'a> JobLogic<'a> {
                     .to(job_schedule_history::Column::Eid)
                     .into(),
             )
+            .apply_if(created_user, |q, v| {
+                q.filter(job_schedule_history::Column::CreatedUser.eq(v))
+            })
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))
             })
@@ -851,7 +855,7 @@ impl<'a> JobLogic<'a> {
 
         let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
-        dispatch_data.params.instance_id = ins.instance_id.clone();
+        dispatch_data.params.instance_id = Some(ins.instance_id.clone());
         dispatch_data.params.created_user = updated_user;
 
         let mut body = automate::DispatchJobRequest {

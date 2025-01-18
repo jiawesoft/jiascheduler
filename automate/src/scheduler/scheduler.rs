@@ -393,6 +393,7 @@ impl
         let start_time = Utc::now();
         let schedule_id = job_params.schedule_id;
         let base_job = job_params.base_job;
+        let instance_id = job_params.instance_id.to_owned().unwrap();
 
         let _ = react
             .send_update_job_msg(UpdateJobParams {
@@ -410,7 +411,7 @@ impl
                 schedule_type: schedule_type.clone(),
                 created_user: job_params.created_user.clone(),
                 start_time: Some(start_time.clone()),
-                instance_id: job_params.instance_id.clone(),
+                instance_id: instance_id.clone(),
                 ..Default::default()
             })
             .await?;
@@ -433,7 +434,7 @@ impl
                         prev_time,
                         next_time,
                         bind_namespace: react.namespace.clone(),
-                        instance_id: job_params.instance_id.clone(),
+                        instance_id: instance_id.clone(),
                         bind_ip: react.local_ip.clone(),
                         start_time: Some(start_time),
                         schedule_type: schedule_type.clone(),
@@ -456,7 +457,7 @@ impl
                 schedule_id: schedule_id.clone(),
                 exit_status: output.get_exit_status(),
                 exit_code: output.get_exit_code(),
-                instance_id: job_params.instance_id.clone(),
+                instance_id: instance_id.clone(),
                 prev_time,
                 next_time,
                 bind_namespace: react.namespace.clone(),
@@ -483,7 +484,7 @@ impl
         let react_clone = react.clone();
         let created_user = dispatch_params.created_user.clone();
         let schedule_id = dispatch_params.schedule_id.clone();
-        let instance_id = dispatch_params.instance_id.clone();
+        let instance_id = dispatch_params.instance_id.to_owned().unwrap();
 
         let job = Job::new_cron_job_async_tz(
             timer_expr.as_str(),
@@ -554,6 +555,7 @@ impl
     }
 
     async fn stop_timer(dispatch_params: DispatchJobParams, mut react: React) -> Result<Value> {
+        let instance_id = dispatch_params.instance_id.to_owned().unwrap();
         react
             .remove_job_schedule(&dispatch_params.base_job.eid)
             .await?;
@@ -563,7 +565,7 @@ impl
                 schedule_status: Some(types::ScheduleStatus::Unscheduled),
                 run_status: None,
                 schedule_id: dispatch_params.schedule_id,
-                instance_id: dispatch_params.instance_id.clone(),
+                instance_id,
                 exit_status: None,
                 exit_code: None,
                 stdout: None,
