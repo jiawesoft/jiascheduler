@@ -1,6 +1,7 @@
 use crate::entity::executor;
 use crate::entity::job_bundle_script;
 use crate::entity::prelude::*;
+use crate::entity::team;
 use anyhow::Result;
 use sea_orm::JoinType;
 use sea_orm::QuerySelect;
@@ -35,11 +36,19 @@ impl<'a> JobLogic<'a> {
     ) -> Result<(Vec<types::BundleScriptRelatedExecutorModel>, u64)> {
         let model = JobBundleScript::find()
             .column_as(executor::Column::Name, "executor_name")
+            .column_as(team::Column::Name, "team_name")
             .join_rev(
                 JoinType::LeftJoin,
                 Executor::belongs_to(JobBundleScript)
                     .from(executor::Column::Id)
                     .to(job_bundle_script::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(JobBundleScript)
+                    .from(team::Column::Id)
+                    .to(job_bundle_script::Column::TeamId)
                     .into(),
             )
             .apply_if(username, |q, v| {

@@ -1,4 +1,4 @@
-use crate::entity::{instance, job, job_exec_history, job_schedule_history, prelude::*};
+use crate::entity::{instance, job, job_exec_history, job_schedule_history, prelude::*, team};
 use anyhow::Result;
 use sea_orm::{
     ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -29,6 +29,8 @@ impl<'a> JobLogic<'a> {
     ) -> Result<(Vec<ExecHistoryRelatedScheduleModel>, u64)> {
         let model = JobExecHistory::find()
             .column_as(job_schedule_history::Column::Name, "schedule_name")
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .column(job_schedule_history::Column::CreatedUser)
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
@@ -37,6 +39,13 @@ impl<'a> JobLogic<'a> {
                 Job::belongs_to(JobExecHistory)
                     .from(job::Column::Eid)
                     .to(job_exec_history::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .join_rev(

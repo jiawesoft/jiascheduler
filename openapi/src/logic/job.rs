@@ -16,7 +16,7 @@ use sea_query::Expr;
 use crate::{
     entity::{
         self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
-        job_schedule_history, prelude::*,
+        job_schedule_history, prelude::*, team,
     },
     state::AppContext,
 };
@@ -196,6 +196,7 @@ impl<'a> JobLogic<'a> {
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
         let model = Job::find()
+            .column_as(team::Column::Name, "team_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
             .column_as(executor::Column::Platform, "executor_platform")
@@ -204,6 +205,13 @@ impl<'a> JobLogic<'a> {
                 Executor::belongs_to(Job)
                     .from(executor::Column::Id)
                     .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(created_user, |query, v| {
@@ -275,6 +283,8 @@ impl<'a> JobLogic<'a> {
             .column_as(job_schedule_history::Column::DispatchData, "dispatch_data")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(job::Column::ExecutorId, "executor_id")
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .column_as(
                 job_schedule_history::Column::SnapshotData,
                 "schedule_snapshot_data",
@@ -305,6 +315,13 @@ impl<'a> JobLogic<'a> {
                 Executor::belongs_to(Job)
                     .from(executor::Column::Id)
                     .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(schedule_type, |query, v| {

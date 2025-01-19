@@ -5,7 +5,7 @@ use sea_orm::{
 };
 
 use super::{types::JobTimerRelatedJobModel, JobLogic};
-use crate::entity::{executor, job, job_exec_history, job_timer, prelude::*};
+use crate::entity::{executor, job, job_exec_history, job_timer, prelude::*, team};
 
 impl<'a> JobLogic<'a> {
     pub async fn save_job_timer(
@@ -30,6 +30,8 @@ impl<'a> JobLogic<'a> {
             .column(job::Column::ExecutorId)
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Platform, "executor_platform")
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .join_rev(
                 JoinType::LeftJoin,
                 Job::belongs_to(JobTimer)
@@ -42,6 +44,13 @@ impl<'a> JobLogic<'a> {
                 Executor::belongs_to(Job)
                     .from(executor::Column::Id)
                     .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(name, |query, v| {

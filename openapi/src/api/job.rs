@@ -92,6 +92,8 @@ mod types {
         pub info: String,
         pub is_public: bool,
         pub job_type: String,
+        pub team_name: Option<String>,
+        pub team_id: Option<u64>,
         pub bundle_script: Option<Value>,
         pub display_on_dashboard: bool,
         pub work_dir: String,
@@ -112,6 +114,8 @@ mod types {
         pub id: u64,
         pub executor_id: u64,
         pub executor_name: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub instance_id: String,
         pub bind_ip: String,
         pub bind_namespace: String,
@@ -188,6 +192,8 @@ mod types {
     pub struct ScheduleRecord {
         pub id: u64,
         pub schedule_id: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub name: String,
         pub eid: String,
         pub job_type: String,
@@ -214,6 +220,8 @@ mod types {
         pub schedule_id: String,
         pub bind_ip: String,
         pub job_type: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub bundle_script_result: Option<serde_json::Value>,
         pub exit_status: String,
         pub exit_code: i64,
@@ -297,6 +305,8 @@ mod types {
         pub eid: String,
         pub executor_id: u64,
         pub executor_name: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub name: String,
         pub code: String,
         pub info: String,
@@ -318,6 +328,8 @@ mod types {
         pub id: u64,
         pub eid: String,
         pub name: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub job_name: String,
         pub job_type: String,
         pub executor_id: u64,
@@ -439,6 +451,8 @@ mod types {
         pub executor_id: u64,
         pub executor_name: String,
         pub executor_platform: String,
+        pub team_id: Option<u64>,
+        pub team_name: Option<String>,
         pub restart_interval: u64,
         pub info: String,
         pub created_user: String,
@@ -599,10 +613,16 @@ impl JobApi {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
 
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
+
         let ret = svc
             .job
             .query_job(
-                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
+                search_username,
                 job_type.filter(|v| v != ""),
                 name.filter(|v| v != ""),
                 updated_time_range,
@@ -626,6 +646,8 @@ impl JobApi {
                 name: v.name,
                 code: v.code,
                 info: v.info,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 display_on_dashboard: v.display_on_dashboard,
                 bundle_script: v.bundle_script,
                 is_public: v.is_public == 1,
@@ -790,11 +812,15 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryRunResp>> {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
-
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
         let ret = svc
             .job
             .query_run_list(
-                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
+                search_username,
                 bind_ip.filter(|v| v != ""),
                 team_id,
                 schedule_name.filter(|v| v != ""),
@@ -815,6 +841,8 @@ impl JobApi {
                 eid: v.eid,
                 executor_id: v.executor_id,
                 executor_name: v.executor_name,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 updated_user: v.updated_user,
                 updated_time: local_time!(v.updated_time),
                 bind_ip: v.bind_ip,
@@ -877,12 +905,16 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryScheduleResp>> {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
-
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
         let ret = svc
             .job
             .query_schedule(
                 schedule_type,
-                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
+                search_username,
                 job_type,
                 name,
                 team_id,
@@ -900,6 +932,8 @@ impl JobApi {
                 eid: v.eid,
                 created_user: v.created_user,
                 updated_user: v.updated_user,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
                 schedule_type: v.schedule_type,
@@ -952,8 +986,13 @@ impl JobApi {
         Query(page_size): Query<u64>,
     ) -> Result<ApiStdResponse<types::QueryExecResp>> {
         let start_time_range = start_time_range.map(|v| (v[0].clone(), v[1].clone()));
-
         let svc = state.service();
+
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
         let ret = svc
             .job
             .query_exec_history(
@@ -963,7 +1002,7 @@ impl JobApi {
                 team_id,
                 eid,
                 schedule_name,
-                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
+                search_username,
                 instance_id.filter(|v| v != ""),
                 bind_namespace,
                 bind_ip,
@@ -984,6 +1023,8 @@ impl JobApi {
                 exit_code: v.exit_code,
                 output: v.output,
                 job_type: v.job_type,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 created_user: v.created_user,
                 bundle_script_result: v.bundle_script_result,
                 start_time: Some(default_local_time!(v.start_time)),
@@ -1066,6 +1107,7 @@ impl JobApi {
                 id,
                 eid,
                 executor_id: Set(req.executor_id),
+                team_id: Set(team_id.unwrap_or_default()),
                 name: Set(req.name),
                 code: Set(req.code),
                 info: Set(req.info),
@@ -1129,10 +1171,17 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobBundleScriptResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
+
         let ret = svc
             .job
             .query_bundle_script(
-                team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username),
+                search_username,
                 team_id,
                 default_eid,
                 name,
@@ -1145,19 +1194,21 @@ impl JobApi {
         let list: Vec<types::JobBundleScriptRecord> = ret
             .0
             .into_iter()
-            .map(|x| types::JobBundleScriptRecord {
-                id: x.id,
-                eid: x.eid,
-                executor_id: x.executor_id,
-                executor_name: x.executor_name,
-                name: x.name,
-                code: x.code,
-                info: x.info,
-                created_user: x.created_user,
-                updated_user: x.updated_user,
-                args: x.args,
-                created_time: local_time!(x.created_time),
-                updated_time: local_time!(x.updated_time),
+            .map(|v| types::JobBundleScriptRecord {
+                id: v.id,
+                eid: v.eid,
+                executor_id: v.executor_id,
+                executor_name: v.executor_name,
+                team_id: v.team_id,
+                team_name: v.team_name,
+                name: v.name,
+                code: v.code,
+                info: v.info,
+                created_user: v.created_user,
+                updated_user: v.updated_user,
+                args: v.args,
+                created_time: local_time!(v.created_time),
+                updated_time: local_time!(v.updated_time),
             })
             .collect();
         return_ok!(types::QueryJobBundleScriptResp {
@@ -1191,11 +1242,18 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobTimerResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username.as_ref()
+        } else {
+            team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref())
+        };
+
         let ret = svc
             .job
             .query_job_timer(
                 team_id,
-                team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref()),
+                search_username,
                 name.filter(|v| v != ""),
                 job_type.filter(|v| v != ""),
                 updated_time_range,
@@ -1215,6 +1273,8 @@ impl JobApi {
                 timer_expr: v.timer_expr.map_or(json!("null"), |v| v),
                 job_type: v.job_type,
                 info: v.info,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 executor_id: v.executor_id,
                 executor_name: v.executor_name,
                 executor_platform: v.executor_platform,
@@ -1369,10 +1429,15 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobSupervisorResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username.as_ref()
+        } else {
+            team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref())
+        };
         let ret = svc
             .job
             .query_job_supervisor(
-                team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref()),
+                search_username,
                 name.filter(|v| v != ""),
                 eid,
                 team_id,
@@ -1392,6 +1457,8 @@ impl JobApi {
                 eid: v.eid,
                 info: v.info,
                 executor_id: v.executor_id,
+                team_id: v.team_id,
+                team_name: v.team_name,
                 created_user: v.created_user,
                 updated_user: v.updated_user,
                 created_time: local_time!(v.created_time),

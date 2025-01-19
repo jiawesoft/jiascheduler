@@ -1,4 +1,4 @@
-use crate::entity::{executor, job, job_exec_history, job_supervisor};
+use crate::entity::{executor, job, job_exec_history, job_supervisor, team};
 use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
@@ -7,6 +7,7 @@ use sea_orm::{
 
 use super::{
     types::JobSupervisorRelatedJobModel, Executor, Job, JobExecHistory, JobLogic, JobSupervisor,
+    Team,
 };
 
 impl<'a> JobLogic<'a> {
@@ -24,6 +25,8 @@ impl<'a> JobLogic<'a> {
             .column_as(job::Column::Name, "job_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Platform, "executor_platform")
+            .column_as(team::Column::Name, "team_name")
+            .column_as(team::Column::Id, "team_id")
             .column(job::Column::ExecutorId)
             .join_rev(
                 JoinType::LeftJoin,
@@ -37,6 +40,13 @@ impl<'a> JobLogic<'a> {
                 Executor::belongs_to(Job)
                     .from(executor::Column::Id)
                     .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(name, |query, v| {

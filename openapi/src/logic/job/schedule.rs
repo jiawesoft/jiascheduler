@@ -22,14 +22,16 @@ use tokio::fs;
 use tracing::error;
 
 use crate::{
-    entity::{self, executor, instance, job, job_running_status, job_schedule_history, prelude::*},
+    entity::{
+        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*, team,
+    },
     file_name,
     logic::{executor::ExecutorLogic, job::types::DispatchResult},
     utils, IdGenerator,
 };
 
 use super::{
-    types::{BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
+    types::{self, BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
     JobLogic,
 };
 
@@ -771,14 +773,23 @@ impl<'a> JobLogic<'a> {
         updated_time_range: Option<(String, String)>,
         page: u64,
         page_size: u64,
-    ) -> Result<(Vec<job_schedule_history::Model>, u64)> {
+    ) -> Result<(Vec<types::ScheduleJobTeamModel>, u64)> {
         let model = JobScheduleHistory::find()
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .filter(job_schedule_history::Column::JobType.eq(job_type))
             .join_rev(
                 JoinType::LeftJoin,
                 Job::belongs_to(JobScheduleHistory)
                     .from(job::Column::Eid)
                     .to(job_schedule_history::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(created_user, |q, v| {
@@ -803,6 +814,7 @@ impl<'a> JobLogic<'a> {
 
         let list = model
             .order_by_desc(job_schedule_history::Column::Id)
+            .into_model()
             .paginate(&self.ctx.db, page_size)
             .fetch_page(page)
             .await?;
