@@ -143,7 +143,7 @@ CREATE TABLE `job_timer` (
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
     KEY `idx_eid` (`eid`),
-    UNIQUE KEY `uk_name` (`name`)
+    UNIQUE KEY `uk_name` (`name`, `eid`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业定时器';
 
 DROP TABLE IF EXISTS `job_supervisor`;
@@ -159,7 +159,8 @@ CREATE TABLE `job_supervisor` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_eid` (`eid`)
+    UNIQUE KEY `uk_eid` (`eid`),
+    UNIQUE KEY `uk_name` (`name`, `eid`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'job supervisor';
 
 DROP TABLE IF EXISTS `job`;
@@ -188,7 +189,7 @@ CREATE TABLE `job` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name` (`name`, `created_user`)
+    UNIQUE KEY `uk_name` (`name`, `team_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户作业';
 
 DROP TABLE IF EXISTS `job_bundle_script`;
@@ -207,7 +208,7 @@ CREATE TABLE `job_bundle_script` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name` (`created_user`, `name`)
+    UNIQUE KEY `uk_name`  (`name`, `team_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '供作业批量执行的脚本';
 
 DROP TABLE IF EXISTS `executor`;
