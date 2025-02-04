@@ -652,6 +652,7 @@ impl<'a> JobLogic<'a> {
         schedule_id: &str,
         action: JobAction,
         job_schedule_record: job_schedule_history::Model,
+        created_user: String,
     ) -> Result<Vec<Result<DispatchResult>>> {
         let dispatch_data: DispatchData = job_schedule_record
             .dispatch_data
@@ -669,6 +670,7 @@ impl<'a> JobLogic<'a> {
             let instance_id = v.instance_id.clone();
             dispatch_params.action = action;
             dispatch_params.instance_id = Some(instance_id.clone());
+            dispatch_params.created_user = created_user.clone();
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
@@ -845,7 +847,12 @@ impl<'a> JobLogic<'a> {
             ))?;
 
         if !self
-            .can_dispatch_job(&user_info, team_id, None, &schedule_record.eid)
+            .can_dispatch_job(
+                &user_info,
+                team_id,
+                Some(&schedule_record.created_user),
+                &schedule_record.eid,
+            )
             .await?
         {
             anyhow::bail!(
@@ -879,7 +886,7 @@ impl<'a> JobLogic<'a> {
         let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
         dispatch_data.params.instance_id = Some(ins.instance_id.clone());
-        dispatch_data.params.created_user = user_info.updated_time.clone();
+        dispatch_data.params.created_user = user_info.username.clone();
 
         let mut body = automate::DispatchJobRequest {
             agent_ip: ins.ip.clone(),

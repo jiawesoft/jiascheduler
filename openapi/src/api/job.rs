@@ -749,7 +749,12 @@ impl JobApi {
 
         if !svc
             .job
-            .can_dispatch_job(&user_info, team_id, None, &schedule_record.eid)
+            .can_dispatch_job(
+                &user_info,
+                team_id,
+                Some(&schedule_record.created_user),
+                &schedule_record.eid,
+            )
             .await?
         {
             return_err!(
@@ -759,7 +764,12 @@ impl JobApi {
 
         let ret = svc
             .job
-            .redispatch_job(&req.schedule_id, action, schedule_record)
+            .redispatch_job(
+                &req.schedule_id,
+                action,
+                schedule_record,
+                user_info.username.clone(),
+            )
             .await?;
 
         let ret = ret
