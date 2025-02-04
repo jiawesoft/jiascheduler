@@ -208,7 +208,7 @@ CREATE TABLE `job_bundle_script` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name`  (`name`, `team_id`)
+    UNIQUE KEY `uk_name` (`name`, `team_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '供作业批量执行的脚本';
 
 DROP TABLE IF EXISTS `executor`;
@@ -269,6 +269,7 @@ CREATE TABLE `job_exec_history` (
     `output` text NOT NULL COMMENT '执行输出',
     `start_time` timestamp NULL DEFAULT NULL COMMENT 'job开始执行时间',
     `end_time` timestamp NULL DEFAULT NULL COMMENT 'job结束时间',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),

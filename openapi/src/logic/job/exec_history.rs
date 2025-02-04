@@ -31,7 +31,6 @@ impl<'a> JobLogic<'a> {
             .column_as(job_schedule_history::Column::Name, "schedule_name")
             .column_as(team::Column::Id, "team_id")
             .column_as(team::Column::Name, "team_name")
-            .column(job_schedule_history::Column::CreatedUser)
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .join_rev(
@@ -64,7 +63,7 @@ impl<'a> JobLogic<'a> {
             )
             .filter(job_exec_history::Column::JobType.eq(job_type))
             .apply_if(username, |q, v| {
-                q.filter(job_schedule_history::Column::CreatedUser.eq(v))
+                q.filter(job_exec_history::Column::CreatedUser.eq(v))
             })
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))

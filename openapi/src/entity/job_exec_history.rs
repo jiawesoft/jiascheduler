@@ -21,6 +21,7 @@ pub struct Model {
     pub end_time: Option<DateTimeUtc>,
     pub created_time: DateTimeUtc,
     pub updated_time: DateTimeUtc,
+    pub created_user: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

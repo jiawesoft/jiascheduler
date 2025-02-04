@@ -232,6 +232,7 @@ impl<'a> JobLogic<'a> {
                     start_time: Set(params.start_time),
                     end_time: Set(params.end_time),
                     bundle_script_result,
+                    created_user: Set(params.created_user),
                     job_type,
                     ..Default::default()
                 })
