@@ -22,6 +22,8 @@ use crate::{
 };
 use sea_orm::JoinType;
 
+use super::types::UserInfo;
+
 pub mod types;
 
 pub struct JobLogic<'a> {
@@ -42,11 +44,11 @@ impl<'a> JobLogic<'a> {
 
     pub async fn can_write_bundle_script(
         &self,
-        username: &str,
+        user_info: &UserInfo,
         team_id: Option<u64>,
         eid: &str,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(username).await?;
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
         if ok {
             Ok(true)
         } else {
@@ -58,13 +60,16 @@ impl<'a> JobLogic<'a> {
                             .and(job_bundle_script::Column::Eid.eq(eid)),
                     )
                 })
-                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
-                    q.filter(
-                        job_bundle_script::Column::Eid
-                            .eq(eid)
-                            .and(job_bundle_script::Column::CreatedUser.eq(v)),
-                    )
-                })
+                .apply_if(
+                    team_id.map_or(Some(user_info.username.clone()), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job_bundle_script::Column::Eid
+                                .eq(eid)
+                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
                 .one(&self.ctx.db)
                 .await?
                 .map_or(false, |_| true);
@@ -74,11 +79,11 @@ impl<'a> JobLogic<'a> {
 
     pub async fn can_write_bundle_script_by_id(
         &self,
-        username: &str,
+        user_info: &UserInfo,
         team_id: Option<u64>,
         id: u64,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(username).await?;
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
         if ok {
             Ok(true)
         } else {
@@ -90,13 +95,16 @@ impl<'a> JobLogic<'a> {
                             .and(job_bundle_script::Column::Id.eq(id)),
                     )
                 })
-                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
-                    q.filter(
-                        job_bundle_script::Column::Id
-                            .eq(id)
-                            .and(job_bundle_script::Column::CreatedUser.eq(v)),
-                    )
-                })
+                .apply_if(
+                    team_id.map_or(Some(user_info.username.clone()), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job_bundle_script::Column::Id
+                                .eq(id)
+                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
                 .one(&self.ctx.db)
                 .await?
                 .map_or(false, |_| true);
@@ -106,11 +114,11 @@ impl<'a> JobLogic<'a> {
 
     pub async fn can_write_job(
         &self,
-        username: &str,
+        user_info: &UserInfo,
         team_id: Option<u64>,
         eid: &str,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(username).await?;
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
         if ok {
             Ok(true)
         } else {
@@ -118,9 +126,10 @@ impl<'a> JobLogic<'a> {
                 .apply_if(team_id, |q, v| {
                     q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
                 })
-                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
-                    q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v)))
-                })
+                .apply_if(
+                    team_id.map_or(Some(&user_info.user_id), |_| None),
+                    |q, v| q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v))),
+                )
                 .one(&self.ctx.db)
                 .await?
                 .map_or(false, |_| true);
@@ -130,11 +139,11 @@ impl<'a> JobLogic<'a> {
 
     pub async fn can_write_job_by_id(
         &self,
-        username: &str,
+        user_info: &UserInfo,
         team_id: Option<u64>,
         job_id: u64,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(username).await?;
+        let ok = self.ctx.can_manage_job(&user_info.username).await?;
         if ok {
             Ok(true)
         } else {
@@ -142,18 +151,40 @@ impl<'a> JobLogic<'a> {
                 .apply_if(team_id, |q, v| {
                     q.filter(job::Column::TeamId.eq(v).and(job::Column::Id.eq(job_id)))
                 })
-                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
-                    q.filter(
-                        job::Column::Id
-                            .eq(job_id)
-                            .and(job::Column::CreatedUser.eq(v)),
-                    )
-                })
+                .apply_if(
+                    team_id.map_or(Some(&user_info.username), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job::Column::Id
+                                .eq(job_id)
+                                .and(job::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
                 .one(&self.ctx.db)
                 .await?
                 .map_or(false, |_| true);
             Ok(v)
         }
+    }
+
+    pub async fn can_dispatch_job(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        schedule_user: Option<&str>,
+        eid: &str,
+    ) -> Result<bool> {
+        if !self.can_write_job(user_info, team_id, eid).await? {
+            return Ok(false);
+        }
+        let Some(schedule_user) = schedule_user else {
+            return Ok(true);
+        };
+        if self.ctx.can_manage_instance(&user_info.user_id).await? {
+            return Ok(true);
+        }
+        Ok(schedule_user.eq(&user_info.username))
     }
 
     pub async fn get_authorized_job(

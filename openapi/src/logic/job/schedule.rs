@@ -26,7 +26,7 @@ use crate::{
         self, executor, instance, job, job_running_status, job_schedule_history, prelude::*, team,
     },
     file_name,
-    logic::{executor::ExecutorLogic, job::types::DispatchResult},
+    logic::{executor::ExecutorLogic, job::types::DispatchResult, types::UserInfo},
     utils, IdGenerator,
 };
 
@@ -826,7 +826,8 @@ impl<'a> JobLogic<'a> {
         &self,
         schedule_id: String,
         instance_id: String,
-        updated_user: String,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
         action: JobAction,
     ) -> Result<Value> {
         let ins = Instance::find()
@@ -842,6 +843,15 @@ impl<'a> JobLogic<'a> {
                 "cannot get shedule by {}",
                 schedule_id.clone()
             ))?;
+
+        if !self
+            .can_dispatch_job(&user_info, team_id, None, &schedule_record.eid)
+            .await?
+        {
+            anyhow::bail!(
+                "Rescheduling is not allowed unless you are the task's original scheduler."
+            );
+        }
 
         let dispatch_data = schedule_record
             .dispatch_data
@@ -869,7 +879,7 @@ impl<'a> JobLogic<'a> {
         let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
         dispatch_data.params.instance_id = Some(ins.instance_id.clone());
-        dispatch_data.params.created_user = updated_user;
+        dispatch_data.params.created_user = user_info.updated_time.clone();
 
         let mut body = automate::DispatchJobRequest {
             agent_ip: ins.ip.clone(),

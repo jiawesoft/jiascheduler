@@ -8,7 +8,7 @@ use crate::{
     logic::{self, job::types::BundleScriptRecord},
     middleware,
     response::{std_into_error, ApiStdResponse},
-    return_ok, AppState, IdGenerator,
+    return_err, return_ok, AppState, IdGenerator,
 };
 
 use automate::JobAction;
@@ -511,7 +511,7 @@ impl JobApi {
         if let Some(job_id) = req.id {
             if !svc
                 .job
-                .can_write_job_by_id(&user_info.username, team_id, job_id)
+                .can_write_job_by_id(&user_info, team_id, job_id)
                 .await?
             {
                 return Err(NoPermission().into());
@@ -680,11 +680,7 @@ impl JobApi {
         Json(req): Json<types::DeleteJobReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
-        if !svc
-            .job
-            .can_write_job(&user_info.username, team_id, &req.eid)
-            .await?
-        {
+        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
             return Err(NoPermission().into());
         }
 
@@ -707,7 +703,7 @@ impl JobApi {
 
         if !svc
             .job
-            .can_write_job(&user_info.username, team_id, &req.eid)
+            .can_dispatch_job(&user_info, team_id, None, &req.eid)
             .await?
         {
             return Err(NoPermission().into());
@@ -753,10 +749,12 @@ impl JobApi {
 
         if !svc
             .job
-            .can_write_job(&user_info.username, team_id, &schedule_record.eid)
+            .can_dispatch_job(&user_info, team_id, None, &schedule_record.eid)
             .await?
         {
-            return Err(NoPermission().into());
+            return_err!(
+                "Rescheduling is not allowed unless you are the task's original scheduler."
+            );
         }
 
         let ret = svc
@@ -1046,6 +1044,7 @@ impl JobApi {
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
         _session: &Session,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::ActionReq>,
     ) -> Result<ApiStdResponse<types::ActionRes>> {
         let svc = state.service();
@@ -1063,7 +1062,8 @@ impl JobApi {
             .action(
                 req.schedule_id,
                 req.instance_id,
-                user_info.username.clone(),
+                &user_info,
+                team_id,
                 action,
             )
             .await?;
@@ -1093,7 +1093,7 @@ impl JobApi {
         if let Some(bundle_script_id) = req.id {
             if !svc
                 .job
-                .can_write_bundle_script_by_id(&user_info.username, team_id, bundle_script_id)
+                .can_write_bundle_script_by_id(&user_info, team_id, bundle_script_id)
                 .await?
             {
                 return Err(NoPermission().into());
@@ -1142,7 +1142,7 @@ impl JobApi {
         let svc = state.service();
         if !svc
             .job
-            .can_write_bundle_script(&user_info.username, team_id, &req.eid)
+            .can_write_bundle_script(&user_info, team_id, &req.eid)
             .await?
         {
             return Err(NoPermission().into());
@@ -1313,11 +1313,7 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::SaveJobTimerResp>> {
         let svc = state.service();
 
-        if !svc
-            .job
-            .can_write_job(&user_info.username, team_id, &req.eid)
-            .await?
-        {
+        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
             return Err(NoPermission().into());
         }
 
@@ -1353,11 +1349,7 @@ impl JobApi {
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
 
-        if !svc
-            .job
-            .can_write_job(&user_info.username, team_id, &req.eid)
-            .await?
-        {
+        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
             return Err(NoPermission().into());
         }
 
@@ -1505,11 +1497,7 @@ impl JobApi {
     ) -> api_response!(types::SaveJobSupervisorResp) {
         let svc = state.service();
 
-        if !svc
-            .job
-            .can_write_job(&user_info.username, team_id, &req.eid)
-            .await?
-        {
+        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
             return Err(NoPermission().into());
         }
 
