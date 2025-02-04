@@ -731,7 +731,7 @@ impl JobApi {
         return_ok!(types::DispatchJobResp { result: ret })
     }
 
-    #[oai(path = "/redispatch", method = "post")]
+    #[oai(path = "/redispatch", method = "post", transform = "set_middleware")]
     pub async fn redispatch(
         &self,
         state: Data<&AppState>,
@@ -781,7 +781,7 @@ impl JobApi {
         return_ok!(ret)
     }
 
-    #[oai(path = "/run-list", method = "get")]
+    #[oai(path = "/run-list", method = "get", transform = "set_middleware")]
     pub async fn query_run_list(
         &self,
         state: Data<&AppState>,
@@ -877,7 +877,7 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/schedule-list", method = "get")]
+    #[oai(path = "/schedule-list", method = "get", transform = "set_middleware")]
     pub async fn query_schedule(
         &self,
         state: Data<&AppState>,
@@ -952,7 +952,7 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/exec-list", method = "get")]
+    #[oai(path = "/exec-list", method = "get", transform = "set_middleware")]
     pub async fn query_exec(
         &self,
         state: Data<&AppState>,
@@ -1040,7 +1040,7 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/action", method = "post")]
+    #[oai(path = "/action", method = "post", transform = "set_middleware")]
     pub async fn action(
         &self,
         state: Data<&AppState>,
@@ -1071,7 +1071,11 @@ impl JobApi {
         return_ok!(types::ActionRes { result: ret });
     }
 
-    #[oai(path = "/save-bundle-script", method = "post")]
+    #[oai(
+        path = "/save-bundle-script",
+        method = "post",
+        transform = "set_middleware"
+    )]
     pub async fn save_bundle_script(
         &self,
         state: Data<&AppState>,
@@ -1123,7 +1127,11 @@ impl JobApi {
         });
     }
 
-    #[oai(path = "/delete-bundle-script", method = "post")]
+    #[oai(
+        path = "/delete-bundle-script",
+        method = "post",
+        transform = "set_middleware"
+    )]
     pub async fn delete_bundle_script(
         &self,
         state: Data<&AppState>,
@@ -1147,7 +1155,11 @@ impl JobApi {
         return_ok!(ret)
     }
 
-    #[oai(path = "/bundle-script-list", method = "get")]
+    #[oai(
+        path = "/bundle-script-list",
+        method = "get",
+        transform = "set_middleware"
+    )]
     pub async fn query_bundle_script_list(
         &self,
         state: Data<&AppState>,
@@ -1217,7 +1229,7 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/timer-list", method = "get")]
+    #[oai(path = "/timer-list", method = "get", transform = "set_middleware")]
     pub async fn query_timer(
         &self,
         state: Data<&AppState>,
@@ -1290,7 +1302,7 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/save-timer", method = "post")]
+    #[oai(path = "/save-timer", method = "post", transform = "set_middleware")]
     pub async fn save_timer(
         &self,
         state: Data<&AppState>,
@@ -1331,7 +1343,7 @@ impl JobApi {
         });
     }
 
-    #[oai(path = "/delete-timer", method = "post")]
+    #[oai(path = "/delete-timer", method = "post", transform = "set_middleware")]
     pub async fn delete_timer(
         &self,
         state: Data<&AppState>,
@@ -1353,7 +1365,7 @@ impl JobApi {
         return_ok!(ret);
     }
 
-    #[oai(path = "/dashboard", method = "post")]
+    #[oai(path = "/dashboard", method = "post", transform = "set_middleware")]
     pub async fn get_dashboard(
         &self,
         state: Data<&AppState>,
@@ -1406,7 +1418,11 @@ impl JobApi {
         });
     }
 
-    #[oai(path = "/supervisor-list", method = "get")]
+    #[oai(
+        path = "/supervisor-list",
+        method = "get",
+        transform = "set_middleware"
+    )]
     pub async fn query_job_supervisor(
         &self,
         state: Data<&AppState>,
@@ -1474,7 +1490,11 @@ impl JobApi {
         })
     }
 
-    #[oai(path = "/save-supervisor", method = "post")]
+    #[oai(
+        path = "/save-supervisor",
+        method = "post",
+        transform = "set_middleware"
+    )]
     pub async fn save_job_supervisor(
         &self,
         state: Data<&AppState>,
