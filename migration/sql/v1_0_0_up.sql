@@ -22,6 +22,33 @@ CREATE TABLE `user` (
     UNIQUE KEY `uqe_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户角色';
 
+DROP TABLE IF EXISTS `team`;
+
+CREATE TABLE `team` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `name` varchar(100) NOT NULL DEFAULT '' COMMENT '团队名称',
+    `info` varchar(200) NOT NULL DEFAULT '' COMMENT '介绍',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+    `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT '修改人',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_name` (`name`, `created_user`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '团队';
+
+DROP TABLE IF EXISTS `team_member`;
+
+CREATE TABLE `team_member` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `team_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '团队id',
+    `user_id` varchar(10) not null COMMENT '用户id',
+    `is_admin` BOOLEAN NOT NULL DEFAULT false COMMENT '是否是管理员',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`, `team_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户团队成员';
+
 DROP TABLE IF EXISTS `instance`;
 
 CREATE TABLE `instance` (
@@ -116,8 +143,25 @@ CREATE TABLE `job_timer` (
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
     KEY `idx_eid` (`eid`),
-    UNIQUE KEY `uk_name` (`name`)
+    UNIQUE KEY `uk_name` (`name`, `eid`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '作业定时器';
+
+DROP TABLE IF EXISTS `job_supervisor`;
+
+CREATE TABLE `job_supervisor` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
+    `name` varchar(100) NOT NULL DEFAULT '' COMMENT 'supervisor名称',
+    `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
+    `restart_interval` BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '重启间隔,单位秒',
+    `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+    `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT '修改人',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_eid` (`eid`),
+    UNIQUE KEY `uk_name` (`name`, `eid`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'job supervisor';
 
 DROP TABLE IF EXISTS `job`;
 
@@ -126,6 +170,7 @@ CREATE TABLE `job` (
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `executor_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '执行器',
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型',
+    `team_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队id',
     `name` varchar(100) NOT NULL DEFAULT '' COMMENT '作业名称',
     `code` text NOT NULL COMMENT '代码',
     `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',
@@ -144,7 +189,7 @@ CREATE TABLE `job` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name` (`name`, `created_user`)
+    UNIQUE KEY `uk_name` (`name`, `team_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户作业';
 
 DROP TABLE IF EXISTS `job_bundle_script`;
@@ -153,6 +198,7 @@ CREATE TABLE `job_bundle_script` (
     `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `executor_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '执行器',
+    `team_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '团队id',
     `name` varchar(100) NOT NULL DEFAULT '' COMMENT '作业名称',
     `code` text NOT NULL COMMENT '代码',
     `info` varchar(500) NOT NULL DEFAULT '' COMMENT '描述信息',
@@ -162,7 +208,7 @@ CREATE TABLE `job_bundle_script` (
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_name` (`created_user`, `name`)
+    UNIQUE KEY `uk_name` (`name`, `team_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '供作业批量执行的脚本';
 
 DROP TABLE IF EXISTS `executor`;
@@ -191,7 +237,8 @@ INSERT INTO
         `created_user`,
         `updated_user`
     )
-VALUES (
+VALUES
+    (
         'bash',
         'bash -c',
         'linux',
@@ -222,6 +269,7 @@ CREATE TABLE `job_exec_history` (
     `output` text NOT NULL COMMENT '执行输出',
     `start_time` timestamp NULL DEFAULT NULL COMMENT 'job开始执行时间',
     `end_time` timestamp NULL DEFAULT NULL COMMENT 'job结束时间',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
     PRIMARY KEY (`id`),
@@ -267,7 +315,7 @@ CREATE TABLE `job_schedule_history` (
     `job_type` VARCHAR(50) NOT NULL DEFAULT 'default' COMMENT '作业类型 default, bundle',
     `eid` varchar(100) NOT NULL DEFAULT '' COMMENT '执行id',
     `dispatch_result` json DEFAULT NULL COMMENT '调度派送结果',
-    `schedule_type` varchar(20) NOT NULL DEFAULT '' COMMENT '调度类型 once flow timer',
+    `schedule_type` varchar(20) NOT NULL DEFAULT '' COMMENT '调度类型 once flow timer daemon',
     `action` varchar(20) NOT NULL DEFAULT '' COMMENT '动作 exec kill start_timer stop_timer',
     `dispatch_data` json DEFAULT NULL COMMENT '调度派送数据',
     `snapshot_data` json DEFAULT NULL COMMENT '快照数据',

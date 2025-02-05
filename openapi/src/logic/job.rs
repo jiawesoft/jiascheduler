@@ -4,6 +4,7 @@ mod bundle_script;
 mod dashboard;
 mod exec_history;
 mod schedule;
+mod supervisor;
 mod timer;
 
 use sea_orm::{
@@ -14,12 +15,14 @@ use sea_query::Expr;
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
-        prelude::*,
+        self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
+        job_schedule_history, prelude::*, team,
     },
     state::AppContext,
 };
 use sea_orm::JoinType;
+
+use super::types::UserInfo;
 
 pub mod types;
 
@@ -39,6 +42,178 @@ impl<'a> JobLogic<'a> {
         Ok(model)
     }
 
+    pub async fn can_write_bundle_script(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = JobBundleScript::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::TeamId
+                            .eq(v)
+                            .and(job_bundle_script::Column::Eid.eq(eid)),
+                    )
+                })
+                .apply_if(
+                    team_id.map_or(Some(user_info.username.clone()), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job_bundle_script::Column::Eid
+                                .eq(eid)
+                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_bundle_script_by_id(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        id: u64,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = JobBundleScript::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(
+                        job_bundle_script::Column::TeamId
+                            .eq(v)
+                            .and(job_bundle_script::Column::Id.eq(id)),
+                    )
+                })
+                .apply_if(
+                    team_id.map_or(Some(user_info.username.clone()), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job_bundle_script::Column::Id
+                                .eq(id)
+                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_job(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
+                })
+                .apply_if(
+                    team_id.map_or(Some(&user_info.user_id), |_| None),
+                    |q, v| q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v))),
+                )
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_write_job_by_id(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        job_id: u64,
+    ) -> Result<bool> {
+        let ok = self.ctx.can_manage_job(&user_info.username).await?;
+        if ok {
+            Ok(true)
+        } else {
+            let v = Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Id.eq(job_id)))
+                })
+                .apply_if(
+                    team_id.map_or(Some(&user_info.username), |_| None),
+                    |q, v| {
+                        q.filter(
+                            job::Column::Id
+                                .eq(job_id)
+                                .and(job::Column::CreatedUser.eq(v)),
+                        )
+                    },
+                )
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true);
+            Ok(v)
+        }
+    }
+
+    pub async fn can_dispatch_job(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        schedule_user: Option<&str>,
+        eid: &str,
+    ) -> Result<bool> {
+        if !self.can_write_job(user_info, team_id, eid).await? {
+            return Ok(false);
+        }
+        let Some(schedule_user) = schedule_user else {
+            return Ok(true);
+        };
+        if self.ctx.can_manage_instance(&user_info.user_id).await? {
+            return Ok(true);
+        }
+        Ok(schedule_user.eq(&user_info.username))
+    }
+
+    pub async fn get_authorized_job(
+        &self,
+        username: &str,
+        team_id: Option<u64>,
+        eid: &str,
+    ) -> Result<job::Model> {
+        let ok = self.ctx.can_manage_job(username).await?;
+        if ok {
+            let v = Job::find()
+                .filter(job::Column::Eid.eq(eid))
+                .one(&self.ctx.db)
+                .await?;
+            v.ok_or(anyhow::anyhow!("no permission to write job"))
+        } else {
+            Job::find()
+                .apply_if(team_id, |q, v| {
+                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
+                })
+                .apply_if(team_id.map_or(Some(username), |_| None), |q, v| {
+                    q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v)))
+                })
+                .one(&self.ctx.db)
+                .await?
+                .ok_or(anyhow::anyhow!("no permission to write job"))
+        }
+    }
+
     pub async fn query_job(
         &self,
         created_user: Option<String>,
@@ -47,17 +222,27 @@ impl<'a> JobLogic<'a> {
         updated_time_range: Option<(String, String)>,
         default_id: Option<u64>,
         default_eid: Option<String>,
+        team_id: Option<u64>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
         let model = Job::find()
+            .column_as(team::Column::Name, "team_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
+            .column_as(executor::Column::Platform, "executor_platform")
             .join_rev(
                 JoinType::LeftJoin,
                 Executor::belongs_to(Job)
                     .from(executor::Column::Id)
                     .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(created_user, |query, v| {
@@ -66,7 +251,8 @@ impl<'a> JobLogic<'a> {
             .apply_if(job_type, |query, v| {
                 query.filter(job::Column::JobType.eq(v))
             })
-            .apply_if(name, |query, v| query.filter(job::Column::Name.contains(v)))
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
+            .apply_if(name, |q, v| q.filter(job::Column::Name.contains(v)))
             .apply_if(updated_time_range, |query, v| {
                 query.filter(
                     job::Column::UpdatedTime
@@ -113,6 +299,7 @@ impl<'a> JobLogic<'a> {
         &self,
         created_user: Option<String>,
         bind_ip: Option<String>,
+        team_id: Option<u64>,
         schedule_name: Option<String>,
         schedule_type: Option<String>,
         job_type: Option<String>,
@@ -124,6 +311,11 @@ impl<'a> JobLogic<'a> {
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
+            .column_as(job_schedule_history::Column::DispatchData, "dispatch_data")
+            .column_as(executor::Column::Name, "executor_name")
+            .column_as(job::Column::ExecutorId, "executor_id")
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .column_as(
                 job_schedule_history::Column::SnapshotData,
                 "schedule_snapshot_data",
@@ -140,6 +332,27 @@ impl<'a> JobLogic<'a> {
                 Instance::belongs_to(JobRunningStatus)
                     .from(instance::Column::InstanceId)
                     .to(job_running_status::Column::InstanceId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobRunningStatus)
+                    .from(job::Column::Eid)
+                    .to(job_running_status::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Executor::belongs_to(Job)
+                    .from(executor::Column::Id)
+                    .to(job::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
                     .into(),
             )
             .apply_if(schedule_type, |query, v| {
@@ -163,7 +376,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job::Column::UpdatedTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 

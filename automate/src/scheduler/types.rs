@@ -9,8 +9,9 @@ pub enum JobAction {
     Kill,
     StartTimer,
     StopTimer,
-    StartSupervisor,
-    StopSupervisor,
+    StartSupervising,
+    RestartSupervising,
+    StopSupervising,
 }
 
 impl TryFrom<&str> for JobAction {
@@ -22,6 +23,9 @@ impl TryFrom<&str> for JobAction {
             "kill" => JobAction::Kill,
             "start_timer" => JobAction::StartTimer,
             "stop_timer" => JobAction::StopTimer,
+            "start_supervising" => JobAction::StartSupervising,
+            "stop_supervising" => JobAction::StopSupervising,
+            "restart_supervising" => JobAction::RestartSupervising,
             _ => return Err(anyhow!("invalid job action {value}")),
         };
 
@@ -36,8 +40,9 @@ impl fmt::Display for JobAction {
             JobAction::Kill => write!(f, "kill"),
             JobAction::StartTimer => write!(f, "start_timer"),
             JobAction::StopTimer => write!(f, "stop_timer"),
-            JobAction::StartSupervisor => write!(f, "start_supervisor"),
-            JobAction::StopSupervisor => write!(f, "stop_supervisor"),
+            JobAction::StartSupervising => write!(f, "start_supervising"),
+            JobAction::RestartSupervising => write!(f, "restart_supervising"),
+            JobAction::StopSupervising => write!(f, "stop_supervising"),
         }
     }
 }
@@ -46,7 +51,9 @@ impl fmt::Display for JobAction {
 pub enum RuntimeAction {
     Kill,
     StopTimer,
-    StopSupervisor,
+    StartSupervising,
+    RestartSupervising,
+    StopSupervising,
 }
 
 impl fmt::Display for RuntimeAction {
@@ -54,7 +61,9 @@ impl fmt::Display for RuntimeAction {
         match self {
             RuntimeAction::Kill => write!(f, "kill"),
             RuntimeAction::StopTimer => write!(f, "stop_timer"),
-            RuntimeAction::StopSupervisor => write!(f, "stop_supervisor"),
+            RuntimeAction::StartSupervising => write!(f, "start_supervising"),
+            RuntimeAction::RestartSupervising => write!(f, "restart_supervising"),
+            RuntimeAction::StopSupervising => write!(f, "stop_supervising"),
         }
     }
 }
@@ -81,6 +90,8 @@ impl fmt::Display for RunStatus {
 pub enum ScheduleStatus {
     #[default]
     Prepare,
+    Supervising,
+    Unsupervised,
     Scheduling,
     Unscheduled,
 }
@@ -91,6 +102,8 @@ impl fmt::Display for ScheduleStatus {
             ScheduleStatus::Prepare => write!(f, "prepare"),
             ScheduleStatus::Scheduling => write!(f, "scheduling"),
             ScheduleStatus::Unscheduled => write!(f, "unscheduled"),
+            ScheduleStatus::Supervising => write!(f, "supervising"),
+            ScheduleStatus::Unsupervised => write!(f, "unsupervised"),
         }
     }
 }
@@ -151,6 +164,7 @@ pub enum ScheduleType {
     Once,
     Timer,
     Flow,
+    Daemon,
 }
 
 impl TryFrom<&str> for ScheduleType {
@@ -161,6 +175,7 @@ impl TryFrom<&str> for ScheduleType {
             "once" => ScheduleType::Once,
             "flow" => ScheduleType::Flow,
             "timer" => ScheduleType::Timer,
+            "daemon" => ScheduleType::Daemon,
             _ => return Err(anyhow!("invalid schedule type").into()),
         };
         Ok(schedule_type)
@@ -173,6 +188,7 @@ impl fmt::Display for ScheduleType {
             ScheduleType::Once => write!(f, "once"),
             ScheduleType::Timer => write!(f, "timer"),
             ScheduleType::Flow => write!(f, "flow"),
+            ScheduleType::Daemon => write!(f, "daemon"),
         }
     }
 }

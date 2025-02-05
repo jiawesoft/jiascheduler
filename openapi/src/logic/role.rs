@@ -32,6 +32,18 @@ const POLICY_DO_NOT_ALLOW_CHANGE_DATA: Permission = Permission {
     action: "forbid",
 };
 
+const POLICY_ALLOW_CHANGE_ALL_JOB: Permission = Permission {
+    name: "Allow manage all job",
+    object: "job",
+    action: "manage",
+};
+
+const POLICY_ALLOW_UPLOAD_FILE: Permission = Permission {
+    name: "Allow upload file",
+    object: "file",
+    action: "upload",
+};
+
 pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
     // vec![
     //     Permission {
@@ -54,6 +66,8 @@ pub static PERMISSIONS: LazyLock<Vec<Permission>> = LazyLock::new(|| {
         POLICY_ALLOW_MANAGE_ALL_INSTANCE,
         POLICY_ALLOW_MANAGE_ALL_USER,
         POLICY_DO_NOT_ALLOW_CHANGE_DATA,
+        POLICY_ALLOW_CHANGE_ALL_JOB,
+        POLICY_ALLOW_UPLOAD_FILE,
     ]
 });
 
@@ -107,10 +121,12 @@ impl<'a> RoleLogic<'a> {
         F: FnOnce(String, String) -> T + Clone,
         T: Future<Output = Result<()>>,
     {
-        let role_record = Role::find_by_id(role_id)
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!("invalid role, role_id: {role_id}"))?;
+        if role_id != 0 {
+            Role::find_by_id(role_id)
+                .one(&self.ctx.db)
+                .await?
+                .ok_or(anyhow!("invalid role, role_id: {role_id}"))?;
+        }
 
         let affected = if let Some(user_ids) = user_ids {
             let affected = User::update_many()
@@ -132,7 +148,7 @@ impl<'a> RoleLogic<'a> {
 
             for v in user_records {
                 let update_role = update_role.clone();
-                update_role(v.user_id, role_record.id.to_string()).await?;
+                update_role(v.user_id, role_id.to_string()).await?;
             }
 
             affected

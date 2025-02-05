@@ -65,9 +65,15 @@ impl<'a> Cmd<'a> {
         self
     }
 
+    #[cfg(unix)]
     pub fn work_user(&mut self, user: &str) -> Result<&mut Self> {
         let u = users::get_user_by_name(user).ok_or(anyhow!("invalid system user {user}"))?;
         self.inner.uid(u.uid());
+        Ok(self)
+    }
+
+    #[cfg(windows)]
+    pub fn work_user(&mut self, _: &str) -> Result<&mut Self> {
         Ok(self)
     }
 
@@ -76,13 +82,28 @@ impl<'a> Cmd<'a> {
         self
     }
 
+    #[cfg(windows)]
+    pub fn killpg(_pid: u32) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    pub fn killpg(pid: u32) -> Result<()> {
+        let pid = nix::unistd::Pid::from_raw(pid as i32);
+        nix::sys::signal::killpg(pid, nix::sys::signal::SIGKILL)?;
+        Ok(())
+    }
+
     pub async fn wait_with_output(
         &mut self,
         tx: UnboundedSender<String>,
         mut kill_signal_rx: Receiver<()>,
     ) -> Result<Output> {
         // kill process group See https://github.com/rust-lang/rust/issues/115241
+        #[cfg(unix)]
         let mut child = self.inner.process_group(0).spawn()?;
+        #[cfg(windows)]
+        let mut child = self.inner.spawn()?;
 
         if self.read_code_from_stdin.0 {
             if let Some(mut stdin_pipe) = child.stdin.take() {
@@ -105,23 +126,18 @@ impl<'a> Cmd<'a> {
             });
         tokio::pin!(sleep);
 
-        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
+        let pid = child.id().unwrap();
         tokio::select! {
             _ = &mut sleep =>  {
                 info!("timeout kill");
                 child.kill().await?;
-                nix::sys::signal::killpg(
-                    pid,
-                    nix::sys::signal::SIGKILL,
-                )?;
+                Self::killpg(pid)?;
+
             },
             _ = kill_signal_rx.recv() => {
                 info!("manual kill");
                 child.kill().await?;
-                nix::sys::signal::killpg(
-                    pid,
-                    nix::sys::signal::SIGKILL,
-                )?;
+                Self::killpg(pid)?;
             },
             ret = child.wait() =>{
                 ret?;

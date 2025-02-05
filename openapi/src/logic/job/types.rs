@@ -6,9 +6,13 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct RunStatusRelatedScheduleJobModel {
     pub id: u64,
+    pub executor_id: u64,
+    pub executor_name: String,
     pub instance_id: String,
     pub bind_ip: String,
     pub bind_namespace: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
     pub schedule_type: String,
     pub job_type: String,
     pub eid: String,
@@ -19,6 +23,7 @@ pub struct RunStatusRelatedScheduleJobModel {
     pub run_status: String,
     pub exit_status: String,
     pub exit_code: i32,
+    pub dispatch_data: Option<serde_json::Value>,
     pub dispatch_result: Option<serde_json::Value>,
     pub start_time: Option<DateTimeUtc>,
     pub end_time: Option<DateTimeUtc>,
@@ -36,6 +41,8 @@ pub struct ExecHistoryRelatedScheduleModel {
     pub namespace: String,
     pub job_type: String,
     pub output: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
     pub bundle_script_result: Option<serde_json::Value>,
     pub created_user: String,
     pub exit_code: i64,
@@ -53,11 +60,14 @@ pub struct JobRelatedExecutorModel {
     pub eid: String,
     pub executor_id: u64,
     pub executor_name: String,
+    pub executor_platform: String,
     pub executor_command: String,
     pub job_type: String,
     pub name: String,
     pub code: String,
     pub info: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
     pub bundle_script: Option<serde_json::Value>,
     pub work_dir: String,
     pub work_user: String,
@@ -80,6 +90,8 @@ pub struct BundleScriptRelatedExecutorModel {
     pub eid: String,
     pub executor_id: u64,
     pub executor_name: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
     pub name: String,
     pub code: String,
     pub info: String,
@@ -93,11 +105,15 @@ pub struct BundleScriptRelatedExecutorModel {
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct JobTimerRelatedJobModel {
     pub id: u64,
+    pub eid: String,
     pub name: String,
     pub job_name: String,
     pub job_type: String,
     pub executor_id: u64,
-    pub eid: String,
+    pub executor_name: String,
+    pub executor_platform: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
     pub timer_expr: Option<serde_json::Value>,
     pub info: String,
     pub created_user: String,
@@ -208,4 +224,51 @@ pub struct JobStatSummary {
 pub struct InstanceStatSummary {
     pub online: u64,
     pub offline: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct JobSupervisorRelatedJobModel {
+    pub id: u64,
+    pub name: String,
+    pub job_name: String,
+    pub restart_interval: u64,
+    pub executor_id: u64,
+    pub executor_name: String,
+    pub executor_platform: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
+    pub eid: String,
+    pub info: String,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeUtc,
+    pub updated_time: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TeamMemberModel {
+    pub user_id: String,
+    pub username: String,
+    pub is_admin: bool,
+    pub created_time: DateTimeUtc,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct ScheduleJobTeamModel {
+    pub id: u64,
+    pub schedule_id: String,
+    pub name: String,
+    pub job_type: String,
+    pub eid: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
+    pub dispatch_result: Option<serde_json::Value>,
+    pub schedule_type: String,
+    pub action: String,
+    pub dispatch_data: Option<serde_json::Value>,
+    pub snapshot_data: Option<serde_json::Value>,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeUtc,
+    pub updated_time: DateTimeUtc,
 }

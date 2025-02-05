@@ -4,24 +4,17 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
-#[sea_orm(table_name = "job_exec_history")]
+#[sea_orm(table_name = "team")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
-    pub instance_id: String,
-    pub schedule_id: String,
-    pub eid: String,
-    pub job_type: String,
-    pub bundle_script_result: Option<Json>,
-    pub exit_status: String,
-    pub exit_code: i32,
-    #[sea_orm(column_type = "Text")]
-    pub output: String,
-    pub start_time: Option<DateTimeUtc>,
-    pub end_time: Option<DateTimeUtc>,
+    #[sea_orm(unique)]
+    pub name: String,
+    pub info: String,
+    pub created_user: String,
+    pub updated_user: String,
     pub created_time: DateTimeUtc,
     pub updated_time: DateTimeUtc,
-    pub created_user: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

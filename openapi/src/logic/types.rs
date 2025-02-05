@@ -113,3 +113,29 @@ impl Display for Permission {
         f.write_str(format!("{}_{}", self.object, self.action).as_str())
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
+pub struct TeamMemberCount {
+    pub team_id: u64,
+    pub total: i64,
+}
+
+pub struct TeamMemberCountList(pub Vec<TeamMemberCount>);
+
+impl TeamMemberCountList {
+    pub fn get_by_team_id(&self, team_id: u64) -> Option<&TeamMemberCount> {
+        self.0.iter().find(|&v| v.team_id == team_id)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
+pub struct TeamRecord {
+    pub id: u64,
+    pub name: String,
+    pub info: String,
+    pub is_admin: Option<bool>,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeUtc,
+    pub updated_time: DateTimeUtc,
+}

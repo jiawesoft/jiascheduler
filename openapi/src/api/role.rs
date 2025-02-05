@@ -27,6 +27,11 @@ mod types {
         pub permissions: Option<Vec<String>>,
     }
 
+    #[derive(Object, Serialize, Deserialize)]
+    pub struct SaveRoleResult {
+        pub role_id: u64,
+    }
+
     #[derive(Object, Serialize, Default)]
     pub struct QueryRoleResp {
         pub total: u64,
@@ -89,7 +94,7 @@ impl RoleApi {
         _session: &Session,
         state: Data<&AppState>,
         Json(req): Json<types::SaveRoleReq>,
-    ) -> Result<ApiStdResponse<types::UpdateResult>> {
+    ) -> Result<ApiStdResponse<types::SaveRoleResult>> {
         let ok = state.can_manage_user(&user_info.user_id).await?;
         if !ok {
             return Err(NoPermission().into());
@@ -99,7 +104,7 @@ impl RoleApi {
             return_err!("Dont't allow modify admin role");
         }
 
-        let affected = state
+        let role_id = state
             .service()
             .role
             .save_role(
@@ -114,10 +119,10 @@ impl RoleApi {
             )
             .await?;
         if let Some(permissions) = req.permissions {
-            state.set_permissions(affected, permissions).await?;
+            state.set_permissions(role_id, permissions).await?;
         }
 
-        return_ok!(types::UpdateResult { affected })
+        return_ok!(types::SaveRoleResult { role_id })
     }
 
     #[oai(path = "/set-user", method = "post")]
@@ -216,10 +221,7 @@ impl RoleApi {
             });
         }
 
-        return_ok!(types::QueryRoleResp {
-            total: ret.1,
-            list: list,
-        })
+        return_ok!(types::QueryRoleResp { total: ret.1, list })
     }
 
     #[oai(path = "/bind-instance", method = "post")]

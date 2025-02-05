@@ -1,6 +1,7 @@
 use crate::entity::executor;
 use crate::entity::job_bundle_script;
 use crate::entity::prelude::*;
+use crate::entity::team;
 use anyhow::Result;
 use sea_orm::JoinType;
 use sea_orm::QuerySelect;
@@ -26,6 +27,7 @@ impl<'a> JobLogic<'a> {
     pub async fn query_bundle_script(
         &self,
         username: Option<String>,
+        team_id: Option<u64>,
         default_eid: Option<String>,
         name: Option<String>,
         updated_time_range: Option<(String, String)>,
@@ -34,11 +36,19 @@ impl<'a> JobLogic<'a> {
     ) -> Result<(Vec<types::BundleScriptRelatedExecutorModel>, u64)> {
         let model = JobBundleScript::find()
             .column_as(executor::Column::Name, "executor_name")
+            .column_as(team::Column::Name, "team_name")
             .join_rev(
                 JoinType::LeftJoin,
                 Executor::belongs_to(JobBundleScript)
                     .from(executor::Column::Id)
                     .to(job_bundle_script::Column::ExecutorId)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(JobBundleScript)
+                    .from(team::Column::Id)
+                    .to(job_bundle_script::Column::TeamId)
                     .into(),
             )
             .apply_if(username, |q, v| {
@@ -53,6 +63,9 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_bundle_script::Column::UpdatedTime.lt(v.1)),
                 )
+            })
+            .apply_if(team_id, |q, v| {
+                q.filter(job_bundle_script::Column::TeamId.eq(v))
             });
 
         let total = model.clone().count(&self.ctx.db).await?;

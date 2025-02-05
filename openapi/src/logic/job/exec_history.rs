@@ -1,4 +1,4 @@
-use crate::entity::{instance, job_exec_history, job_schedule_history, prelude::*};
+use crate::entity::{instance, job, job_exec_history, job_schedule_history, prelude::*, team};
 use anyhow::Result;
 use sea_orm::{
     ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -16,6 +16,7 @@ impl<'a> JobLogic<'a> {
         job_type: String,
         schedule_id: Option<String>,
         schedule_type: Option<String>,
+        team_id: Option<u64>,
         eid: Option<String>,
         schedule_name: Option<String>,
         username: Option<String>,
@@ -28,9 +29,24 @@ impl<'a> JobLogic<'a> {
     ) -> Result<(Vec<ExecHistoryRelatedScheduleModel>, u64)> {
         let model = JobExecHistory::find()
             .column_as(job_schedule_history::Column::Name, "schedule_name")
-            .column(job_schedule_history::Column::CreatedUser)
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobExecHistory)
+                    .from(job::Column::Eid)
+                    .to(job_exec_history::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
+                    .into(),
+            )
             .join_rev(
                 JoinType::LeftJoin,
                 JobScheduleHistory::belongs_to(JobExecHistory)
@@ -45,8 +61,10 @@ impl<'a> JobLogic<'a> {
                     .to(job_exec_history::Column::InstanceId)
                     .into(),
             )
-            .filter(job_schedule_history::Column::CreatedUser.eq(username))
             .filter(job_exec_history::Column::JobType.eq(job_type))
+            .apply_if(username, |q, v| {
+                q.filter(job_exec_history::Column::CreatedUser.eq(v))
+            })
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))
             })
@@ -74,7 +92,8 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_exec_history::Column::EndTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 

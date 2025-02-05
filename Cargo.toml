@@ -3,7 +3,7 @@ members = ["automate", "openapi", "openapi-derive", "migration"]
 
 [package]
 name = "jiascheduler"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -51,7 +51,7 @@ uuid.workspace = true
 automate.workspace = true
 openapi.workspace = true
 watchexec-supervisor.workspace = true
-terminal-keycode = "1.1.1"
+# terminal-keycode = "1.1.1"
 
 
 [workspace.dependencies]
@@ -112,7 +112,6 @@ serde_repr = "0.1.18"
 russh = "0.44.0"
 russh-sftp = "2.0.1"
 russh-keys = "0.44.0"
-termion = "*"
 redis-macros = "0.4.0"
 config = "*"
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -132,7 +131,6 @@ async-trait = "0.1.81"
 toml = "0.8.19"
 shellexpand = "3.1.0"
 git-version = "0.3.9"
-users = "0.11.0"
 rand = "0.8.5"
 http = "1.1.0"
 sql-builder = "3.1.1"

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, Result};
 
@@ -22,14 +22,16 @@ use tokio::fs;
 use tracing::error;
 
 use crate::{
-    entity::{self, executor, instance, job, job_running_status, job_schedule_history, prelude::*},
+    entity::{
+        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*, team,
+    },
     file_name,
-    logic::{executor::ExecutorLogic, job::types::DispatchResult},
+    logic::{executor::ExecutorLogic, job::types::DispatchResult, types::UserInfo},
     utils, IdGenerator,
 };
 
 use super::{
-    types::{BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
+    types::{self, BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
     JobLogic,
 };
 
@@ -193,13 +195,9 @@ impl<'a> JobLogic<'a> {
         match params.run_status {
             Some(RunStatus::Stop) => {
                 let (bundle_script_result, job_type) = if params.bundle_output.is_some() {
-                    let schedule_record = self
-                        .get_schedule(params.schedule_id.clone())
-                        .await?
-                        .ok_or(anyhow::format_err!(
-                            "cannot get schedule record {}",
-                            params.schedule_id
-                        ))?;
+                    let schedule_record = self.get_schedule(&params.schedule_id).await?.ok_or(
+                        anyhow::format_err!("cannot get schedule record {}", params.schedule_id),
+                    )?;
                     let job_record: job::Model = serde_json::from_value(
                         schedule_record
                             .snapshot_data
@@ -234,6 +232,7 @@ impl<'a> JobLogic<'a> {
                     start_time: Set(params.start_time),
                     end_time: Set(params.end_time),
                     bundle_script_result,
+                    created_user: Set(params.created_user),
                     job_type,
                     ..Default::default()
                 })
@@ -243,6 +242,42 @@ impl<'a> JobLogic<'a> {
             }
             _ => Ok(ret.last_insert_id),
         }
+    }
+
+    pub fn check_schedule_type(
+        &self,
+        action: JobAction,
+        schedule_type: ScheduleType,
+    ) -> Result<()> {
+        match schedule_type {
+            ScheduleType::Once => {
+                if !matches!(action, JobAction::Exec | JobAction::Kill) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+            ScheduleType::Timer => {
+                if !matches!(
+                    action,
+                    JobAction::StartTimer
+                        | JobAction::StopTimer
+                        | JobAction::Exec
+                        | JobAction::Kill
+                ) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+            ScheduleType::Flow => unimplemented!("not support flow schedule type"),
+            ScheduleType::Daemon => {
+                if !matches!(
+                    action,
+                    JobAction::StartSupervising | JobAction::RestartSupervising
+                ) {
+                    anyhow::bail!("cannot {action} job with once schedule type")
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn dispatch_job(
@@ -255,10 +290,11 @@ impl<'a> JobLogic<'a> {
         schedule_type: ScheduleType,
         action: automate::JobAction,
         timer_expr: Option<String>,
+        restart_interval: Option<Duration>,
         created_user: String,
     ) -> Result<u64> {
+        self.check_schedule_type(action.clone(), schedule_type.clone())?;
         let schedule_id = IdGenerator::get_schedule_uid();
-
         let endpoints = Instance::find()
             .filter(instance::Column::InstanceId.is_in(instance_ids))
             .all(&self.ctx.db)
@@ -348,8 +384,9 @@ impl<'a> JobLogic<'a> {
                 max_parallel: job_record.max_parallel as u8,
                 read_code_from_stdin: false,
             },
-            instance_id: "".to_string(),
+            instance_id: None,
             fields: None,
+            restart_interval,
             created_user: created_user.clone(),
             schedule_id: schedule_id.clone(),
             timer_expr: timer_expr.clone(),
@@ -379,7 +416,7 @@ impl<'a> JobLogic<'a> {
             let logic = logic.clone();
             let http_client = http_client.clone();
             let secret = secret.clone();
-            dispatch_params.instance_id = v.instance_id.clone();
+            dispatch_params.instance_id = Some(v.instance_id.clone());
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
@@ -539,7 +576,7 @@ impl<'a> JobLogic<'a> {
                 ScheduleStatus::Scheduling.to_string(),
                 ScheduleStatus::Prepare.to_string(),
             ]))
-            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id))
+            .filter(job_running_status::Column::InstanceId.eq(ins.instance_id.clone()))
             .into_tuple()
             .all(&self.ctx.db)
             .await?;
@@ -548,7 +585,8 @@ impl<'a> JobLogic<'a> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
 
         for (dispatch_data_val, mac_addr) in runnable {
-            let dispatch_data: DispatchData = dispatch_data_val.try_into()?;
+            let mut dispatch_data: DispatchData = dispatch_data_val.try_into()?;
+            dispatch_data.params.instance_id = Some(ins.instance_id.clone());
 
             let body = automate::DispatchJobRequest {
                 agent_ip: bind_ip.clone(),
@@ -613,15 +651,9 @@ impl<'a> JobLogic<'a> {
         &self,
         schedule_id: &str,
         action: JobAction,
+        job_schedule_record: job_schedule_history::Model,
+        created_user: String,
     ) -> Result<Vec<Result<DispatchResult>>> {
-        let job_schedule_record = JobScheduleHistory::find()
-            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!(
-                "cannot found job schedule by schedule_id: {schedule_id}"
-            ))?;
-
         let dispatch_data: DispatchData = job_schedule_record
             .dispatch_data
             .ok_or(anyhow!("cannot found job dispatch data"))?
@@ -635,8 +667,10 @@ impl<'a> JobLogic<'a> {
             let mut dispatch_params = dispatch_data.params.clone();
             let logic = logic.clone();
             let http_client = http_client.clone();
+            let instance_id = v.instance_id.clone();
             dispatch_params.action = action;
-            dispatch_params.instance_id = v.instance_id.clone();
+            dispatch_params.instance_id = Some(instance_id.clone());
+            dispatch_params.created_user = created_user.clone();
             Box::pin(async move {
                 let body = automate::DispatchJobRequest {
                     agent_ip: v.ip.clone(),
@@ -648,7 +682,7 @@ impl<'a> JobLogic<'a> {
                     Err(e) => {
                         return Ok(DispatchResult {
                             namespace: v.namespace.clone(),
-                            instance_id: v.instance_id.clone(),
+                            instance_id: instance_id.clone(),
                             bind_ip: v.ip.clone(),
                             response: json!(null),
                             has_err: true,
@@ -735,16 +769,35 @@ impl<'a> JobLogic<'a> {
     pub async fn query_schedule(
         &self,
         schedule_type: Option<String>,
-        created_user: String,
+        created_user: Option<String>,
         job_type: String,
         name: Option<String>,
+        team_id: Option<u64>,
         updated_time_range: Option<(String, String)>,
         page: u64,
         page_size: u64,
-    ) -> Result<(Vec<job_schedule_history::Model>, u64)> {
+    ) -> Result<(Vec<types::ScheduleJobTeamModel>, u64)> {
         let model = JobScheduleHistory::find()
-            .filter(job_schedule_history::Column::CreatedUser.eq(created_user))
+            .column_as(team::Column::Id, "team_id")
+            .column_as(team::Column::Name, "team_name")
             .filter(job_schedule_history::Column::JobType.eq(job_type))
+            .join_rev(
+                JoinType::LeftJoin,
+                Job::belongs_to(JobScheduleHistory)
+                    .from(job::Column::Eid)
+                    .to(job_schedule_history::Column::Eid)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
+                    .into(),
+            )
+            .apply_if(created_user, |q, v| {
+                q.filter(job_schedule_history::Column::CreatedUser.eq(v))
+            })
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_schedule_history::Column::ScheduleType.eq(v))
             })
@@ -757,12 +810,14 @@ impl<'a> JobLogic<'a> {
                         .gt(v.0)
                         .and(job_schedule_history::Column::UpdatedTime.lt(v.1)),
                 )
-            });
+            })
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
         let total = model.clone().count(&self.ctx.db).await?;
 
         let list = model
             .order_by_desc(job_schedule_history::Column::Id)
+            .into_model()
             .paginate(&self.ctx.db, page_size)
             .fetch_page(page)
             .await?;
@@ -773,7 +828,8 @@ impl<'a> JobLogic<'a> {
         &self,
         schedule_id: String,
         instance_id: String,
-        updated_user: String,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
         action: JobAction,
     ) -> Result<Value> {
         let ins = Instance::find()
@@ -782,13 +838,27 @@ impl<'a> JobLogic<'a> {
             .await?
             .ok_or(anyhow!("cannot found instance"))?;
 
-        let schedule_record =
-            self.get_schedule(schedule_id.clone())
-                .await?
-                .ok_or(anyhow::format_err!(
-                    "cannot get shedule by {}",
-                    schedule_id.clone()
-                ))?;
+        let schedule_record = self
+            .get_schedule(&schedule_id)
+            .await?
+            .ok_or(anyhow::format_err!(
+                "cannot get shedule by {}",
+                schedule_id.clone()
+            ))?;
+
+        if !self
+            .can_dispatch_job(
+                &user_info,
+                team_id,
+                Some(&schedule_record.created_user),
+                &schedule_record.eid,
+            )
+            .await?
+        {
+            anyhow::bail!(
+                "Rescheduling is not allowed unless you are the task's original scheduler."
+            );
+        }
 
         let dispatch_data = schedule_record
             .dispatch_data
@@ -815,8 +885,8 @@ impl<'a> JobLogic<'a> {
 
         let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
-        dispatch_data.params.instance_id = ins.instance_id.clone();
-        dispatch_data.params.created_user = updated_user;
+        dispatch_data.params.instance_id = Some(ins.instance_id.clone());
+        dispatch_data.params.created_user = user_info.username.clone();
 
         let mut body = automate::DispatchJobRequest {
             agent_ip: ins.ip.clone(),
@@ -836,7 +906,7 @@ impl<'a> JobLogic<'a> {
             .await?;
 
         if ret["code"] != 20000 {
-            anyhow::bail!("failed to dispatch job");
+            anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 
         // JobRunningStatus::update_many()
@@ -869,7 +939,7 @@ impl<'a> JobLogic<'a> {
 
     pub async fn get_schedule(
         &self,
-        schedule_id: String,
+        schedule_id: &str,
     ) -> Result<Option<entity::job_schedule_history::Model>> {
         let ret = JobScheduleHistory::find()
             .filter(entity::job_schedule_history::Column::ScheduleId.eq(schedule_id))

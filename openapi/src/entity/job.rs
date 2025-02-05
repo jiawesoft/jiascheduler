@@ -9,6 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
     pub eid: String,
+    pub team_id: u64,
     pub executor_id: u64,
     pub job_type: String,
     #[sea_orm(unique)]

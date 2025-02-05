@@ -18,6 +18,7 @@ use tokio::{
 };
 
 use crate::{
+    error::NoPermission,
     local_time,
     logic::{
         self,
@@ -49,6 +50,8 @@ pub mod types {
     pub enum GetFileResponse {
         #[oai(status = 200)]
         Ok(Attachment<Vec<u8>>),
+        #[oai(status = 403)]
+        NotAllow,
         /// File not found
         #[oai(status = 404)]
         NotFound,
@@ -116,10 +119,14 @@ impl FileApi {
     #[oai(path = "/upload", method = "post")]
     async fn upload(
         &self,
-        _state: Data<&AppState>,
+        state: Data<&AppState>,
         _session: &Session,
         upload: types::UploadPayload,
+        user_info: Data<&logic::types::UserInfo>,
     ) -> Result<ApiStdResponse<types::UploadFileRes>> {
+        if !state.can_upload_file(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
         let filename = upload.file.file_name().map(ToString::to_string);
         let data = upload.file.into_vec().await.map_err(std_into_error)?;
 
@@ -143,7 +150,16 @@ impl FileApi {
     }
 
     #[oai(path = "/get/:filename", method = "get")]
-    async fn get(&self, Path(filename): Path<String>) -> types::GetFileResponse {
+    async fn get(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        Path(filename): Path<String>,
+    ) -> types::GetFileResponse {
+        if !unwrap_or_response!(state.can_upload_file(&user_info.user_id).await) {
+            return types::GetFileResponse::NotAllow;
+        }
+
         let buf = PathBuf::from(filename);
         let name = buf.file_name();
 

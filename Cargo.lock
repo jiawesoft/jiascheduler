@@ -2298,7 +2298,7 @@ checksum = "b1a46d1a171d865aa5f83f92695765caa047a9b4cbae2cbf37dbd613a793fd4c"
 
 [[package]]
 name = "jiascheduler"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "automate",
@@ -2317,7 +2317,6 @@ dependencies = [
  "redis-macros",
  "serde",
  "serde_json",
- "terminal-keycode",
  "tokio",
  "tokio-cron-scheduler",
  "tokio-nsq",
@@ -5334,12 +5333,6 @@ dependencies = [
  "rustix 0.38.34",
  "windows-sys 0.48.0",
 ]
-
-[[package]]
-name = "terminal-keycode"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e216d205fa6c3c6c16ff15ae727c5c70d7a53bf895a0b634852393466d74f38"
 
 [[package]]
 name = "termion"

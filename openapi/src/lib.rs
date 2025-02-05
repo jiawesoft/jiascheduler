@@ -4,7 +4,7 @@ pub mod response;
 use anyhow::{anyhow, Context, Result};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
-    migration::MigrationApi, role::RoleApi, terminal, user::UserApi,
+    migration::MigrationApi, role::RoleApi, team::TeamApi, terminal, user::UserApi,
 };
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
@@ -44,7 +44,6 @@ mod logic;
 pub mod middleware;
 mod migration;
 mod state;
-#[macro_use]
 pub mod utils;
 
 #[derive(Clone)]
@@ -246,15 +245,6 @@ pub async fn run(opts: WebapiOptions) -> Result<()> {
     let mut auth_value = header::HeaderValue::from_str(&format!("Bearer {}", conf.comet_secret))?;
     auth_value.set_sensitive(true);
     headers.insert(header::AUTHORIZATION, auth_value);
-    // AppContext {
-    //     db: conn,
-    //     conf: conf.clone(),
-    //     redis: client,
-    //     enforcer: Arc::new(RwLock::new(e)),
-    //     http_client: reqwest::Client::builder()
-    //         .default_headers(headers)
-    //         .build()?,
-    // }
 
     let ctx = AppContext::builder()
         .db(conn)
@@ -272,6 +262,7 @@ pub async fn run(opts: WebapiOptions) -> Result<()> {
     let api_service = OpenApiService::new(
         (
             UserApi,
+            TeamApi,
             JobApi,
             ExecutorApi,
             InstanceApi,
