@@ -24,6 +24,12 @@ path = "src/bin/agent.rs"
 name = "jiascheduler-comet"
 path = "src/bin/comet.rs"
 
+# [target.aarch64-unknown-linux-gnu]
+# linker = "aarch64-linux-gnu-gcc"
+
+# [target.aarch64-unknown-linux-musl]
+# linker = "aarch64-linux-musl-ld"
+
 [dependencies]
 poem.workspace = true
 clap.workspace = true
@@ -94,9 +100,9 @@ sea-orm = { version = "1.0.0", features = [
     "with-uuid",
     "with-time",
     "sqlx-mysql",
-    "runtime-tokio-native-tls",
+    # "runtime-tokio-native-tls",
     "debug-print",
-    # "runtime-tokio-rustls",
+    "runtime-tokio-rustls",
 ] }
 syn = "2.0.48"
 quote = "1.0.35"
