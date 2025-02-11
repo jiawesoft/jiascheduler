@@ -127,7 +127,7 @@ impl<'a> JobLogic<'a> {
                     q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
                 })
                 .apply_if(
-                    team_id.map_or(Some(&user_info.user_id), |_| None),
+                    team_id.map_or(Some(&user_info.username), |_| None),
                     |q, v| q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v))),
                 )
                 .one(&self.ctx.db)
