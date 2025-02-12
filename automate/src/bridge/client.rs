@@ -351,8 +351,8 @@ impl
         }
 
         let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))
-            .await?
-            .context("connect timeout")?;
+            .await
+            .context("connect timeout")??;
         let (ws_writer, ws_reader) = ws_stream.split();
         self.ws_reader = Some(ws_reader);
         self.ws_writer = Some(ws_writer);
@@ -408,8 +408,8 @@ impl
                 })),
             }))),
         )
-        .await?
-        .context("ws writer send timeout")?;
+        .await
+        .context("ws writer send timeout")??;
         self.ws_writer.replace(ws_writer);
 
         if let Some(msg) = timeout(Duration::from_secs(5), ws_reader.next())

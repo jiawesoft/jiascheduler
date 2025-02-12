@@ -66,8 +66,9 @@ impl Bridge {
         }
 
         let resp = timeout(Duration::from_secs(90), rx.recv())
-            .await?
-            .context("receive message timeout")?;
+            .await
+            .context("receive message timeout")?
+            .context("failed receives the next value for the receiver.")?;
 
         return match resp {
             MsgState::Completed(v) => Ok(v),

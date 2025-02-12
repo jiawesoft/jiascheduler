@@ -274,8 +274,8 @@ impl
         let req = ClientRequestBuilder::new(u)
             .with_header("Authorization", format!("Bearer {}", comet_secret));
         let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))
-            .await?
-            .context("connect timeout")?;
+            .await
+            .context("connect timeout")??;
 
         let (mut sink, mut stream) = ws_stream.split();
 

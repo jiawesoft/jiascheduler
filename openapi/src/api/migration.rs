@@ -12,7 +12,7 @@ use crate::{
     api_response,
     config::Conf,
     logic::{self, user::UserLogic},
-    response::{anyhow_into_error, std_into_error, ApiStdResponse},
+    response::{std_into_error, ApiStdResponse},
     return_err, return_ok, AppState, InstallState,
 };
 
@@ -183,29 +183,27 @@ impl MigrationApi {
         tx: Data<&Sender<()>>,
     ) -> Result<ApiStdResponse<types::InstallResp>> {
         // 1. connect database
-        let database_url = Url::parse(&req.database_url)
-            .context("database url")
-            .map_err(anyhow_into_error)?;
+        let database_url = Url::parse(&req.database_url).context("failed parse database url")?;
 
         let opt = ConnectOptions::new(database_url);
-        let conn = Database::connect(opt).await.map_err(std_into_error)?;
+        let conn = Database::connect(opt)
+            .await
+            .context("failed connect database")?;
 
         // 2. connect redis
-        let redis_url = Url::parse(&req.redis_url)
-            .context("redis url")
-            .map_err(anyhow_into_error)?;
-        Client::open(redis_url)
-            .context("connect redis")
-            .map_err(anyhow_into_error)?;
+        let redis_url = Url::parse(&req.redis_url).context("failed parse redis url")?;
+        Client::open(redis_url).context("failed connect to redis")?;
 
         if req.migration_type == "up" {
             migration::Migrator::up(&conn, None)
                 .await
-                .map_err(std_into_error)?;
+                .context("failed migrate database")?;
         }
 
         // 2. create admin user
-        let _ = UserLogic::init_admin(&conn, &req.username, &req.password).await?;
+        let _ = UserLogic::init_admin(&conn, &req.username, &req.password)
+            .await
+            .context("failed create admin user")?;
 
         // 3. generate config file
         let mut conf = Conf::default();
@@ -216,9 +214,10 @@ impl MigrationApi {
         conf.admin.password = req.password;
         conf.comet_secret = req.comet_secret;
         conf.encrypt.private_key = nanoid!();
-        conf.sync2file(install_state.config_file.clone())?;
+        conf.sync2file(install_state.config_file.clone())
+            .context("failed save config file")?;
 
-        tx.send(()).await.map_err(|v| std_into_error(v))?;
+        tx.send(()).await.context("failed send install signal")?;
         return_ok!(types::InstallResp { result: 0 })
     }
 }
