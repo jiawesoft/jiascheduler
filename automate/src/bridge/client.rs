@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use futures_util::{
     stream::{SplitSink, SplitStream},
     Future, SinkExt, StreamExt,
@@ -350,7 +350,9 @@ impl
                 .with_header("X-Ssh-Port", ssh_opt.port.to_string());
         }
 
-        let (ws_stream, _b) = connect_async(req).await?;
+        let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))
+            .await?
+            .context("connect timeout")?;
         let (ws_writer, ws_reader) = ws_stream.split();
         self.ws_reader = Some(ws_reader);
         self.ws_writer = Some(ws_writer);
@@ -395,19 +397,25 @@ impl
         let mut ws_writer = self.ws_writer.take().unwrap();
         let mut ws_reader = self.ws_reader.take().unwrap();
 
-        let _ = ws_writer
-            .send(Message::Binary(Protocol::pack_request(Msg {
+        let _ = timeout(
+            Duration::from_secs(5),
+            ws_writer.send(Message::Binary(Protocol::pack_request(Msg {
                 id: 0,
                 data: MsgKind::Request(MsgReqKind::Auth(AuthParams {
                     is_initialized,
                     agent_ip: self.local_ip.unwrap().to_string(),
                     secret,
                 })),
-            })))
-            .await?;
+            }))),
+        )
+        .await?
+        .context("ws writer send timeout")?;
         self.ws_writer.replace(ws_writer);
 
-        if let Some(msg) = ws_reader.next().await {
+        if let Some(msg) = timeout(Duration::from_secs(5), ws_reader.next())
+            .await
+            .context("wait auth responsee timeout")?
+        {
             let msg = msg?;
             let msg = match msg {
                 Message::Binary(v) => {

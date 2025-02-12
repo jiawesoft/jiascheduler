@@ -6,7 +6,7 @@ pub mod protocol;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Context, Ok, Result};
 use serde_json::Value;
 use tokio::{
     sync::{
@@ -65,7 +65,9 @@ impl Bridge {
             None => return Err(anyhow::anyhow!("not found client {}", key)),
         }
 
-        let resp = timeout(Duration::from_secs(90), rx.recv()).await?.unwrap();
+        let resp = timeout(Duration::from_secs(90), rx.recv())
+            .await?
+            .context("receive message timeout")?;
 
         return match resp {
             MsgState::Completed(v) => Ok(v),
