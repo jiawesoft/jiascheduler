@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Local, Utc};
 use futures::{SinkExt, StreamExt};
 
@@ -273,14 +273,17 @@ impl
         let u = addr.parse::<poem::http::Uri>()?;
         let req = ClientRequestBuilder::new(u)
             .with_header("Authorization", format!("Bearer {}", comet_secret));
-        let (ws_stream, _b) = connect_async(req).await?;
+        let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))
+            .await
+            .context("connect timeout")??;
+
         let (mut sink, mut stream) = ws_stream.split();
 
         let login_params = loop {
             let next_stream = match timeout(Duration::from_secs(90), stream.next()).await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!("timeout {e}, retry!");
+                    debug!("read stream timeout {e}, retry!");
                     return Ok(());
                 }
             };

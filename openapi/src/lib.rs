@@ -139,7 +139,7 @@ m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act
 "#;
 
 const GIT_VERSION: &str = git_version!();
-const APP_VERSION: &str = "1.0.0";
+const APP_VERSION: &str = "1.0.2";
 
 fn get_version() -> String {
     format!("{APP_VERSION}-{GIT_VERSION}")
