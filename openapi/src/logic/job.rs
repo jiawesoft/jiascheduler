@@ -120,7 +120,11 @@ impl<'a> JobLogic<'a> {
     ) -> Result<bool> {
         let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
         if ok {
-            Ok(true)
+            Ok(Job::find()
+                .filter(job::Column::Eid.eq(eid))
+                .one(&self.ctx.db)
+                .await?
+                .is_some())
         } else {
             let v = Job::find()
                 .apply_if(team_id, |q, v| {
@@ -132,7 +136,7 @@ impl<'a> JobLogic<'a> {
                 )
                 .one(&self.ctx.db)
                 .await?
-                .map_or(false, |_| true);
+                .is_some();
             Ok(v)
         }
     }
