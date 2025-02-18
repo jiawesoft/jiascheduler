@@ -33,7 +33,32 @@ Github 地址：https://github.com/jiawesoft/jiascheduler
 
 如果你需要下线节点，只需要退出 Agent 即可
 
-**完整安装**
+### 手动编译
+
+1. 编译前端项目
+
+```bash
+# 克隆仓库
+git clone https://github.com/jiaweesoft/jiascheduler-ui.git
+# 安装依赖
+cd jiascheduler-ui
+pnpm install
+# 编译项目
+pnpm build
+# 编译完成后，将dist目录下的文件复制到jiascheduler的dist目录下
+cp -r dist/* jiascheduler/dist/
+```
+
+2. 编译 jiascheduler
+
+```bash
+# 编译
+cargo build -r --target x86_64-unknown-linux-musl
+# 查看编译后的执行文件
+ls target/x86_64-unknown-linux-musl/release
+```
+
+### 完整安装
 
 1. 安装 jiascheduler-console
 

@@ -32,7 +32,32 @@ At this time, there are no online nodes under the guest account. You can deploy 
 
 If you need to log off the node, simply exit the agent
 
-**Complete installation**
+### Manual compilation
+
+1. Compile the frontend project
+
+```bash
+# Clone the repository
+git clone https://github.com/jiaweesoft/jiascheduler-ui.git
+# Install dependencies
+cd jiascheduler-ui
+pnpm install
+# Compile the project
+pnpm build
+# After compilation, copy the files from the dist directory to the dist directory of jiascheduler
+cp -r dist/* jiascheduler/dist/
+```
+
+2. Compile jiascheduler
+
+```bash
+# Compile
+cargo build -r --target x86_64-unknown-linux-musl
+# Check the compiled executable files
+ls target/x86_64-unknown-linux-musl/release
+```
+
+### Complete installation
 
 1. Install jiascheduler-console
 
