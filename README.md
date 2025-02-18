@@ -38,7 +38,7 @@ If you need to log off the node, simply exit the agent
 
 ```bash
 # Clone the repository
-git clone https://github.com/jiaweesoft/jiascheduler-ui.git
+git clone https://github.com/jiawesoft/jiascheduler-ui.git
 # Install dependencies
 cd jiascheduler-ui
 pnpm install

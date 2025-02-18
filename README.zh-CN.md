@@ -39,7 +39,7 @@ Github 地址：https://github.com/jiawesoft/jiascheduler
 
 ```bash
 # 克隆仓库
-git clone https://github.com/jiaweesoft/jiascheduler-ui.git
+git clone https://github.com/jiawesoft/jiascheduler-ui.git
 # 安装依赖
 cd jiascheduler-ui
 pnpm install
