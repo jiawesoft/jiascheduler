@@ -133,6 +133,32 @@ ls target/x86_64-unknown-linux-musl/release
 
 ```
 
+### docker 部署
+
+console.toml 的默认路径为/root/.jiascheduler/console.toml，如果没有，则会自动创建，参考配置如下
+
+```yml
+
+debug = false
+bind_addr = "0.0.0.0:9090"
+api_url = ""
+redis_url = "redis://default:3DGiuazc7wkAppV3@redis"
+comet_secret = "rYzBYE+cXbtdMg=="
+database_url = "mysql://root:kytHmeBR4Vg@mysql:3306/jiascheduler"
+
+[encrypt]
+private_key = "QGr0LLnFFt7mBFrfol2gy"
+
+[admin]
+username = "admin"
+password = "qTQhiMiLCb"
+
+```
+
+docker参考配置如下
+
+[docker-compose.yml](docker-compose.yml)
+
 ## 软件截图
 
 <table style="border-collapse: collapse; border: 1px solid black;">

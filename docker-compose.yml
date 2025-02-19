@@ -1,0 +1,71 @@
+# 更新命令
+# sudo docker compose up -d
+# 更新指定服务
+# sudo docker compose up -d clash
+# 停止命令
+# sudo docker compose stop
+# 重启命令
+# sudo docker compose restart
+# 移除容器、网络（卷 --volumes）
+# sudo docker compose down
+# 更新所有镜像
+# sudo docker compose pull && sudo docker compose up -d
+
+services:
+  mysql:
+    image: mysql:latest
+    # restart: always
+    container_name: mysql
+    volumes:
+      - $WORKDATA/mysql/data:/var/lib/mysql
+      - $WORKCONF/mysql/conf/my.cnf:/etc/my.conf
+      - $WORKDATA/mysql/logs:/var/log/mysql
+    environment:
+      - TZ=Asia/Shanghai # 设置时区
+      - MYSQL_ROOT_PASSWORD=kytHmeBR4Vg
+    ports:
+      # 使用宿主机的端口映射到容器的端口
+      # 宿主机：容器
+      - 3306:3306
+  redis:
+    image: redis:latest
+    container_name: redis
+    volumes:
+      - $WORKDATA/redis/data:/data
+      - $WORKCONF/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
+      - $WORKDATA/redis/logs:/logs
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=3DGiuazc7wkAppV3
+    command: ["redis-server", "--requirepass", "3DGiuazc7wkAppV3"]
+  jiascheduler-console:
+    image: iwannay/jiascheduler
+    container_name: jiascheduler-console
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    volumes:
+      - $WORKCONF/jiascheduler/console.toml:/root/.jiascheduler/console.toml
+    command: ["./jiascheduler-console", "--bind-addr", "0.0.0.0:9090"]
+  jiascheduler-comet:
+    image: iwannay/jiascheduler
+    container_name: jiascheduler-comet
+    ports:
+      - "3000:3000"
+    command: ["./jiascheduler-comet", "--bind", "0.0.0.0:3000","-r","redis://default:3DGiuazc7wkAppV3@redis:6379","--secret","rYzBYE+cXbtdMg=="]
+    restart: unless-stopped
+
+  jiascheduler-agent:
+    image: iwannay/jiascheduler
+    container_name: jiascheduler-agent
+    command:
+      [
+        "./jiascheduler-agent",
+        "--comet-addr", "ws://jiascheduler-comet:3000",
+        "--assign-username", "guest",
+        "--assign-password", "guest",
+        "--namespace", "home"
+      ]
+    restart: unless-stopped 
+
