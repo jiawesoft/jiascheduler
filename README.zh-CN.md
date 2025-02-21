@@ -1,6 +1,6 @@
 # jiascheduler
 
-**简体中文** · [English](./README.md)
+**简体中文** · [English](./README.md) · [Wiki](https://github.com/jiawesoft/jiascheduler/wiki/Install)
 
 一个用 rust 编写的开源高性能，可扩展，动态配置的任务调度器，支持同时推送用户脚本到数以万计的实例运行，并实时收集执行的结果。
 

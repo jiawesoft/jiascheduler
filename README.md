@@ -1,6 +1,6 @@
 # Jiascheduler
 
-**English** · [简体中文](./README.zh-CN.md)
+**English** · [简体中文](./README.zh-CN.md) · [Wiki](https://github.com/jiawesoft/jiascheduler/wiki/Install)
 
 An open-source, high-performance, scalable, and dynamically configured task scheduler written in Rust that supports pushing user scripts to tens of thousands of instances simultaneously and collecting real-time execution results.
 
