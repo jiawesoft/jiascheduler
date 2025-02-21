@@ -1,0 +1,40 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  DOCKER_USERNAME: iwannay
+  IMAGE_NAME: iwannay/jiascheduler
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          # 进入 GitHub 仓库 -> Settings -> Secrets and variables -> Actions -> Repository secrets
+          # 创建DOCKER_PAT变量，填入你的Docker令牌
+          password: ${{ secrets.DOCKER_PAT }} # 使用 DOCKER_PAT 作为密码
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Verify pushed image
+        run: docker pull ${{ env.IMAGE_NAME }}:latest
