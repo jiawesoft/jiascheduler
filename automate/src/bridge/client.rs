@@ -189,7 +189,10 @@ impl WsClient<SplitSink<PWebSocketStream, PMessage>, SplitStream<PWebSocketStrea
         let mut ws_reader = self.ws_reader.take().unwrap();
         let mut ws_writer = self.ws_writer.take().unwrap();
 
-        if let Some(msg) = ws_reader.next().await {
+        if let Some(msg) = timeout(Duration::from_secs(5), ws_reader.next())
+            .await
+            .context("read auth message timeout")?
+        {
             let msg = match msg {
                 Ok(v) => v,
                 Err(e) => {
@@ -234,7 +237,13 @@ impl WsClient<SplitSink<PWebSocketStream, PMessage>, SplitStream<PWebSocketStrea
         T: FnOnce(MsgReqKind) -> F + Send + Sync + Clone + 'static,
         F: Future<Output = Value> + Send,
     {
-        while let Some(msg) = self.ws_reader.as_mut().unwrap().next().await {
+        while let Ok(Some(msg)) = timeout(
+            Duration::from_secs(65),
+            self.ws_reader.as_mut().unwrap().next(),
+        )
+        .await
+        .map_err(|e| error!("read msg timeout - {e}"))
+        {
             let msg = match msg {
                 std::result::Result::Ok(v) => v,
                 Err(e) => {
@@ -257,7 +266,10 @@ impl WsClient<SplitSink<PWebSocketStream, PMessage>, SplitStream<PWebSocketStrea
                             if let Some(tx) = msg_box.get(&resp.id).await.map(|x| x.tx.clone()) {
                                 if let MsgKind::Response(buf) = resp.data {
                                     let _ = tx
-                                        .send(MsgState::Completed(buf))
+                                        .send_timeout(
+                                            MsgState::Completed(buf),
+                                            Duration::from_secs(1),
+                                        )
                                         .await
                                         .map_err(|e| error!("failed send response - {e}"));
                                     return;
@@ -385,9 +397,23 @@ impl
                     }
                     Protocol::pack_request(v.0)
                 };
-                if let Err(e) = ws_writer.send(Message::Binary(buf)).await {
-                    error!("failed send message - {e}");
-                    return;
+
+                let ret = timeout(
+                    Duration::from_secs(10),
+                    ws_writer.send(Message::Binary(buf)),
+                )
+                .await;
+
+                match ret {
+                    Ok(Err(e)) => {
+                        error!("failed send message - {e}");
+                        return;
+                    }
+                    Err(e) => {
+                        error!("send timeout - {e}");
+                        return;
+                    }
+                    Ok(Ok(_)) => {}
                 }
             }
         });
