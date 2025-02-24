@@ -34,7 +34,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            # ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Verify pushed image
         run: docker pull ${{ env.IMAGE_NAME }}:latest

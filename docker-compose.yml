@@ -23,6 +23,7 @@ services:
     environment:
       - TZ=Asia/Shanghai # 设置时区
       - MYSQL_ROOT_PASSWORD=kytHmeBR4Vg
+      - MYSQL_DATABASE=jiascheduler # 自动创建数据库
     ports:
       # 使用宿主机的端口映射到容器的端口
       # 宿主机：容器
@@ -46,14 +47,23 @@ services:
       - "9090:9090"
     restart: unless-stopped
     volumes:
-      - $WORKCONF/jiascheduler/console.toml:/root/.jiascheduler/console.toml
+      - $WORKCONF/.jiascheduler:/root/.jiascheduler
     command: ["./jiascheduler-console", "--bind-addr", "0.0.0.0:9090"]
   jiascheduler-comet:
     image: iwannay/jiascheduler
     container_name: jiascheduler-comet
     ports:
       - "3000:3000"
-    command: ["./jiascheduler-comet", "--bind", "0.0.0.0:3000","-r","redis://default:3DGiuazc7wkAppV3@redis:6379","--secret","rYzBYE+cXbtdMg=="]
+    command:
+      [
+        "./jiascheduler-comet",
+        "--bind",
+        "0.0.0.0:3000",
+        "-r",
+        "redis://default:3DGiuazc7wkAppV3@redis:6379",
+        "--secret",
+        "rYzBYE+cXbtdMg==",
+      ]
     restart: unless-stopped
 
   jiascheduler-agent:
@@ -62,10 +72,13 @@ services:
     command:
       [
         "./jiascheduler-agent",
-        "--comet-addr", "ws://jiascheduler-comet:3000",
-        "--assign-username", "guest",
-        "--assign-password", "guest",
-        "--namespace", "home"
+        "--comet-addr",
+        "ws://jiascheduler-comet:3000",
+        "--assign-username",
+        "guest",
+        "--assign-password",
+        "guest",
+        "--namespace",
+        "home",
       ]
-    restart: unless-stopped 
-
+    restart: unless-stopped
