@@ -135,7 +135,16 @@ ls target/x86_64-unknown-linux-musl/release
 
 ### docker 部署
 
-console.toml 的默认路径为/root/.jiascheduler/console.toml，如果没有，则会自动创建，参考配置如下
+在docker-compose.yml同目录下创建.env文件，内容如下
+
+```shell
+WORKCONF=/data/jiascheduler
+WORKDATA=/data/jiascheduler
+```
+
+console.toml在容器中默认路径为/root/.jiascheduler/console.toml，如果没有，则访问console页面，填写相关信息，在会自动创建
+
+如果存在console.toml文件，访问console页面则直接跳到登录页面，参考配置如下，将以下内容保存为console.toml，放$WORKCONF/.jiascheduler目录下
 
 ```yml
 
@@ -153,6 +162,16 @@ private_key = "QGr0LLnFFt7mBFrfol2gy"
 username = "admin"
 password = "qTQhiMiLCb"
 
+```
+
+执行 docker compose up -d 后访问0.0.0.0:9090，如提示invalid username，说明目前通过配置文件启动暂不支持自动创建用户，需要执行以下 sql 创建用户。（自动生成console.toml会自动创建用户）
+
+```sql
+INSERT INTO jiascheduler.`user` (user_id,username,nickname,is_root,role_id,salt,password,avatar,email,phone,gender,introduction,created_time,updated_time) VALUES
+	 ('NDoFVL5BKj','admin','admin',1,1,'FDzVZNHWWr3mPd6JBVcZD','d733f3b2c0662a4ce0c0f83cda78f7f2','','','','male','','2025-02-24 20:07:03','2025-02-24 20:07:03');
+
+INSERT INTO jiascheduler.`role` (name,info,is_admin,created_user,created_time,updated_time) VALUES
+	 ('admin','System initialization administrator role, unable to delete',1,'admin','2025-02-24 20:07:03','2025-02-24 20:07:03');
 ```
 
 docker参考配置如下
