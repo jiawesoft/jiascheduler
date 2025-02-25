@@ -65,6 +65,38 @@ impl<'a> InstanceLogic<'a> {
             None => (NotSet, NotSet, NotSet),
         };
 
+        if status == 1 && namespace.is_some() {
+            let ins_vec = Instance::find()
+                .apply_if(namespace.clone(), |q, v| {
+                    q.filter(instance::Column::Namespace.eq(v))
+                })
+                .filter(instance::Column::Ip.eq(&agent_ip))
+                .all(&self.ctx.db)
+                .await?;
+            if ins_vec.len() > 0 {
+                Instance::update(instance::ActiveModel {
+                    id: Set(ins_vec[0].id),
+                    mac_addr: Set(mac_addr.clone()),
+                    ..Default::default()
+                })
+                .exec(&self.ctx.db)
+                .await?;
+            }
+            if ins_vec.len() > 1 {
+                let id_vec = ins_vec.iter().map(|v| v.id).collect::<Vec<u64>>();
+                if id_vec.len() > 0 {
+                    Instance::update_many()
+                        .set(instance::ActiveModel {
+                            status: Set(0),
+                            ..Default::default()
+                        })
+                        .filter(instance::Column::Id.is_in(id_vec[1..].to_vec()))
+                        .exec(&self.ctx.db)
+                        .await?;
+                }
+            }
+        }
+
         let mut updated = if sys_user.is_set() {
             OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
                 .value(instance::Column::UpdatedTime, Local::now())
