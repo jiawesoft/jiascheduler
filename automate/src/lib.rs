@@ -59,7 +59,7 @@ fn test_get_mac_address() {
     assert_eq!(ret.is_ok(), true);
 }
 
-/// convert DateTime<Utc> to local time(String)
+/// convert DateTime<Local> to local time(String)
 #[macro_export]
 macro_rules! local_time {
     ($time:expr) => {

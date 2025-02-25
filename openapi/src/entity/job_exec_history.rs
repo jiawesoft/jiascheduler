@@ -17,10 +17,10 @@ pub struct Model {
     pub exit_code: i32,
     #[sea_orm(column_type = "Text")]
     pub output: String,
-    pub start_time: Option<DateTimeUtc>,
-    pub end_time: Option<DateTimeUtc>,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub start_time: Option<DateTimeLocal>,
+    pub end_time: Option<DateTimeLocal>,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
     pub created_user: String,
 }
 

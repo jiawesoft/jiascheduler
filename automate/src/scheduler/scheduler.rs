@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use futures::{SinkExt, StreamExt};
 
 use crate::{
@@ -98,7 +98,7 @@ impl React {
         self.bridge.send_msg(&self.client_key, data).await
     }
 
-    async fn add_job_schedule(&mut self, eid: String, job: Job) -> Result<Option<DateTime<Utc>>> {
+    async fn add_job_schedule(&mut self, eid: String, job: Job) -> Result<Option<DateTime<Local>>> {
         self.remove_job_schedule(eid.as_str()).await?;
 
         let mut locked_map = self.schedule_uuid_mapping.lock().await;
@@ -108,7 +108,7 @@ impl React {
 
         let uuid = self.sched.add(job).await?;
 
-        let next_time = self.sched.next_tick_for_job(uuid).await?;
+        let next_time = self.sched.next_tick_for_job(uuid).await?.map(|v| v.into());
 
         locked_map.insert(eid, uuid);
         Ok(next_time)
@@ -389,11 +389,11 @@ impl
         react: React,
         schedule_type: Option<ScheduleType>,
         kill_signal_rx: Receiver<()>,
-        prev_time: Option<DateTime<Utc>>,
-        next_time: Option<DateTime<Utc>>,
+        prev_time: Option<DateTime<Local>>,
+        next_time: Option<DateTime<Local>>,
         job_params: DispatchJobParams,
     ) -> Result<BundleOutput> {
-        let start_time = Utc::now();
+        let start_time = Local::now();
         let schedule_id = job_params.schedule_id;
         let base_job = job_params.base_job;
         let instance_id = job_params.instance_id.to_owned().unwrap();
@@ -443,7 +443,7 @@ impl
                         schedule_type: schedule_type.clone(),
                         stdout: Some(e.to_string()),
                         stderr: Some(e.to_string()),
-                        end_time: Some(Utc::now()),
+                        end_time: Some(Local::now()),
                         created_user: job_params.created_user.clone(),
                         bundle_output,
                         ..Default::default()
@@ -469,7 +469,7 @@ impl
                 schedule_type: schedule_type.clone(),
                 stdout: output.get_stdout(),
                 stderr: output.get_stderr(),
-                end_time: Some(Utc::now()),
+                end_time: Some(Local::now()),
                 created_user: job_params.created_user.clone(),
                 bundle_output: BundleOutputParams::parse(&output),
                 ..Default::default()
@@ -499,7 +499,11 @@ impl
                 let dispatch_params = dispatch_params.clone();
 
                 Box::pin(async move {
-                    let next_time = job_scheduler.next_tick_for_job(job_id).await.unwrap();
+                    let next_time = job_scheduler
+                        .next_tick_for_job(job_id)
+                        .await
+                        .unwrap()
+                        .map(|v| v.into());
                     let prev_time = Some(Local::now().into());
 
                     react_clone

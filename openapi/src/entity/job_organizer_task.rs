@@ -14,8 +14,8 @@ pub struct Model {
     pub output: String,
     pub bind_total: i32,
     pub restart_num: i32,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -18,8 +18,8 @@ pub struct Model {
     pub status: String,
     pub restart_num: i32,
     pub dispatch_result: Option<Json>,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

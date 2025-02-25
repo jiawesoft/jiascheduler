@@ -18,12 +18,12 @@ pub struct Model {
     pub exit_status: String,
     pub exit_code: i32,
     pub dispatch_result: Option<Json>,
-    pub start_time: Option<DateTimeUtc>,
-    pub end_time: Option<DateTimeUtc>,
-    pub next_time: Option<DateTimeUtc>,
-    pub prev_time: Option<DateTimeUtc>,
+    pub start_time: Option<DateTimeLocal>,
+    pub end_time: Option<DateTimeLocal>,
+    pub next_time: Option<DateTimeLocal>,
+    pub prev_time: Option<DateTimeLocal>,
     pub updated_user: String,
-    pub updated_time: DateTimeUtc,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
