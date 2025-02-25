@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use sea_orm::{prelude::DateTimeUtc, FromQueryResult};
+use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -37,8 +37,8 @@ pub struct UserRecord {
     pub gender: String,
     pub role: Option<String>,
     pub introduction: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
@@ -58,8 +58,8 @@ pub struct UserServer {
     pub tag_key: Option<String>,
     pub tag_val: Option<String>,
     pub status: i8,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default, FromQueryResult)]
@@ -91,8 +91,8 @@ pub struct InstanceRecord {
     pub instance_group: Option<String>,
     pub instance_group_id: u64,
     pub ssh_port: u16,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -136,6 +136,6 @@ pub struct TeamRecord {
     pub is_admin: Option<bool>,
     pub created_user: String,
     pub updated_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }

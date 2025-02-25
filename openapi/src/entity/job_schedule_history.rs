@@ -19,8 +19,8 @@ pub struct Model {
     pub snapshot_data: Option<Json>,
     pub created_user: String,
     pub updated_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

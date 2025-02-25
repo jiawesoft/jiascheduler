@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use anyhow::Error;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc::Sender;
@@ -149,10 +149,10 @@ pub struct UpdateJobParams {
     pub stderr: Option<String>,
     pub created_user: String,
     pub bundle_output: Option<Vec<BundleOutputParams>>,
-    pub start_time: Option<DateTime<Utc>>,
-    pub end_time: Option<DateTime<Utc>>,
-    pub prev_time: Option<DateTime<Utc>>,
-    pub next_time: Option<DateTime<Utc>>,
+    pub start_time: Option<DateTime<Local>>,
+    pub end_time: Option<DateTime<Local>>,
+    pub prev_time: Option<DateTime<Local>>,
+    pub next_time: Option<DateTime<Local>>,
 }
 
 impl UpdateJobParams {

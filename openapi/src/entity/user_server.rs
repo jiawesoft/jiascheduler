@@ -11,7 +11,7 @@ pub struct Model {
     pub user_id: String,
     pub instance_id: String,
     pub instance_group_id: i64,
-    pub created_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

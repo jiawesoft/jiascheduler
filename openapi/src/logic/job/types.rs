@@ -1,5 +1,5 @@
 use automate::DispatchJobParams;
-use sea_orm::{prelude::DateTimeUtc, FromQueryResult};
+use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -25,12 +25,12 @@ pub struct RunStatusRelatedScheduleJobModel {
     pub exit_code: i32,
     pub dispatch_data: Option<serde_json::Value>,
     pub dispatch_result: Option<serde_json::Value>,
-    pub start_time: Option<DateTimeUtc>,
-    pub end_time: Option<DateTimeUtc>,
-    pub next_time: Option<DateTimeUtc>,
-    pub prev_time: Option<DateTimeUtc>,
+    pub start_time: Option<DateTimeLocal>,
+    pub end_time: Option<DateTimeLocal>,
+    pub next_time: Option<DateTimeLocal>,
+    pub prev_time: Option<DateTimeLocal>,
     pub updated_user: String,
-    pub updated_time: DateTimeUtc,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
@@ -47,10 +47,10 @@ pub struct ExecHistoryRelatedScheduleModel {
     pub created_user: String,
     pub exit_code: i64,
     pub exit_status: String,
-    pub start_time: Option<DateTimeUtc>,
-    pub end_time: Option<DateTimeUtc>,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub start_time: Option<DateTimeLocal>,
+    pub end_time: Option<DateTimeLocal>,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
     pub schedule_name: String,
 }
 
@@ -80,8 +80,8 @@ pub struct JobRelatedExecutorModel {
     pub updated_user: String,
     pub display_on_dashboard: bool,
     pub args: Option<serde_json::Value>,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
@@ -98,8 +98,8 @@ pub struct BundleScriptRelatedExecutorModel {
     pub created_user: String,
     pub updated_user: String,
     pub args: Option<serde_json::Value>,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
@@ -118,8 +118,8 @@ pub struct JobTimerRelatedJobModel {
     pub info: String,
     pub created_user: String,
     pub updated_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,8 +241,8 @@ pub struct JobSupervisorRelatedJobModel {
     pub info: String,
     pub created_user: String,
     pub updated_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
@@ -250,7 +250,7 @@ pub struct TeamMemberModel {
     pub user_id: String,
     pub username: String,
     pub is_admin: bool,
-    pub created_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
@@ -269,6 +269,6 @@ pub struct ScheduleJobTeamModel {
     pub snapshot_data: Option<serde_json::Value>,
     pub created_user: String,
     pub updated_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }

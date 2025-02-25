@@ -12,7 +12,7 @@ pub struct Model {
     pub user_id: String,
     pub is_admin: bool,
     pub created_user: String,
-    pub created_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -18,8 +18,8 @@ pub struct Model {
     pub sys_user: String,
     pub password: String,
     pub ssh_port: u16,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

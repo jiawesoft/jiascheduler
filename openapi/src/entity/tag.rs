@@ -11,8 +11,8 @@ pub struct Model {
     pub tag_key: String,
     pub tag_val: String,
     pub created_user: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

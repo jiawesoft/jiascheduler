@@ -22,8 +22,8 @@ pub struct Model {
     pub phone: String,
     pub gender: String,
     pub introduction: String,
-    pub created_time: DateTimeUtc,
-    pub updated_time: DateTimeUtc,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
