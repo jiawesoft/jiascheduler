@@ -1,0 +1,5 @@
+docs
+.vscode
+.idea
+.git#
+/target

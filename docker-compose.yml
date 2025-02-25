@@ -15,7 +15,7 @@ services:
   mysql:
     image: mysql:latest
     # restart: always
-    container_name: mysql
+    container_name: jiascheduler-mysql
     volumes:
       - $WORKDATA/mysql/data:/var/lib/mysql
       - $WORKCONF/mysql/conf/my.cnf:/etc/my.conf
@@ -30,7 +30,7 @@ services:
       - 3306:3306
   redis:
     image: redis:latest
-    container_name: redis
+    container_name: jiascheduler-redis
     volumes:
       - $WORKDATA/redis/data:/data
       - $WORKCONF/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
