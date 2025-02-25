@@ -35,7 +35,19 @@ FROM ubuntu:latest
 WORKDIR /app
 
 # 安装必要依赖
-RUN apt update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y ca-certificates
+
+# 设置时区环境变量
+ENV TZ=Asia/Shanghai
+
+# 安装 tzdata 包并配置时区（非交互模式）
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
+    ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    apt-get clean && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    rm -rf /var/lib/apt/lists/*
+
 
 # 复制后端可执行文件
 COPY --from=backend-builder /app/target/release/jiascheduler-console /app/
