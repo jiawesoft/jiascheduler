@@ -119,11 +119,10 @@ impl<'a> Cmd<'a> {
         let stdout_fut = read_to_end(&mut stdout_pipe, tx.clone());
         let stderr_fut = read_to_end(&mut stderr_pipe, tx.clone());
 
-        let sleep = self
-            .timeout
-            .map_or(tokio::time::sleep(Duration::from_secs(600)), |v| {
-                tokio::time::sleep(v)
-            });
+        let sleep = self.timeout.map_or(
+            tokio::time::sleep(Duration::from_secs(86400 * 365 * 10)),
+            |v| tokio::time::sleep(v),
+        );
         tokio::pin!(sleep);
 
         let pid = child.id().unwrap();
