@@ -132,6 +132,49 @@ ls target/x86_64-unknown-linux-musl/release
 
 ```
 
+### Docker Deployment
+
+Create a `.env` file in the same directory as `docker-compose.yml` with the following content:
+
+```shell
+WORKCONF=/data/jiascheduler
+WORKDATA=/data/jiascheduler
+```
+
+The `console.toml` file has a default path in the container at `/root/.jiascheduler/console.toml`. If it does not exist, accessing the console page will prompt you to fill in relevant information, and it will be automatically created.
+
+If the `console.toml` file exists, accessing the console page will directly take you to the login page. Below is a reference configuration. Save the following content as `console.toml` and place it in the `$WORKCONF/.jiascheduler` directory:
+
+```yml
+debug = false
+bind_addr = "0.0.0.0:9090"
+api_url = ""
+redis_url = "redis://default:3DGiuazc7wkAppV3@redis"
+comet_secret = "rYzBYE+cXbtdMg=="
+database_url = "mysql://root:kytHmeBR4Vg@mysql:3306/jiascheduler"
+
+[encrypt]
+private_key = "QGr0LLnFFt7mBFrfol2gy"
+
+[admin]
+username = "admin"
+password = "qTQhiMiLCb"
+```
+
+After executing `docker compose up -d`, access `0.0.0.0:9090`. If you are prompted with "invalid username," it means that starting via the configuration file currently does not support automatic user creation. You need to execute the following SQL to create a user. (If `console.toml` is automatically generated, it will automatically create the user.)
+
+```sql
+INSERT INTO jiascheduler.`user` (user_id,username,nickname,is_root,role_id,salt,password,avatar,email,phone,gender,introduction,created_time,updated_time) VALUES
+	 ('NDoFVL5BKj','admin','admin',1,1,'FDzVZNHWWr3mPd6JBVcZD','d733f3b2c0662a4ce0c0f83cda78f7f2','','','','male','','2025-02-24 20:07:03','2025-02-24 20:07:03');
+
+INSERT INTO jiascheduler.`role` (name,info,is_admin,created_user,created_time,updated_time) VALUES
+	 ('admin','System initialization administrator role, unable to delete',1,'admin','2025-02-24 20:07:03','2025-02-24 20:07:03');
+```
+
+Below is a reference Docker configuration:
+
+[docker-compose.yml](docker-compose.yml)
+
 ## Screenshot
 
 <table style="border-collapse: collapse; border: 1px solid black;">
