@@ -6,7 +6,6 @@ use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QueryTrait,
 };
-use sea_query::Expr;
 
 pub struct ExecutorList(Vec<entity::executor::Model>);
 
@@ -50,7 +49,7 @@ impl<'a> ExecutorLogic<'a> {
 
         let list = model
             .apply_if(default_id, |query, v| {
-                query.order_by_desc(Expr::expr(executor::Column::Id.eq(v)))
+                query.order_by_desc(executor::Column::Id.eq(v))
             })
             .order_by_asc(entity::executor::Column::Id)
             .paginate(&self.ctx.db, page_size)
