@@ -55,8 +55,6 @@ pub struct UserServer {
     pub instance_group_id: Option<u64>,
     pub instance_group_name: Option<String>,
     pub tag_id: Option<u64>,
-    pub tag_key: Option<String>,
-    pub tag_val: Option<String>,
     pub status: i8,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
