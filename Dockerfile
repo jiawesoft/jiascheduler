@@ -5,7 +5,7 @@ WORKDIR /app/frontend
 # 克隆前端代码
 RUN apt update && apt install -y git && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth=1 https://github.com/jiawesoft/jiascheduler-ui.git .
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
 
 # 编译前端
 RUN pnpm build
