@@ -5,6 +5,7 @@ pub mod job;
 pub mod manage;
 pub mod migration;
 pub mod role;
+pub mod tag;
 pub mod team;
 pub mod terminal;
 pub mod user;
@@ -41,6 +42,7 @@ pub enum Tag {
     Role,
     Admin,
     Migration,
+    Tag,
 }
 
 pub struct OneOfValidator(Vec<String>);

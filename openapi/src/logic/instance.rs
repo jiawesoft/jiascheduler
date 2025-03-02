@@ -362,8 +362,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Status)
             .column(instance::Column::CreatedTime)
             .column(instance::Column::UpdatedTime)
-            .column(tag::Column::TagKey)
-            .column(tag::Column::TagVal)
             .column_as(tag::Column::Id, "tag_id")
             .join_rev(
                 JoinType::LeftJoin,
@@ -376,7 +374,7 @@ impl<'a> InstanceLogic<'a> {
                 JoinType::LeftJoin,
                 Instance::belongs_to(TagResource)
                     .from(instance::Column::Id)
-                    .to(tag_resource::Column::ResourceVal)
+                    .to(tag_resource::Column::ResourceId)
                     .into(),
             )
             .join_rev(
