@@ -10,7 +10,7 @@ pub struct Model {
     pub id: u64,
     pub tag_id: u64,
     pub resource_type: String,
-    pub resource_id: String,
+    pub resource_id: u64,
     pub created_user: String,
     pub created_time: DateTimeLocal,
 }

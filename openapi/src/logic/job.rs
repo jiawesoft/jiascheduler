@@ -227,10 +227,11 @@ impl<'a> JobLogic<'a> {
         default_id: Option<u64>,
         default_eid: Option<String>,
         team_id: Option<u64>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
-        let model = Job::find()
+        let select = Job::find()
             .column_as(team::Column::Name, "team_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
@@ -265,8 +266,13 @@ impl<'a> JobLogic<'a> {
                 )
             });
 
-        let total = model.clone().count(&self.ctx.db).await?;
-        let list = model
+        match tag_ids {
+            Some(v) if v.len() > 0 => todo!(),
+            _ => {}
+        };
+
+        let total = select.clone().count(&self.ctx.db).await?;
+        let list = select
             .apply_if(default_id, |query, v| {
                 query.order_by_desc(Expr::expr(job::Column::Id.eq(v)))
             })

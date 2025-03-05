@@ -137,3 +137,25 @@ pub struct TeamRecord {
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum ResourceType {
+    Job,
+    Instance,
+}
+
+impl Display for ResourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResourceType::Job => write!(f, "job"),
+            ResourceType::Instance => write!(f, "instance"),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TagCount {
+    pub tag_id: u64,
+    pub tag_name: String,
+    pub total: i64,
+}

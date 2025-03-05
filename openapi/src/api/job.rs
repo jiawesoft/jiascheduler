@@ -629,6 +629,7 @@ impl JobApi {
                 default_id,
                 default_eid,
                 team_id,
+                None,
                 page - 1,
                 page_size,
             )
