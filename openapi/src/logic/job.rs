@@ -8,21 +8,21 @@ mod supervisor;
 mod timer;
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Set,
 };
-use sea_query::Expr;
+use sea_query::{Expr, Query};
 
 use crate::{
     entity::{
         self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
-        job_schedule_history, prelude::*, team,
+        job_schedule_history, prelude::*, tag_resource, team,
     },
     state::AppContext,
 };
 use sea_orm::JoinType;
 
-use super::types::UserInfo;
+use super::types::{ResourceType, UserInfo};
 
 pub mod types;
 
@@ -231,7 +231,7 @@ impl<'a> JobLogic<'a> {
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
-        let select = Job::find()
+        let mut select = Job::find()
             .column_as(team::Column::Name, "team_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
@@ -267,7 +267,23 @@ impl<'a> JobLogic<'a> {
             });
 
         match tag_ids {
-            Some(v) if v.len() > 0 => todo!(),
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
             _ => {}
         };
 

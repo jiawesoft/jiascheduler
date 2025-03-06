@@ -95,6 +95,7 @@ mod types {
         pub team_name: Option<String>,
         pub team_id: Option<u64>,
         pub bundle_script: Option<Value>,
+        pub tags: Option<Vec<JobTag>>,
         pub display_on_dashboard: bool,
         pub work_dir: String,
         pub work_user: String,
@@ -107,6 +108,12 @@ mod types {
         pub args: Option<Value>,
         pub created_time: String,
         pub updated_time: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct JobTag {
+        pub id: u64,
+        pub tag_name: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -604,6 +611,7 @@ impl JobApi {
         Query(updated_time_range): Query<Option<Vec<String>>>,
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<Option<String>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(
             default = "types::default_page_size",
             validator(maximum(value = "10000"))
@@ -629,10 +637,15 @@ impl JobApi {
                 default_id,
                 default_eid,
                 team_id,
-                None,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
             .await?;
 
         let list: Vec<types::JobRecord> = ret
@@ -656,6 +669,21 @@ impl JobApi {
                 created_user: v.created_user,
                 updated_user: v.updated_user,
                 args: v.args,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 work_dir: v.work_dir,
                 work_user: v.work_user,
                 timeout: v.timeout,

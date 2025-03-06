@@ -5,10 +5,10 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityOrSelect, EntityTrait, JoinType, QueryFilter, QuerySelect,
-    QueryTrait, Related, Set,
+    ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, JoinType, QueryFilter,
+    QuerySelect, QueryTrait, Related, Set,
 };
-use sea_query::Expr;
+use sea_query::{Expr, Query};
 
 #[derive(Clone)]
 pub struct TagLogic<'a> {
@@ -160,5 +160,48 @@ impl<'a> TagLogic<'a> {
             .await?;
 
         Ok(tag_count)
+    }
+
+    pub async fn get_all_tag_bind_by_job_ids(
+        &self,
+        job_ids: Vec<u64>,
+    ) -> Result<Vec<types::TagBind>> {
+        let tags = TagResource::find()
+            .column(tag::Column::TagName)
+            .join_rev(
+                JoinType::LeftJoin,
+                Tag::belongs_to(TagResource)
+                    .from(tag::Column::Id)
+                    .to(tag_resource::Column::ResourceId)
+                    .into(),
+            )
+            .filter(tag_resource::Column::ResourceType.eq(ResourceType::Job.to_string()))
+            .filter(tag_resource::Column::ResourceId.is_in(job_ids))
+            .into_model()
+            .all(&self.ctx.db)
+            .await?;
+        Ok(tags)
+    }
+
+    pub async fn get_all_tag_by_job_ids(&self, job_ids: Vec<u64>) -> Result<Vec<tag::Model>> {
+        let tags = Tag::find()
+            .filter(
+                Condition::any().add(
+                    tag::Column::Id.in_subquery(
+                        Query::select()
+                            .column(tag_resource::Column::TagId)
+                            .and_where(
+                                tag_resource::Column::ResourceType
+                                    .eq(ResourceType::Job.to_string())
+                                    .and(tag_resource::Column::TagId.is_in(job_ids)),
+                            )
+                            .from(TagResource)
+                            .to_owned(),
+                    ),
+                ),
+            )
+            .all(&self.ctx.db)
+            .await?;
+        Ok(tags)
     }
 }

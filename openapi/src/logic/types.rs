@@ -159,3 +159,10 @@ pub struct TagCount {
     pub tag_name: String,
     pub total: i64,
 }
+
+#[derive(Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TagBind {
+    pub tag_id: u64,
+    pub tag_name: String,
+    pub resource_id: u64,
+}
