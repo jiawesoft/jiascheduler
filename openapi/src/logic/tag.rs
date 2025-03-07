@@ -1,14 +1,14 @@
-use super::types::{self, ResourceType, TeamRecord};
+use super::types::{self, ResourceType};
 use crate::{
     entity::{instance, job, prelude::*, tag, tag_resource},
     state::AppContext,
 };
 use anyhow::{anyhow, Result};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityOrSelect, EntityTrait, JoinType, QueryFilter,
-    QuerySelect, QueryTrait, Related, Set,
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, QueryFilter, QuerySelect,
+    QueryTrait, Set,
 };
-use sea_query::{Expr, Query};
+use sea_query::Query;
 
 #[derive(Clone)]
 pub struct TagLogic<'a> {
@@ -101,31 +101,33 @@ impl<'a> TagLogic<'a> {
         _user_info: &types::UserInfo,
         tag_id: u64,
         resource_type: ResourceType,
-        resource_val: Vec<u64>,
+        resource_id: Vec<u64>,
     ) -> Result<u64> {
         let ret = TagResource::delete_many()
             .filter(tag_resource::Column::TagId.eq(tag_id))
             .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
-            .filter(tag_resource::Column::ResourceId.is_in(resource_val))
+            .filter(tag_resource::Column::ResourceId.is_in(resource_id))
             .exec(&self.ctx.db)
             .await?;
         Ok(ret.rows_affected)
     }
 
-    pub async fn count_team_tag(
+    pub async fn count_resource(
         &self,
         user_info: &types::UserInfo,
         resource_type: ResourceType,
         team_id: Option<u64>,
     ) -> Result<Vec<types::TagCount>> {
         let select = TagResource::find()
-            .column(tag::Column::Id)
-            .column_as(tag::Column::Id.count(), "count")
+            .select_only()
+            .column(tag::Column::TagName)
+            .column_as(tag::Column::Id, "tag_id")
+            .column_as(tag::Column::Id.count(), "total")
             .join_rev(
                 JoinType::LeftJoin,
-                TagResource::belongs_to(Tag)
-                    .from(tag_resource::Column::TagId)
-                    .to(tag::Column::Id)
+                Tag::belongs_to(TagResource)
+                    .from(tag::Column::Id)
+                    .to(tag_resource::Column::TagId)
                     .into(),
             )
             .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))

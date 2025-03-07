@@ -13,7 +13,7 @@ CREATE TABLE `tag` (
 DROP TABLE IF EXISTS `tag_resource`;
 CREATE TABLE `tag_resource` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增id',
-    `tag_id` varchar(40) NOT NULL DEFAULT '' COMMENT '调度uuid',
+    `tag_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT '标签id',
     `resource_type` varchar(40) NOT NULL DEFAULT '' COMMENT '资源类型',
     `resource_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '标签值id',
     `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
