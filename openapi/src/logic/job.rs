@@ -330,10 +330,11 @@ impl<'a> JobLogic<'a> {
         schedule_type: Option<String>,
         job_type: Option<String>,
         updated_time_range: Option<(String, String)>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::RunStatusRelatedScheduleJobModel>, u64)> {
-        let model = JobRunningStatus::find()
+        let mut select = JobRunningStatus::find()
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
@@ -405,9 +406,30 @@ impl<'a> JobLogic<'a> {
             })
             .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
-        let total = model.clone().count(&self.ctx.db).await?;
+        match tag_ids {
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
+            _ => {}
+        };
 
-        let list = model
+        let total = select.clone().count(&self.ctx.db).await?;
+
+        let list = select
             .order_by_desc(entity::job_running_status::Column::UpdatedTime)
             .into_model()
             .paginate(&self.ctx.db, page_size)
