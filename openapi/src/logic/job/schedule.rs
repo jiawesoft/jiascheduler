@@ -786,6 +786,7 @@ impl<'a> JobLogic<'a> {
         let mut select = JobScheduleHistory::find()
             .column_as(team::Column::Id, "team_id")
             .column_as(team::Column::Name, "team_name")
+            .column_as(job::Column::Id, "job_id")
             .filter(job_schedule_history::Column::JobType.eq(job_type))
             .join_rev(
                 JoinType::LeftJoin,

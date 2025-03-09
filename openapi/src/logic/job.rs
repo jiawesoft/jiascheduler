@@ -335,6 +335,7 @@ impl<'a> JobLogic<'a> {
         page_size: u64,
     ) -> Result<(Vec<types::RunStatusRelatedScheduleJobModel>, u64)> {
         let mut select = JobRunningStatus::find()
+            .column_as(job::Column::Id, "job_id")
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")

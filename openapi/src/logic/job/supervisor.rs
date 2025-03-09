@@ -27,6 +27,7 @@ impl<'a> JobLogic<'a> {
         page_size: u64,
     ) -> Result<(Vec<JobSupervisorRelatedJobModel>, u64)> {
         let mut select = job_supervisor::Entity::find()
+            .column_as(job::Column::Id, "job_id")
             .column_as(job::Column::Name, "job_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Platform, "executor_platform")

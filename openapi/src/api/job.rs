@@ -878,7 +878,7 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::RunRecord> = ret
@@ -913,7 +913,7 @@ impl JobApi {
                     tag_records
                         .iter()
                         .filter_map(|tb| {
-                            if tb.resource_id == v.id {
+                            if tb.resource_id == v.job_id {
                                 Some(types::JobTag {
                                     id: tb.tag_id,
                                     tag_name: tb.tag_name.clone(),
@@ -992,7 +992,7 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::ScheduleRecord> = ret
@@ -1017,7 +1017,7 @@ impl JobApi {
                     tag_records
                         .iter()
                         .filter_map(|tb| {
-                            if tb.resource_id == v.id {
+                            if tb.resource_id == v.job_id {
                                 Some(types::JobTag {
                                     id: tb.tag_id,
                                     tag_name: tb.tag_name.clone(),
@@ -1102,7 +1102,7 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::ExecRecord> = ret
@@ -1126,7 +1126,7 @@ impl JobApi {
                     tag_records
                         .iter()
                         .filter_map(|tb| {
-                            if tb.resource_id == v.id {
+                            if tb.resource_id == v.job_id {
                                 Some(types::JobTag {
                                     id: tb.tag_id,
                                     tag_name: tb.tag_name.clone(),
@@ -1388,7 +1388,7 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::JobTimerRecord> = ret
@@ -1408,7 +1408,7 @@ impl JobApi {
                     tag_records
                         .iter()
                         .filter_map(|tb| {
-                            if tb.resource_id == v.id {
+                            if tb.resource_id == v.job_id {
                                 Some(types::JobTag {
                                     id: tb.tag_id,
                                     tag_name: tb.tag_name.clone(),
@@ -1591,7 +1591,7 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::JobSupervisorRecord> = ret
@@ -1612,7 +1612,7 @@ impl JobApi {
                     tag_records
                         .iter()
                         .filter_map(|tb| {
-                            if tb.resource_id == v.id {
+                            if tb.resource_id == v.job_id {
                                 Some(types::JobTag {
                                     id: tb.tag_id,
                                     tag_name: tb.tag_name.clone(),
