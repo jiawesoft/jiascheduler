@@ -174,7 +174,7 @@ impl<'a> TagLogic<'a> {
                 JoinType::LeftJoin,
                 Tag::belongs_to(TagResource)
                     .from(tag::Column::Id)
-                    .to(tag_resource::Column::ResourceId)
+                    .to(tag_resource::Column::TagId)
                     .into(),
             )
             .filter(tag_resource::Column::ResourceType.eq(ResourceType::Job.to_string()))
