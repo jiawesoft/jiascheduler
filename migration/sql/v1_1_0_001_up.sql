@@ -19,6 +19,6 @@ CREATE TABLE `tag_resource` (
     `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_tag_id` (`resource_type`, `tag_id`)
+    UNIQUE KEY `uk_tag_id` (`resource_type`, `tag_id`, `resource_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '标签绑定';
 
