@@ -114,9 +114,10 @@ impl<'a> TagLogic<'a> {
 
     pub async fn count_resource(
         &self,
-        user_info: &types::UserInfo,
+        _user_info: &types::UserInfo,
         resource_type: ResourceType,
         team_id: Option<u64>,
+        username: Option<String>,
     ) -> Result<Vec<types::TagCount>> {
         let select = TagResource::find()
             .select_only()
@@ -130,11 +131,7 @@ impl<'a> TagLogic<'a> {
                     .to(tag_resource::Column::TagId)
                     .into(),
             )
-            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
-            .apply_if(
-                team_id.map_or(Some(user_info.username.clone()), |_| None),
-                |q, v| q.filter(tag_resource::Column::CreatedUser.eq(v)),
-            );
+            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()));
 
         let select = match resource_type {
             ResourceType::Job => select
@@ -145,7 +142,8 @@ impl<'a> TagLogic<'a> {
                         .to(tag_resource::Column::ResourceId)
                         .into(),
                 )
-                .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v))),
+                .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
+                .apply_if(username, |q, v| q.filter(job::Column::CreatedUser.eq(v))),
             ResourceType::Instance => select.join_rev(
                 JoinType::LeftJoin,
                 Instance::belongs_to(TagResource)

@@ -124,9 +124,17 @@ impl TagApi {
             types::ResourceType::Job => ResourceType::Job,
             types::ResourceType::Instance => ResourceType::Instance,
         };
+
+        let search_username =
+            if state.can_manage_job(&user_info.user_id).await? || team_id.is_some() {
+                None
+            } else {
+                Some(user_info.username.clone())
+            };
+
         let ret = svc
             .tag
-            .count_resource(&user_info, resource_type, team_id)
+            .count_resource(&user_info, resource_type, team_id, search_username)
             .await?;
 
         let list: Vec<types::TagCount> = ret
