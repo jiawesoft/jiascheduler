@@ -31,12 +31,12 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use sea_orm_adapter::SeaOrmAdapter;
 use state::{AppContext, AppState};
 use std::{path::Path, time::Duration};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot::Sender};
 use tracing::info;
 use url::Url;
 
 pub mod api;
-mod config;
+pub mod config;
 pub mod entity;
 mod error;
 mod job;
@@ -211,7 +211,7 @@ pub async fn upgrade(conn: &DatabaseConnection) -> Result<()> {
     Ok(())
 }
 
-pub async fn run(opts: WebapiOptions) -> Result<()> {
+pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()> {
     if !is_installed(&opts.config_file)? {
         info!("start initializing configuration file");
         install(&opts).await?;
@@ -319,6 +319,10 @@ pub async fn run(opts: WebapiOptions) -> Result<()> {
             conf.bind_addr.clone(),
             Some(opts.config_file),
         ));
+
+    if let Some(tx) = signal {
+        tx.send(conf.clone()).expect("failed send signal");
+    }
 
     Ok(poem::Server::new(TcpListener::bind(conf.bind_addr.clone()))
         .run(app)

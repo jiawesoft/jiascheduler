@@ -1,12 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
-use anyhow::Ok;
+use anyhow::{Context, Ok};
 use futures::SinkExt;
 
-use handler::SecretHeader;
-use poem::web::websocket::WebSocketStream;
+use handler::{middleware::bearer_auth, SecretHeader};
+use poem::{
+    get, listener::TcpListener, post, web::websocket::WebSocketStream, EndpointExt, Route, Server,
+};
 use serde_json::{json, Value};
-use tokio::sync::{mpsc::Sender, Mutex};
+use tokio::sync::{mpsc::Sender, oneshot::Sender as OneSender, Mutex};
 use tracing::{debug, error, info};
 use types::SshLoginParams;
 
@@ -185,4 +187,91 @@ impl Comet {
             |v| v,
         )
     }
+}
+
+pub struct CometOptions {
+    pub redis_url: String,
+    pub bind_addr: String,
+    pub secret: String,
+}
+
+pub async fn run(opts: CometOptions, signal: Option<OneSender<()>>) -> Result<()> {
+    let redis_client = redis::Client::open(opts.redis_url).context("failed connect to redis")?;
+    let port = opts
+        .bind_addr
+        .parse::<SocketAddr>()
+        .context("failed parse bind address")?
+        .port();
+    let comet = Comet::new(redis_client, port, opts.secret.clone());
+    let app = Route::new()
+        .at(
+            "/dispatch",
+            post(
+                handler::dispatch
+                    .with(bearer_auth(&opts.secret))
+                    .data(comet.clone()),
+            ),
+        )
+        .at(
+            "runtime/action",
+            post(
+                handler::runtime_action
+                    .with(bearer_auth(&opts.secret))
+                    .data(comet.clone()),
+            ),
+        )
+        .at(
+            "/file/get/:filename",
+            get(handler::get_file
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone())),
+        )
+        .at(
+            "/evt/:namespace",
+            get(handler::ws
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone())),
+        )
+        .at(
+            "/ssh/register/:ip",
+            handler::ssh_register
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/ssh/tunnel",
+            handler::proxy_ssh
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/read-dir",
+            handler::sftp_read_dir
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/upload",
+            handler::sftp_upload
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/remove",
+            handler::sftp_remove
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/download",
+            handler::sftp_download
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        );
+    if let Some(tx) = signal {
+        tx.send(()).expect("failed send signal");
+    }
+    Ok(Server::new(TcpListener::bind(opts.bind_addr))
+        .run(app)
+        .await?)
 }

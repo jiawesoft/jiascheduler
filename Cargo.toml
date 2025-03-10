@@ -24,6 +24,10 @@ path = "src/bin/agent.rs"
 name = "jiascheduler-comet"
 path = "src/bin/comet.rs"
 
+[[bin]]
+name = "jiascheduler"
+path = "src/bin/jiascheduler.rs"
+
 # [target.aarch64-unknown-linux-gnu]
 # linker = "aarch64-linux-gnu-gcc"
 
