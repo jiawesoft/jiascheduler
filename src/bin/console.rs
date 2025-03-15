@@ -33,11 +33,14 @@ async fn main() -> Result<()> {
     }
     tracing_subscriber::fmt::init();
 
-    openapi::run(WebapiOptions {
-        database_url: args.database_url,
-        redis_url: args.redis_url,
-        config_file: args.config,
-        bind_addr: args.bind_addr,
-    })
+    openapi::run(
+        WebapiOptions {
+            database_url: args.database_url,
+            redis_url: args.redis_url,
+            config_file: args.config,
+            bind_addr: args.bind_addr,
+        },
+        None,
+    )
     .await
 }
