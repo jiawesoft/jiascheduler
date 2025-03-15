@@ -13,6 +13,10 @@ struct WebapiArgs {
     #[arg(long)]
     bind_addr: Option<String>,
 
+    /// Set log level, eg: "trace", "debug", "info", "warn", "error" etc.
+    #[arg(long, default_value_t = String::from("error"))]
+    log_level: String,
+
     /// where to read config file,
     /// you can temporarily overwrite the configuration file using command-line parameters
     #[arg(long, value_name = "FILE", default_value_t = String::from("~/.jiascheduler/console.toml"))]
@@ -28,9 +32,7 @@ struct WebapiArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = WebapiArgs::parse();
-    if args.debug {
-        std::env::set_var("RUST_LOG", "debug");
-    }
+    std::env::set_var("RUST_LOG", args.log_level);
     tracing_subscriber::fmt::init();
 
     openapi::run(

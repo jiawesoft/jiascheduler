@@ -1,13 +1,6 @@
-use std::net::SocketAddr;
-
 use anyhow::Result;
-use automate::comet::{
-    self,
-    handler::{self, middleware::bearer_auth},
-    Comet, CometOptions,
-};
+use automate::comet::{self, CometOptions};
 use clap::Parser;
-use poem::{get, listener::TcpListener, post, EndpointExt, Route, Server};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -26,14 +19,17 @@ struct CometArgs {
     redis_url: String,
     #[arg(long, default_value_t = String::from("rYzBYE+cXbtdMg=="))]
     secret: String,
+
+    /// Set log level, eg: "trace", "debug", "info", "warn", "error" etc.
+    #[arg(long, default_value_t = String::from("error"))]
+    log_level: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CometArgs::parse();
-    if args.debug {
-        std::env::set_var("RUST_LOG", "debug");
-    }
+    std::env::set_var("RUST_LOG", args.log_level);
+
     tracing_subscriber::fmt::init();
 
     comet::run(

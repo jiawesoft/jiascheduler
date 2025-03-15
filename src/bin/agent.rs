@@ -16,9 +16,6 @@ use automate::scheduler::{
     long_about = None
 )]
 struct AgentArgs {
-    /// If enable debug mode
-    #[arg(short, long)]
-    debug: bool,
     #[arg(short, long, default_value_t = String::from("0.0.0.0:3001"))]
     bind: String,
     #[arg(long, default_values_t = vec![String::from("ws://127.0.0.1:3000")])]
@@ -46,14 +43,16 @@ struct AgentArgs {
     /// Assign this instance to a user and specify their password
     #[arg(long)]
     assign_password: Option<String>,
+
+    /// Set log level, eg: "trace", "debug", "info", "warn", "error" etc.
+    #[arg(long, default_value_t = String::from("error"))]
+    log_level: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = AgentArgs::parse();
-    if args.debug {
-        std::env::set_var("RUST_LOG", "debug");
-    }
+    std::env::set_var("RUST_LOG", args.log_level);
     tracing_subscriber::fmt::init();
 
     let mut scheduler = Scheduler::new(
