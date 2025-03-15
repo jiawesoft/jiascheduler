@@ -4,7 +4,7 @@ pub mod response;
 use anyhow::{anyhow, Context, Result};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
-    migration::MigrationApi, role::RoleApi, team::TeamApi, terminal, user::UserApi,
+    migration::MigrationApi, role::RoleApi, tag::TagApi, team::TeamApi, terminal, user::UserApi,
 };
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
@@ -139,7 +139,7 @@ m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act
 "#;
 
 const GIT_VERSION: &str = git_version!();
-const APP_VERSION: &str = "1.0.4";
+const APP_VERSION: &str = "1.1.0";
 
 fn get_version() -> String {
     format!("{APP_VERSION}-{GIT_VERSION}")
@@ -270,6 +270,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             RoleApi,
             MigrationApi,
             ManageApi,
+            TagApi,
         ),
         "jiascheduler web api",
         "1.0",

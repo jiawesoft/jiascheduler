@@ -3,6 +3,8 @@ name: Docker Build and Push
 on:
   push:
     branches: ["main"]
+    tags:
+      - "*"
 
 env:
   DOCKER_USERNAME: iwannay
@@ -14,6 +16,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get tag name or default to latest
+        id: get-tag
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          else
+            TAG_NAME="latest"
+          fi
+          echo "Tag name: $TAG_NAME"
+          echo "::set-output name=tag_name::$TAG_NAME"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -33,7 +46,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.get-tag.outputs.tag_name }}
 
       - name: Verify pushed image
-        run: docker pull ${{ env.IMAGE_NAME }}:latest
+        run: docker pull ${{ env.IMAGE_NAME }}:${{ steps.get-tag.outputs.tag_name }}

@@ -1,9 +1,13 @@
-use crate::entity::{instance, job, job_exec_history, job_schedule_history, prelude::*, team};
+use crate::entity::{
+    instance, job, job_exec_history, job_schedule_history, prelude::*, tag_resource, team,
+};
+use crate::logic::types::ResourceType;
 use anyhow::Result;
 use sea_orm::{
-    ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait,
+    ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait,
 };
+use sea_query::Query;
 
 use super::types::ExecHistoryRelatedScheduleModel;
 use super::JobLogic;
@@ -24,13 +28,15 @@ impl<'a> JobLogic<'a> {
         bind_namespace: Option<String>,
         bind_ip: Option<String>,
         start_time_range: Option<(String, String)>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<ExecHistoryRelatedScheduleModel>, u64)> {
-        let model = JobExecHistory::find()
+        let mut select = JobExecHistory::find()
             .column_as(job_schedule_history::Column::Name, "schedule_name")
             .column_as(team::Column::Id, "team_id")
             .column_as(team::Column::Name, "team_name")
+            .column_as(job::Column::Id, "job_id")
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .join_rev(
@@ -95,9 +101,30 @@ impl<'a> JobLogic<'a> {
             })
             .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
-        let total = model.clone().count(&self.ctx.db).await?;
+        match tag_ids {
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
+            _ => {}
+        };
 
-        let list = model
+        let total = select.clone().count(&self.ctx.db).await?;
+
+        let list = select
             .order_by_desc(job_exec_history::Column::Id)
             .into_model()
             .paginate(&self.ctx.db, page_size)

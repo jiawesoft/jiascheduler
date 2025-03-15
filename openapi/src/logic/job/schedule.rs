@@ -11,11 +11,11 @@ use automate::{
 use evalexpr::eval_boolean;
 
 use sea_orm::{
-    ActiveValue::NotSet, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Set,
+    ActiveValue::NotSet, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set,
 };
 
-use sea_query::OnConflict;
+use sea_query::{OnConflict, Query};
 
 use serde_json::{json, Value};
 use tokio::fs;
@@ -23,10 +23,15 @@ use tracing::error;
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*, team,
+        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*,
+        tag_resource, team,
     },
     file_name,
-    logic::{executor::ExecutorLogic, job::types::DispatchResult, types::UserInfo},
+    logic::{
+        executor::ExecutorLogic,
+        job::types::DispatchResult,
+        types::{ResourceType, UserInfo},
+    },
     utils, IdGenerator,
 };
 
@@ -774,12 +779,14 @@ impl<'a> JobLogic<'a> {
         name: Option<String>,
         team_id: Option<u64>,
         updated_time_range: Option<(String, String)>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::ScheduleJobTeamModel>, u64)> {
-        let model = JobScheduleHistory::find()
+        let mut select = JobScheduleHistory::find()
             .column_as(team::Column::Id, "team_id")
             .column_as(team::Column::Name, "team_name")
+            .column_as(job::Column::Id, "job_id")
             .filter(job_schedule_history::Column::JobType.eq(job_type))
             .join_rev(
                 JoinType::LeftJoin,
@@ -813,9 +820,30 @@ impl<'a> JobLogic<'a> {
             })
             .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
-        let total = model.clone().count(&self.ctx.db).await?;
+        match tag_ids {
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
+            _ => {}
+        };
 
-        let list = model
+        let total = select.clone().count(&self.ctx.db).await?;
+
+        let list = select
             .order_by_desc(job_schedule_history::Column::Id)
             .into_model()
             .paginate(&self.ctx.db, page_size)

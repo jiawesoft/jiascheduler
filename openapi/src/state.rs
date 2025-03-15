@@ -1,6 +1,7 @@
 use crate::config::Conf;
 use crate::logic::role;
 use crate::logic::ssh::SshLogic;
+use crate::logic::tag::TagLogic;
 use crate::logic::team::TeamLogic;
 use crate::logic::types::Permission;
 use crate::logic::{
@@ -29,6 +30,7 @@ pub struct Service<'a> {
     pub role: RoleLogic<'a>,
     pub ssh: SshLogic<'a>,
     pub team: TeamLogic<'a>,
+    pub tag: TagLogic<'a>,
 }
 
 #[derive(Clone)]
@@ -140,6 +142,7 @@ impl AppContext {
             migration: MigrationLogic::new(self),
             ssh: SshLogic::new(self),
             team: TeamLogic::new(self),
+            tag: TagLogic::new(self),
         }
     }
 

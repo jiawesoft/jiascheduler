@@ -95,6 +95,7 @@ mod types {
         pub team_name: Option<String>,
         pub team_id: Option<u64>,
         pub bundle_script: Option<Value>,
+        pub tags: Option<Vec<JobTag>>,
         pub display_on_dashboard: bool,
         pub work_dir: String,
         pub work_user: String,
@@ -107,6 +108,12 @@ mod types {
         pub args: Option<Value>,
         pub created_time: String,
         pub updated_time: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct JobTag {
+        pub id: u64,
+        pub tag_name: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -131,6 +138,7 @@ mod types {
         pub exit_code: i32,
         pub dispatch_result: Option<serde_json::Value>,
         pub dispatch_data: Option<serde_json::Value>,
+        pub tags: Option<Vec<JobTag>>,
         pub start_time: String,
         pub end_time: String,
         pub next_time: String,
@@ -202,6 +210,7 @@ mod types {
         pub action: String,
         pub dispatch_data: Option<Value>,
         pub snapshot_data: Option<Value>,
+        pub tags: Option<Vec<JobTag>>,
         pub created_user: String,
         pub updated_user: String,
         pub created_time: String,
@@ -227,6 +236,7 @@ mod types {
         pub exit_code: i64,
         pub start_time: Option<String>,
         pub end_time: Option<String>,
+        pub tags: Option<Vec<JobTag>>,
         pub output: String,
         pub created_user: String,
         pub created_time: String,
@@ -337,6 +347,7 @@ mod types {
         pub executor_platform: String,
         pub timer_expr: serde_json::Value,
         pub info: String,
+        pub tags: Option<Vec<JobTag>>,
         pub created_user: String,
         pub updated_user: String,
         pub created_time: String,
@@ -455,6 +466,7 @@ mod types {
         pub team_name: Option<String>,
         pub restart_interval: u64,
         pub info: String,
+        pub tags: Option<Vec<JobTag>>,
         pub created_user: String,
         pub updated_user: String,
         pub created_time: String,
@@ -604,6 +616,7 @@ impl JobApi {
         Query(updated_time_range): Query<Option<Vec<String>>>,
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<Option<String>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(
             default = "types::default_page_size",
             validator(maximum(value = "10000"))
@@ -629,9 +642,15 @@ impl JobApi {
                 default_id,
                 default_eid,
                 team_id,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
             .await?;
 
         let list: Vec<types::JobRecord> = ret
@@ -655,6 +674,21 @@ impl JobApi {
                 created_user: v.created_user,
                 updated_user: v.updated_user,
                 args: v.args,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 work_dir: v.work_dir,
                 work_user: v.work_user,
                 timeout: v.timeout,
@@ -806,6 +840,7 @@ impl JobApi {
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"bundle\", \"default\"])"))]
         Query(job_type): Query<String>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -835,9 +870,15 @@ impl JobApi {
                 Some(schedule_type),
                 Some(job_type),
                 updated_time_range,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::RunRecord> = ret
@@ -868,6 +909,21 @@ impl JobApi {
                 schedule_name: v.schedule_name,
                 schedule_status: v.schedule_status,
                 schedule_snapshot_data: v.schedule_snapshot_data,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.job_id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 run_status: v.run_status,
                 exit_status: v.exit_status,
                 exit_code: v.exit_code,
@@ -902,6 +958,7 @@ impl JobApi {
 
         #[oai(default)] Query(name): Query<Option<String>>,
         #[oai(default)] Query(job_type): Query<String>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
@@ -927,9 +984,15 @@ impl JobApi {
                 name,
                 team_id,
                 updated_time_range,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::ScheduleRecord> = ret
@@ -950,6 +1013,21 @@ impl JobApi {
                 job_type: v.job_type,
                 dispatch_result: v.dispatch_result,
                 action: v.action,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.job_id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 dispatch_data: v.dispatch_data,
                 snapshot_data: v.snapshot_data,
             })
@@ -974,6 +1052,7 @@ impl JobApi {
         Query(job_type): Query<String>,
         #[oai(default)] Query(schedule_name): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(validator(
             custom = "super::OneOfValidator::new(vec![\"once\",\"timer\",\"flow\",\"daemon\"])"
         ))]
@@ -1015,9 +1094,15 @@ impl JobApi {
                 bind_namespace,
                 bind_ip,
                 start_time_range,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::ExecRecord> = ret
@@ -1037,6 +1122,21 @@ impl JobApi {
                 bundle_script_result: v.bundle_script_result,
                 start_time: Some(default_local_time!(v.start_time)),
                 end_time: Some(default_local_time!(v.end_time)),
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.job_id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
                 schedule_name: v.schedule_name,
@@ -1249,6 +1349,7 @@ impl JobApi {
         #[oai(default)] Query(job_type): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Query(search_username): Query<Option<String>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         /// Search based on time range
         #[oai(validator(max_items = 2, min_items = 2))]
         Query(updated_time_range): Query<Option<Vec<String>>>,
@@ -1279,9 +1380,15 @@ impl JobApi {
                 name.filter(|v| v != ""),
                 job_type.filter(|v| v != ""),
                 updated_time_range,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::JobTimerRecord> = ret
@@ -1297,6 +1404,21 @@ impl JobApi {
                 info: v.info,
                 team_id: v.team_id,
                 team_name: v.team_name,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.job_id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 executor_id: v.executor_id,
                 executor_name: v.executor_name,
                 executor_platform: v.executor_platform,
@@ -1437,6 +1559,7 @@ impl JobApi {
         Query(updated_time_range): Query<Option<Vec<String>>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Query(search_username): Query<Option<String>>,
+        Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
         Query(page): Query<u64>,
         #[oai(
@@ -1460,9 +1583,15 @@ impl JobApi {
                 eid,
                 team_id,
                 updated_time_range,
+                tag_ids,
                 page - 1,
                 page_size,
             )
+            .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
             .await?;
 
         let list: Vec<types::JobSupervisorRecord> = ret
@@ -1479,6 +1608,21 @@ impl JobApi {
                 team_name: v.team_name,
                 created_user: v.created_user,
                 updated_user: v.updated_user,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.job_id {
+                                Some(types::JobTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
                 executor_name: v.executor_name,

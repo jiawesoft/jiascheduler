@@ -10,10 +10,9 @@ pub struct Model {
     pub id: u64,
     pub tag_id: u64,
     pub resource_type: String,
-    pub resource_val: String,
+    pub resource_id: u64,
     pub created_user: String,
     pub created_time: DateTimeLocal,
-    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

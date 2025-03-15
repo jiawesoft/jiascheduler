@@ -175,6 +175,30 @@ impl<'a> TeamLogic<'a> {
         Ok(team_id)
     }
 
+    pub async fn get_my_teams(&self, username: &str) -> Result<Vec<TeamRecord>> {
+        let list = Team::find()
+            .column(team_member::Column::IsAdmin)
+            .join_rev(
+                JoinType::LeftJoin,
+                TeamMember::belongs_to(Team)
+                    .from(team_member::Column::TeamId)
+                    .to(team::Column::Id)
+                    .into(),
+            )
+            .join_rev(
+                JoinType::LeftJoin,
+                User::belongs_to(TeamMember)
+                    .from(user::Column::UserId)
+                    .to(team_member::Column::UserId)
+                    .into(),
+            )
+            .filter(user::Column::Username.eq(username))
+            .into_model()
+            .all(&self.ctx.db)
+            .await?;
+        Ok(list)
+    }
+
     pub async fn query_team(
         &self,
         name: Option<String>,

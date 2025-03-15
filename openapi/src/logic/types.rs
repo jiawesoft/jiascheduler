@@ -55,8 +55,6 @@ pub struct UserServer {
     pub instance_group_id: Option<u64>,
     pub instance_group_name: Option<String>,
     pub tag_id: Option<u64>,
-    pub tag_key: Option<String>,
-    pub tag_val: Option<String>,
     pub status: i8,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
@@ -138,4 +136,33 @@ pub struct TeamRecord {
     pub updated_user: String,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum ResourceType {
+    Job,
+    Instance,
+}
+
+impl Display for ResourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResourceType::Job => write!(f, "job"),
+            ResourceType::Instance => write!(f, "instance"),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TagCount {
+    pub tag_id: u64,
+    pub tag_name: String,
+    pub total: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct TagBind {
+    pub tag_id: u64,
+    pub tag_name: String,
+    pub resource_id: u64,
 }

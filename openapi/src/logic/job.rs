@@ -8,21 +8,21 @@ mod supervisor;
 mod timer;
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Set,
 };
-use sea_query::Expr;
+use sea_query::{Expr, Query};
 
 use crate::{
     entity::{
         self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
-        job_schedule_history, prelude::*, team,
+        job_schedule_history, prelude::*, tag_resource, team,
     },
     state::AppContext,
 };
 use sea_orm::JoinType;
 
-use super::types::UserInfo;
+use super::types::{ResourceType, UserInfo};
 
 pub mod types;
 
@@ -227,10 +227,11 @@ impl<'a> JobLogic<'a> {
         default_id: Option<u64>,
         default_eid: Option<String>,
         team_id: Option<u64>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::JobRelatedExecutorModel>, u64)> {
-        let model = Job::find()
+        let mut select = Job::find()
             .column_as(team::Column::Name, "team_name")
             .column_as(executor::Column::Name, "executor_name")
             .column_as(executor::Column::Command, "executor_command")
@@ -265,8 +266,29 @@ impl<'a> JobLogic<'a> {
                 )
             });
 
-        let total = model.clone().count(&self.ctx.db).await?;
-        let list = model
+        match tag_ids {
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
+            _ => {}
+        };
+
+        let total = select.clone().count(&self.ctx.db).await?;
+        let list = select
             .apply_if(default_id, |query, v| {
                 query.order_by_desc(Expr::expr(job::Column::Id.eq(v)))
             })
@@ -308,10 +330,12 @@ impl<'a> JobLogic<'a> {
         schedule_type: Option<String>,
         job_type: Option<String>,
         updated_time_range: Option<(String, String)>,
+        tag_ids: Option<Vec<u64>>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::RunStatusRelatedScheduleJobModel>, u64)> {
-        let model = JobRunningStatus::find()
+        let mut select = JobRunningStatus::find()
+            .column_as(job::Column::Id, "job_id")
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
@@ -383,9 +407,30 @@ impl<'a> JobLogic<'a> {
             })
             .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)));
 
-        let total = model.clone().count(&self.ctx.db).await?;
+        match tag_ids {
+            Some(v) if v.len() > 0 => {
+                select = select.filter(
+                    Condition::any().add(
+                        job::Column::Id.in_subquery(
+                            Query::select()
+                                .column(tag_resource::Column::ResourceId)
+                                .and_where(
+                                    tag_resource::Column::ResourceType
+                                        .eq(ResourceType::Job.to_string())
+                                        .and(tag_resource::Column::TagId.is_in(v)),
+                                )
+                                .from(TagResource)
+                                .to_owned(),
+                        ),
+                    ),
+                );
+            }
+            _ => {}
+        };
 
-        let list = model
+        let total = select.clone().count(&self.ctx.db).await?;
+
+        let list = select
             .order_by_desc(entity::job_running_status::Column::UpdatedTime)
             .into_model()
             .paginate(&self.ctx.db, page_size)

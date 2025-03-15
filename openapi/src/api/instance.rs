@@ -55,6 +55,12 @@ pub mod types {
     }
 
     #[derive(Object, Serialize, Default)]
+    pub struct Tag {
+        pub tag_id: u64,
+        pub tag_name: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
     pub struct UserServerRecord {
         pub instance_id: String,
         pub ip: String,
@@ -63,8 +69,7 @@ pub mod types {
         pub instance_group: String,
         pub status: i8,
         pub info: String,
-        pub tag_key: Option<String>,
-        pub tag_val: Option<String>,
+        pub tags: Option<Vec<Tag>>,
         pub created_time: String,
         pub updated_time: String,
     }
@@ -328,8 +333,7 @@ impl InstanceApi {
                 instance_id: v.instance_id,
                 ip: v.ip,
                 info: v.info,
-                tag_key: v.tag_key,
-                tag_val: v.tag_val,
+                tags: None,
                 namespace: v.namespace,
                 instance_group_id: v.instance_group_id.unwrap_or_default(),
                 instance_group: v.instance_group_name.unwrap_or_default(),
