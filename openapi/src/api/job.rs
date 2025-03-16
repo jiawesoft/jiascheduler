@@ -28,6 +28,8 @@ mod types {
     use serde::Serialize;
     use serde_json::Value;
 
+    use crate::logic;
+
     #[derive(Object, Serialize, Default)]
     pub struct SaveJobResp {
         pub result: u64,
@@ -54,6 +56,43 @@ mod types {
         pub is_public: Option<bool>,
         pub display_on_dashboard: Option<bool>,
         pub args: Option<HashMap<String, String>>,
+        pub completed_callback: Option<CompletedCallbackOpts>,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct CompletedCallbackOpts {
+        pub trigger_on: CompletedCallbackTriggerType,
+        pub url: String,
+        pub header: Option<HashMap<String, String>>,
+        pub enable: bool,
+    }
+
+    impl Into<logic::types::CompletedCallbackOpts> for CompletedCallbackOpts {
+        fn into(self) -> logic::types::CompletedCallbackOpts {
+            let trigger_on = match self.trigger_on {
+                CompletedCallbackTriggerType::All => {
+                    logic::types::CompletedCallbackTriggerType::All
+                }
+                CompletedCallbackTriggerType::Error => {
+                    logic::types::CompletedCallbackTriggerType::Error
+                }
+            };
+            logic::types::CompletedCallbackOpts {
+                trigger_on,
+                url: self.url,
+                header: self.header,
+                enable: self.enable,
+            }
+        }
+    }
+
+    #[derive(Enum, Serialize, Default)]
+    pub enum CompletedCallbackTriggerType {
+        #[default]
+        #[oai(rename = "all")]
+        All,
+        #[oai(rename = "error")]
+        Error,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -536,6 +575,13 @@ impl JobApi {
             .transpose()
             .map_err(std_into_error)?;
 
+        let completed_callback = if let Some(v) = req.completed_callback {
+            let data: logic::types::CompletedCallbackOpts = v.into();
+            Set(Some(serde_json::to_value(data).map_err(std_into_error)?))
+        } else {
+            NotSet
+        };
+
         let (job_type, bundle_script) = match req.bundle_script {
             Some(v) => {
                 let list: Vec<BundleScriptRecord> = v
@@ -589,6 +635,7 @@ impl JobApi {
                 updated_user: Set(user_info.username.clone()),
                 args: Set(args),
                 team_id: Set(team_id.unwrap_or_default()),
+                completed_callback,
                 ..Default::default()
             })
             .await?;

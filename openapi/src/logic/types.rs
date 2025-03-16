@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
 use serde::{Deserialize, Serialize};
@@ -165,4 +165,22 @@ pub struct TagBind {
     pub tag_id: u64,
     pub tag_name: String,
     pub resource_id: u64,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct CompletedCallbackOpts {
+    #[serde(default)]
+    pub trigger_on: CompletedCallbackTriggerType,
+    pub header: Option<HashMap<String, String>>,
+    pub url: String,
+    pub enable: bool,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub enum CompletedCallbackTriggerType {
+    #[default]
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "error")]
+    Error,
 }
