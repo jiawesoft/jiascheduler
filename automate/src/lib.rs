@@ -69,3 +69,10 @@ macro_rules! local_time {
             .to_string()
     };
 }
+
+#[macro_export]
+macro_rules! run_id {
+    () => {
+        chrono::Local::now().format("%Y%m%d%H%M%S").to_string()
+    };
+}

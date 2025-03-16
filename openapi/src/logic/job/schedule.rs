@@ -93,6 +93,15 @@ impl<'a> JobLogic<'a> {
             .collect()
     }
 
+    pub async fn completed_callback(&self, schedule_id: &str) -> Result<()> {
+        let _schedule_record = JobScheduleHistory::find()
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .one(&self.ctx.db)
+            .await;
+
+        Ok(())
+    }
+
     pub async fn update_job_status(&self, params: UpdateJobParams) -> Result<u64> {
         let mut update_values = vec![
             (
@@ -233,6 +242,7 @@ impl<'a> JobLogic<'a> {
                     exit_status: Set(params.exit_status.clone().unwrap_or_default()),
                     exit_code: Set(params.exit_code.unwrap_or_default()),
                     output: Set(output),
+                    run_id: Set(params.run_id),
                     eid: Set(params.base_job.eid),
                     start_time: Set(params.start_time),
                     end_time: Set(params.end_time),
@@ -389,6 +399,7 @@ impl<'a> JobLogic<'a> {
                 max_parallel: job_record.max_parallel as u8,
                 read_code_from_stdin: false,
             },
+            run_id: IdGenerator::get_run_id(),
             instance_id: None,
             fields: None,
             restart_interval,
@@ -659,10 +670,12 @@ impl<'a> JobLogic<'a> {
         job_schedule_record: job_schedule_history::Model,
         created_user: String,
     ) -> Result<Vec<Result<DispatchResult>>> {
-        let dispatch_data: DispatchData = job_schedule_record
+        let mut dispatch_data: DispatchData = job_schedule_record
             .dispatch_data
             .ok_or(anyhow!("cannot found job dispatch data"))?
             .try_into()?;
+
+        dispatch_data.params.run_id = IdGenerator::get_run_id();
 
         let logic = automate::Logic::new(self.ctx.redis().clone());
 
@@ -962,6 +975,7 @@ impl<'a> JobLogic<'a> {
             dispatch_params: dispatch_data.params.clone(),
         };
         body.dispatch_params.action = action.clone();
+        body.dispatch_params.run_id = IdGenerator::get_run_id();
 
         let resp = match self
             .ctx

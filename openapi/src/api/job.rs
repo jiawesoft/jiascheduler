@@ -1504,14 +1504,11 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::GetDashboardResp>> {
         let svc = state.service();
 
-        let job_summary = svc
-            .job
-            .get_summary(Some(user_info.username.clone()))
-            .await?;
+        let job_summary = svc.job.get_summary(&user_info).await?;
 
         let stats = svc
             .job
-            .get_dashboard(Some(user_info.username.clone()), Some(req.job_type), None)
+            .get_dashboard(&user_info, Some(req.job_type), None)
             .await?;
 
         let rows = stats

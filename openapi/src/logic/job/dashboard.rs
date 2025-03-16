@@ -18,7 +18,7 @@ use super::{
 
 use crate::{
     entity::{job, job_exec_history, job_running_status, job_schedule_history, prelude::*},
-    local_time, time_format,
+    local_time, logic,
 };
 
 #[derive(Debug, FromQueryResult)]
@@ -40,16 +40,16 @@ struct BundleScriptExecCount {
 pub struct FilterScheduleAndRunTime {
     pub eid: String,
     pub schedule_id: String,
-    pub run_time: String,
+    pub run_id: String,
 }
 
 impl<'a> JobLogic<'a> {
     async fn get_job_exec_count_result(
         &self,
         schedule_id: String,
-        run_time: Option<String>,
+        run_id: Option<String>,
     ) -> Result<Vec<JobExecCount>> {
-        // let mut sql = r#"
+        // const TPL: &'static str = r#"
         //     select
         //         eid,
         //         count(1) total,
@@ -63,9 +63,8 @@ impl<'a> JobLogic<'a> {
         //         is_exec_succ;
         // "#;
         // if let Some(run_time) = run_time {
-        //     let sql = format!(sql, "and DATE_FORMAT(created_time, '%Y-%m-%d %H:%i')");
+        //     let sql = format!(TPL, "and DATE_FORMAT(created_time, '%Y-%m-%d %H:%i')");
         // }
-        //
 
         let ret = JobExecHistory::find()
             .select_only()
@@ -76,23 +75,31 @@ impl<'a> JobLogic<'a> {
                 "is_exec_succ",
             )
             .filter(job_exec_history::Column::ScheduleId.eq(schedule_id))
-            .apply_if(run_time, |query, v| {
-                query.filter(
-                    Expr::custom_keyword(Alias::new(
-                        "DATE_FORMAT(`created_time`, '%Y-%m-%d %H:%i')",
-                    ))
-                    .eq(v),
-                )
-            })
             .group_by(Expr::col(Alias::new("eid")))
+            // .apply_if(run_time, |query, v| {
+            //     query.filter(Expr::cust(
+            //         "`created_time` BETWEEN '2025-03-15 22:14:00' AND '2025-03-15 22:14:59'",
+            //     ))
+            // })
+            // .apply_if(run_time, |query, v| {
+            //     query.filter(
+            //         Expr::custom_keyword(Alias::new(
+            //             "DATE_FORMAT(`job_exec_history`.`start_time`, '%Y-%m-%d %H:%i')",
+            //         ))
+            //         .eq(v),
+            //     )
+            // })
+            .apply_if(run_id, |q, v| {
+                q.filter(job_exec_history::Column::RunId.eq(v))
+            })
             .group_by(Expr::col(Alias::new("is_exec_succ")))
             .into_model::<JobExecCount>()
             .all(&self.ctx.db)
             .await?;
 
-        // let m =    JobExecCount::find_by_statement(Statement::from_string(
+        // let ret =    JobExecCount::find_by_statement(Statement::from_string(
         //         sea_orm::DatabaseBackend::MySql,
-        //         "SELECT `job_exec_history`.`eid`, COUNT(`job_exec_history`.`eid`) AS `total`, (CASE WHEN (`exit_code` = 0) THEN TRUE ELSE FALSE END) AS `is_exec_succ` FROM `job_exec_history` WHERE `job_exec_history`.`schedule_id` = 's-oIXK5fOuN0' AND DATE_FORMAT(`created_time`, '%Y-%m-%d %H:%i') = '2024-11-17 15:54' GROUP BY `eid`, `is_exec_succ`"))
+        //         "SELECT `job_exec_history`.`eid`, COUNT(`job_exec_history`.`eid`) AS `total`, (CASE WHEN (`exit_code` = 0) THEN TRUE ELSE FALSE END) AS `is_exec_succ` FROM `job_exec_history` WHERE `job_exec_history`.`schedule_id` = 's-UUNUXT95Iy' AND DATE_FORMAT(`created_time`, '%Y-%m-%d %H:%i') = '2025-03-15 22:14' GROUP BY `eid`, `is_exec_succ`"))
         //     .all(&self.ctx.db).await?;
 
         // let ret: Vec<JobExecCount> = JobExecCount::find_by_statement(
@@ -100,6 +107,7 @@ impl<'a> JobLogic<'a> {
         // )
         // .all(&self.ctx.db)
         // .await?;
+
         Ok(ret)
     }
 
@@ -126,7 +134,7 @@ impl<'a> JobLogic<'a> {
             .and_where("jeh.schedule_id = ?".bind(&schedule_id))
             .to_owned();
         if let Some(run_time) = run_time {
-            sb.and_where("DATE_FORMAT(jeh.created_time, '%Y-%m-%d %H:%i')=?".bind(&run_time));
+            sb.and_where("DATE_FORMAT(jeh.start_time, '%Y-%m-%d %H:%i')=?".bind(&run_time));
         }
         sb.group_by("bst.eid,bst.exit_code,bst.result,eval_err");
 
@@ -142,51 +150,33 @@ impl<'a> JobLogic<'a> {
         &self,
         eid: String,
         schedule_id: Option<String>,
-        run_time: Option<String>,
+        run_id: Option<String>,
     ) -> Result<Option<(job_schedule_history::Model, String, String)>> {
-        let (schedule_id, latest_exec_time, run_time) = if let Some(schedule_id) = schedule_id {
+        let (schedule_id, latest_exec_time, run_id) = if let Some(schedule_id) = schedule_id {
             match JobExecHistory::find()
                 .filter(job_exec_history::Column::Eid.eq(eid.clone()))
                 .filter(job_exec_history::Column::ScheduleId.eq(schedule_id.clone()))
-                .apply_if(run_time, |q, v| {
-                    q.filter(
-                        Expr::custom_keyword(Alias::new(
-                            "DATE_FORMAT(created_time, '%Y-%m-%d %H:%i')",
-                        ))
-                        .eq(v),
-                    )
+                .apply_if(run_id, |q, v| {
+                    q.filter(job_exec_history::Column::RunId.eq(v))
                 })
                 .order_by(job_exec_history::Column::Id, sea_orm::Order::Desc)
                 .one(&self.ctx.db)
                 .await?
             {
-                Some(v) => (
-                    schedule_id,
-                    local_time!(v.created_time),
-                    time_format!(v.created_time, "%Y-%m-%d %H:%M"),
-                ),
+                Some(v) => (schedule_id, local_time!(v.created_time), v.run_id.clone()),
                 None => return Ok(None),
             }
         } else {
             match JobExecHistory::find()
                 .filter(job_exec_history::Column::Eid.eq(eid.clone()))
-                .apply_if(run_time, |q, v| {
-                    q.filter(
-                        Expr::custom_keyword(Alias::new(
-                            "DATE_FORMAT(created_time, '%Y-%m-%d %H:%i')",
-                        ))
-                        .eq(v),
-                    )
+                .apply_if(run_id, |q, v| {
+                    q.filter(job_exec_history::Column::RunId.eq(v))
                 })
                 .order_by(job_exec_history::Column::Id, sea_orm::Order::Desc)
                 .one(&self.ctx.db)
                 .await?
             {
-                Some(v) => (
-                    v.schedule_id,
-                    local_time!(v.created_time),
-                    time_format!(v.created_time, "%Y-%m-%d %H:%M"),
-                ),
+                Some(v) => (v.schedule_id, local_time!(v.created_time), v.run_id.clone()),
                 None => return Ok(None),
             }
         };
@@ -195,16 +185,30 @@ impl<'a> JobLogic<'a> {
             .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
             .one(&self.ctx.db)
             .await?
-            .map(|v| (v, latest_exec_time, run_time));
+            .map(|v| (v, latest_exec_time, run_id));
 
         Ok(ret)
     }
 
     /// can optimize performance
-    pub async fn get_summary(&self, created_user: Option<String>) -> Result<JobStatSummary> {
+    pub async fn get_summary(&self, user_info: &logic::types::UserInfo) -> Result<JobStatSummary> {
+        let svc = self.ctx.service();
+        let (search_user, team_ids) = if self.ctx.can_manage_job(&user_info.user_id).await? {
+            (None, None)
+        } else {
+            let team_ids = svc
+                .team
+                .get_my_teams(&user_info.user_id)
+                .await?
+                .into_iter()
+                .map(|v| v.id)
+                .collect::<Vec<u64>>();
+            (Some(user_info.username.clone()), Some(team_ids))
+        };
+
         let mut summary: JobStatSummary = Default::default();
         summary.total = Job::find()
-            .apply_if(created_user.clone(), |query, v| {
+            .apply_if(search_user.clone(), |query, v| {
                 query.filter(job::Column::CreatedUser.eq(v))
             })
             .count(&self.ctx.db)
@@ -218,8 +222,12 @@ impl<'a> JobLogic<'a> {
                     .to(job_running_status::Column::Eid)
                     .into(),
             )
-            .apply_if(created_user.clone(), |query, v| {
-                query.filter(job::Column::CreatedUser.eq(v))
+            .apply_if(search_user.clone(), |query, v| {
+                let mut cond = job::Column::CreatedUser.eq(v);
+                if let Some(team_ids) = team_ids.clone() {
+                    cond = cond.or(job::Column::TeamId.is_in(team_ids));
+                }
+                query.filter(cond)
             })
             .filter(job_running_status::Column::RunStatus.eq(RunStatus::Running.to_string()))
             .count(&self.ctx.db)
@@ -233,8 +241,12 @@ impl<'a> JobLogic<'a> {
                     .to(job_running_status::Column::Eid)
                     .into(),
             )
-            .apply_if(created_user.clone(), |query, v| {
-                query.filter(job::Column::CreatedUser.eq(v))
+            .apply_if(search_user.clone(), |query, v| {
+                let mut cond = job::Column::CreatedUser.eq(v);
+                if let Some(team_ids) = team_ids.clone() {
+                    cond = cond.or(job::Column::TeamId.is_in(team_ids));
+                }
+                query.filter(cond)
             })
             .filter(job_running_status::Column::ExitCode.eq(0))
             .count(&self.ctx.db)
@@ -247,8 +259,12 @@ impl<'a> JobLogic<'a> {
                     .to(job_running_status::Column::Eid)
                     .into(),
             )
-            .apply_if(created_user.clone(), |query, v| {
-                query.filter(job::Column::CreatedUser.eq(v))
+            .apply_if(search_user.clone(), |query, v| {
+                let mut cond = job::Column::CreatedUser.eq(v);
+                if let Some(team_ids) = team_ids {
+                    cond = cond.or(job::Column::TeamId.is_in(team_ids.clone()));
+                }
+                query.filter(cond)
             })
             .filter(job_running_status::Column::ExitCode.ne(0))
             .count(&self.ctx.db)
@@ -258,13 +274,31 @@ impl<'a> JobLogic<'a> {
 
     pub async fn get_dashboard(
         &self,
-        created_user: Option<String>,
+        user_info: &logic::types::UserInfo,
         job_type: Option<String>,
         filter: Option<Vec<FilterScheduleAndRunTime>>,
     ) -> Result<Vec<types::JobRunResultStats>> {
+        let svc = self.ctx.service();
+        let (search_user, team_ids) = if self.ctx.can_manage_job(&user_info.user_id).await? {
+            (None, None)
+        } else {
+            let team_ids = svc
+                .team
+                .get_my_teams(&user_info.user_id)
+                .await?
+                .into_iter()
+                .map(|v| v.id)
+                .collect::<Vec<u64>>();
+            (Some(user_info.username.clone()), Some(team_ids))
+        };
+
         let list = Job::find()
-            .apply_if(created_user, |query, v| {
-                query.filter(job::Column::CreatedUser.eq(v))
+            .apply_if(search_user.clone(), |query, v| {
+                let mut cond = job::Column::CreatedUser.eq(v);
+                if let Some(team_ids) = team_ids.clone() {
+                    cond = cond.or(job::Column::TeamId.is_in(team_ids));
+                }
+                query.filter(cond)
             })
             .apply_if(job_type, |query, v| {
                 query.filter(job::Column::JobType.eq(v))
@@ -279,17 +313,17 @@ impl<'a> JobLogic<'a> {
             let matched = filter
                 .as_ref()
                 .and_then(|v| v.iter().find(|v| v.eid == item.eid));
-            let (schedule_id, run_time) = matched
-                .map(|v| (v.schedule_id.to_string(), v.run_time.to_string()))
+            let (schedule_id, run_id) = matched
+                .map(|v| (v.schedule_id.to_string(), v.run_id.to_string()))
                 .unzip();
 
-            if let Some((schedule_record, latest_exec_time, run_time)) = self
-                .get_latest_schedule(item.eid.clone(), schedule_id, run_time)
+            if let Some((schedule_record, latest_exec_time, run_id)) = self
+                .get_latest_schedule(item.eid.clone(), schedule_id, run_id)
                 .await?
             {
                 if schedule_record.job_type == "default" {
                     let count_result = self
-                        .get_job_exec_count_result(schedule_record.schedule_id, Some(run_time))
+                        .get_job_exec_count_result(schedule_record.schedule_id, Some(run_id))
                         .await?;
                     let mut stats = types::JobRunResultStats {
                         name: item.name.clone(),
@@ -340,7 +374,7 @@ impl<'a> JobLogic<'a> {
                     let count_result = self
                         .get_bundle_script_exec_count_result(
                             schedule_record.schedule_id,
-                            Some(run_time),
+                            Some(run_id),
                         )
                         .await?;
                     count_result.iter().for_each(|v| {
