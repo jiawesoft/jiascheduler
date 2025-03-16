@@ -24,6 +24,7 @@ pub struct Model {
     pub timeout: u64,
     pub max_retry: u8,
     pub max_parallel: u8,
+    pub completed_callback: Option<Json>,
     pub is_public: i8,
     pub display_on_dashboard: bool,
     pub created_user: String,

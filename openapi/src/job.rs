@@ -19,6 +19,18 @@ async fn heartbeat(state: AppState, msg: HeartbeatParams) -> Result<()> {
 async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
     info!("{}:{}:{} online", msg.agent_ip, msg.namespace, msg.mac_addr);
     let mut svc = state.service();
+
+    svc.instance
+        .update_status(
+            Some(msg.namespace.clone()),
+            msg.agent_ip.clone(),
+            msg.mac_addr.clone(),
+            1,
+            msg.secret_header.assign_user,
+            msg.secret_header.ssh_connection_params,
+        )
+        .await?;
+
     if !msg.is_initialized {
         info!(
             "start initialize runnable job on {}:{}",
@@ -40,17 +52,7 @@ async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
         }
     }
 
-    Ok(svc
-        .instance
-        .update_status(
-            Some(msg.namespace),
-            msg.agent_ip,
-            msg.mac_addr,
-            1,
-            msg.secret_header.assign_user,
-            msg.secret_header.ssh_connection_params,
-        )
-        .await?)
+    Ok(())
 }
 
 async fn agent_offline(state: AppState, msg: AgentOfflineParams) -> Result<()> {

@@ -99,6 +99,8 @@ pub struct DispatchJobParams {
     pub base_job: BaseJob,
     pub schedule_id: String,
     pub instance_id: Option<String>,
+    #[serde(default)]
+    pub run_id: String,
     pub fields: Option<HashMap<String, serde_json::Value>>,
     pub timer_expr: Option<String>,
     pub restart_interval: Option<Duration>,
@@ -149,10 +151,12 @@ pub struct UpdateJobParams {
     pub stderr: Option<String>,
     pub created_user: String,
     pub bundle_output: Option<Vec<BundleOutputParams>>,
+    pub run_id: String,
     pub start_time: Option<DateTime<Local>>,
     pub end_time: Option<DateTime<Local>>,
     pub prev_time: Option<DateTime<Local>>,
     pub next_time: Option<DateTime<Local>>,
+    pub is_timeout: bool,
 }
 
 impl UpdateJobParams {

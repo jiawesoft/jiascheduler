@@ -19,6 +19,7 @@ pub struct Model {
     pub output: String,
     pub start_time: Option<DateTimeLocal>,
     pub end_time: Option<DateTimeLocal>,
+    pub run_id: String,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
     pub created_user: String,
