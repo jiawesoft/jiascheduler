@@ -23,6 +23,7 @@ use serde_json::json;
 mod types {
     use std::collections::HashMap;
 
+    use automate::scheduler::types;
     use poem_openapi::{Enum, Object};
 
     use serde::Serialize;
@@ -265,6 +266,19 @@ mod types {
         StartSupervising,
         #[oai(rename = "stop_supervising")]
         StopSupervising,
+    }
+
+    impl Into<types::JobAction> for JobAction {
+        fn into(self) -> types::JobAction {
+            match self {
+                JobAction::Exec => types::JobAction::Exec,
+                JobAction::Kill => types::JobAction::Kill,
+                JobAction::StartTimer => types::JobAction::StartTimer,
+                JobAction::StopTimer => types::JobAction::StopTimer,
+                JobAction::StartSupervising => types::JobAction::StartSupervising,
+                JobAction::StopSupervising => types::JobAction::StopSupervising,
+            }
+        }
     }
 
     #[test]
@@ -1158,15 +1172,7 @@ impl JobApi {
         Json(req): Json<types::ActionReq>,
     ) -> Result<ApiStdResponse<types::ActionRes>> {
         let svc = state.service();
-
-        let action = match req.action {
-            types::JobAction::StartTimer => JobAction::StartTimer,
-            types::JobAction::Exec => JobAction::Exec,
-            types::JobAction::StopTimer => JobAction::StopTimer,
-            types::JobAction::Kill => JobAction::Kill,
-            types::JobAction::StartSupervising => JobAction::StartSupervising,
-            types::JobAction::StopSupervising => JobAction::StopSupervising,
-        };
+        let action = req.action.into();
         let ret = svc
             .job
             .action(
