@@ -1073,6 +1073,8 @@ impl<'a> JobLogic<'a> {
         };
 
         if ret["code"] != 20000 {
+            self.update_run_status(user_info, &instance_id, &eid, action.clone())
+                .await?;
             anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 

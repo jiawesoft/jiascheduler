@@ -266,6 +266,7 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct ExecRecord {
         pub id: u64,
+        pub job_name: String,
         pub schedule_id: String,
         pub bind_ip: String,
         pub job_type: String,
@@ -1175,6 +1176,7 @@ impl JobApi {
                 bind_ip: v.ip,
                 exit_status: v.exit_status,
                 exit_code: v.exit_code,
+                job_name: v.job_name,
                 output: v.output,
                 job_type: v.job_type,
                 team_id: v.team_id,

@@ -37,6 +37,7 @@ impl<'a> JobLogic<'a> {
             .column_as(team::Column::Id, "team_id")
             .column_as(team::Column::Name, "team_name")
             .column_as(job::Column::Id, "job_id")
+            .column_as(job::Column::Name, "job_name")
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
             .join_rev(

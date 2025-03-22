@@ -38,6 +38,7 @@ pub struct RunStatusRelatedScheduleJobModel {
 pub struct ExecHistoryRelatedScheduleModel {
     pub id: u64,
     pub job_id: u64,
+    pub job_name: String,
     pub schedule_id: String,
     pub ip: String,
     pub namespace: String,
