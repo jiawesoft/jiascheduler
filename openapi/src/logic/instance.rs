@@ -37,9 +37,7 @@ struct InstanceStatusCount {
 }
 
 pub struct InstanceLogic<'a> {
-    // db: &'a DbConn,
     ctx: &'a AppContext,
-    // redis: Client,
 }
 
 impl<'a> InstanceLogic<'a> {
@@ -1008,5 +1006,24 @@ impl<'a> InstanceLogic<'a> {
         };
 
         instance_record
+    }
+
+    pub async fn set_status(
+        &self,
+        state: AppState,
+        user_info: &types::UserInfo,
+        id: Vec<u64>,
+        status: bool,
+    ) -> Result<u64> {
+        let ret = Instance::update_many()
+            .set(instance::ActiveModel {
+                status: Set(status.into()),
+                ..Default::default()
+            })
+            .filter(instance::Column::Id.is_in(id))
+            .exec(&self.ctx.db)
+            .await?;
+
+        Ok(ret.rows_affected)
     }
 }
