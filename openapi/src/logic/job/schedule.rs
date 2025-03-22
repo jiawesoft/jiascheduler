@@ -852,6 +852,40 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
+    async fn update_run_status(
+        &self,
+        user_info: &UserInfo,
+        instance_id: &str,
+        eid: &str,
+        action: JobAction,
+    ) -> Result<()> {
+        match action {
+            JobAction::StopSupervising | JobAction::StopTimer | JobAction::Kill => {
+                let schedule_status = if action == JobAction::StopSupervising {
+                    Set(ScheduleStatus::Supervising.to_string())
+                } else if action == JobAction::StopTimer {
+                    Set(ScheduleStatus::Unscheduled.to_string())
+                } else {
+                    NotSet
+                };
+
+                JobRunningStatus::update_many()
+                    .set(job_running_status::ActiveModel {
+                        run_status: Set(RunStatus::Stop.to_string()),
+                        schedule_status,
+                        updated_user: Set(user_info.username.clone()),
+                        ..Default::default()
+                    })
+                    .filter(job_running_status::Column::InstanceId.eq(instance_id))
+                    .filter(job_running_status::Column::Eid.eq(eid))
+                    .exec(&self.ctx.db)
+                    .await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     pub async fn action(
         &self,
         schedule_id: String,
@@ -861,7 +895,7 @@ impl<'a> JobLogic<'a> {
         action: JobAction,
     ) -> Result<Value> {
         let ins = Instance::find()
-            .filter(instance::Column::InstanceId.eq(instance_id))
+            .filter(instance::Column::InstanceId.eq(&instance_id))
             .one(&self.ctx.db)
             .await?
             .ok_or(anyhow!("cannot found instance"))?;
@@ -910,8 +944,14 @@ impl<'a> JobLogic<'a> {
         // }
 
         let logic = automate::Logic::new(self.ctx.redis());
+        let eid = schedule_record.eid.clone();
 
-        let pair = logic.get_link_pair(&ins.ip, &ins.mac_addr).await?;
+        let Ok(pair) = logic.get_link_pair(&ins.ip, &ins.mac_addr).await else {
+            self.update_run_status(user_info, &instance_id, &eid, action.clone())
+                .await?;
+            anyhow::bail!("Unable to find agent registration information.");
+        };
+
         let api_url = format!("http://{}/dispatch", pair.1.comet_addr);
         dispatch_data.params.instance_id = Some(ins.instance_id.clone());
         dispatch_data.params.created_user = user_info.username.clone();
@@ -923,15 +963,31 @@ impl<'a> JobLogic<'a> {
         };
         body.dispatch_params.action = action.clone();
 
-        let ret = self
+        let resp = match self
             .ctx
             .http_client
             .post(api_url)
+            .timeout(5 * Duration::from_secs(5))
             .json(&body)
             .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                self.update_run_status(user_info, &instance_id, &eid, action.clone())
+                    .await?;
+                anyhow::bail!("failed dispatch job, {e}");
+            }
+        };
+
+        let ret: Value = match resp.json::<serde_json::Value>().await {
+            Ok(v) => v,
+            Err(e) => {
+                self.update_run_status(user_info, &instance_id, &eid, action.clone())
+                    .await?;
+                anyhow::bail!("failed dispatch job, {e}");
+            }
+        };
 
         if ret["code"] != 20000 {
             anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());

@@ -176,10 +176,8 @@ impl React {
         let val = jobs.remove(eid);
         if let Some(supervisor_job) = val {
             let _ = supervisor_job.send(());
-            Ok(())
-        } else {
-            anyhow::bail!("supervisor job is not found")
         }
+        Ok(())
     }
 }
 
@@ -639,6 +637,32 @@ impl
         let eid = dispatch_params.base_job.eid.clone();
         react.kill_job(&eid).await;
         react.stop_supervising(&eid).await?;
+
+        let instance_id = dispatch_params
+            .instance_id
+            .to_owned()
+            .ok_or(anyhow!("not found instance_id in params"))?;
+
+        let _ = react
+            .send_update_job_msg(UpdateJobParams {
+                base_job: dispatch_params.base_job.to_pure_job(),
+                schedule_status: Some(types::ScheduleStatus::Unsupervised),
+                run_status: None,
+                schedule_id: dispatch_params.schedule_id,
+                instance_id,
+                exit_status: None,
+                exit_code: None,
+                stdout: None,
+                stderr: None,
+                next_time: None,
+                bind_namespace: react.namespace.clone(),
+                bind_ip: react.local_ip.clone(),
+                schedule_type: Some(ScheduleType::Timer),
+                created_user: dispatch_params.created_user,
+                start_time: None,
+                ..Default::default()
+            })
+            .await?;
         Ok(json!(null))
     }
 
@@ -867,10 +891,12 @@ impl
                     "data": v,
                 })
             }
-            Err(e) => json!({
-                "code":50000,
-                "msg":e.to_string(),
-            }),
+            Err(e) => {
+                json!({
+                    "code":50000,
+                    "msg":e.to_string(),
+                })
+            }
         }
     }
 
