@@ -1010,8 +1010,8 @@ impl<'a> InstanceLogic<'a> {
 
     pub async fn set_status(
         &self,
-        state: AppState,
-        user_info: &types::UserInfo,
+        _state: AppState,
+        _user_info: &types::UserInfo,
         id: Vec<u64>,
         status: bool,
     ) -> Result<u64> {

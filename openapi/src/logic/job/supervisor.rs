@@ -1,18 +1,15 @@
 use crate::{
-    entity::{executor, job, job_exec_history, job_supervisor, prelude::*, tag_resource, team},
+    entity::{executor, job, job_supervisor, prelude::*, tag_resource, team},
     logic::types::ResourceType,
 };
 use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Set,
+    QueryOrder, QuerySelect, QueryTrait,
 };
 use sea_query::Query;
 
-use super::{
-    types::JobSupervisorRelatedJobModel, Executor, Job, JobExecHistory, JobLogic, JobSupervisor,
-    Team,
-};
+use super::{types::JobSupervisorRelatedJobModel, Executor, Job, JobLogic, JobSupervisor, Team};
 
 impl<'a> JobLogic<'a> {
     pub async fn query_job_supervisor(
@@ -111,20 +108,14 @@ impl<'a> JobLogic<'a> {
         Ok(active_model.save(&self.ctx.db).await?)
     }
 
-    pub async fn delete_job_supervisor(&self, eid: String) -> Result<u64> {
-        let record = JobExecHistory::find()
-            .filter(job_exec_history::Column::Eid.eq(&eid))
-            .one(&self.ctx.db)
+    pub async fn delete_job_supervisor(&self, username: Option<String>, id: u64) -> Result<u64> {
+        let ret = JobSupervisor::delete_many()
+            .apply_if(username.clone(), |q, v| {
+                q.filter(job_supervisor::Column::CreatedUser.eq(v))
+            })
+            .filter(job_supervisor::Column::Id.eq(id))
+            .exec(&self.ctx.db)
             .await?;
-        if record.is_some() {
-            anyhow::bail!("forbidden to delete the executed jobs")
-        }
-        let ret = JobSupervisor::delete(job_supervisor::ActiveModel {
-            eid: Set(eid),
-            ..Default::default()
-        })
-        .exec(&self.ctx.db)
-        .await?;
         Ok(ret.rows_affected)
     }
 }

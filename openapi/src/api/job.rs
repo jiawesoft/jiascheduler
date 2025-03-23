@@ -20,6 +20,7 @@ use poem_openapi::{
 };
 use sea_orm::{ActiveValue::NotSet, Set};
 use serde_json::json;
+use types::CompletedCallbackOpts;
 mod types {
     use std::collections::HashMap;
 
@@ -66,6 +67,25 @@ mod types {
         pub url: String,
         pub header: Option<HashMap<String, String>>,
         pub enable: bool,
+    }
+
+    impl From<logic::types::CompletedCallbackOpts> for CompletedCallbackOpts {
+        fn from(value: logic::types::CompletedCallbackOpts) -> Self {
+            let trigger_on = match value.trigger_on {
+                logic::types::CompletedCallbackTriggerType::All => {
+                    CompletedCallbackTriggerType::All
+                }
+                logic::types::CompletedCallbackTriggerType::Error => {
+                    CompletedCallbackTriggerType::Error
+                }
+            };
+            Self {
+                trigger_on,
+                url: value.url,
+                header: value.header,
+                enable: value.enable,
+            }
+        }
     }
 
     impl Into<logic::types::CompletedCallbackOpts> for CompletedCallbackOpts {
@@ -146,6 +166,7 @@ mod types {
         pub updated_user: String,
         pub upload_file: String,
         pub args: Option<Value>,
+        pub completed_callback: Option<CompletedCallbackOpts>,
         pub created_time: String,
         pub updated_time: String,
     }
@@ -234,6 +255,11 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct DeleteJobReq {
         pub eid: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteJobResp {
+        pub result: u64,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -549,6 +575,41 @@ mod types {
     pub struct SaveJobSupervisorResp {
         pub result: u64,
     }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteExecHistoryReq {
+        pub eid: Option<String>,
+        pub schedule_id: Option<String>,
+        pub ids: Option<Vec<u64>>,
+        pub instance_id: Option<String>,
+        pub time_range_start: Option<String>,
+        pub time_range_end: Option<String>,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteExecHistoryResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteJobSupervisorReq {
+        pub id: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteJobSupervisorResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteJobTimerReq {
+        pub id: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteJobTimerResp {
+        pub result: u64,
+    }
 }
 
 fn set_middleware(ep: impl Endpoint) -> impl Endpoint {
@@ -736,6 +797,12 @@ impl JobApi {
                 created_user: v.created_user,
                 updated_user: v.updated_user,
                 args: v.args,
+                completed_callback: v
+                    .completed_callback
+                    .map(|v| serde_json::from_value::<logic::types::CompletedCallbackOpts>(v))
+                    .transpose()
+                    .unwrap_or_default()
+                    .map(|v| CompletedCallbackOpts::from(v)),
                 tags: Some(
                     tag_records
                         .iter()
@@ -774,14 +841,24 @@ impl JobApi {
         user_info: Data<&logic::types::UserInfo>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         Json(req): Json<types::DeleteJobReq>,
-    ) -> Result<ApiStdResponse<u64>> {
+    ) -> api_response!(types::DeleteJobResp) {
         let svc = state.service();
-        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
-            return Err(NoPermission().into());
-        }
+        let username = if !svc
+            .team
+            .can_delete_job(team_id.clone(), &user_info.user_id)
+            .await?
+        {
+            if team_id.is_none() {
+                Some(user_info.username.clone())
+            } else {
+                return_err!("no permission to delete this job");
+            }
+        } else {
+            None
+        };
 
-        let ret = svc.job.delete_job(req.eid).await?;
-        return_ok!(ret)
+        let result = svc.job.delete_job(username, req.eid).await?;
+        return_ok!(types::DeleteJobResp { result })
     }
 
     #[oai(path = "/dispatch", method = "post", transform = "set_middleware")]
@@ -1211,6 +1288,51 @@ impl JobApi {
         })
     }
 
+    #[oai(
+        path = "/delete-exec-history",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_exec_history(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteExecHistoryReq>,
+        _session: &Session,
+    ) -> api_response!(types::DeleteExecHistoryResp) {
+        let svc = state.service();
+        let username = if !svc
+            .team
+            .can_delete_job(team_id.clone(), &user_info.user_id)
+            .await?
+        {
+            if team_id.is_none() {
+                Some(user_info.username.clone())
+            } else {
+                return_err!("no permission to delete job execution history");
+            }
+        } else {
+            None
+        };
+
+        let result = svc
+            .job
+            .delete_exec_history(
+                req.ids,
+                req.schedule_id,
+                req.instance_id,
+                req.eid,
+                team_id,
+                username,
+                req.time_range_start,
+                req.time_range_end,
+            )
+            .await?;
+
+        return_ok!(types::DeleteExecHistoryResp { result })
+    }
+
     #[oai(path = "/action", method = "post", transform = "set_middleware")]
     pub async fn action(
         &self,
@@ -1305,18 +1427,21 @@ impl JobApi {
         Json(req): Json<types::DeleteJobBundleScriptReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
-        if !svc
-            .job
-            .can_write_bundle_script(&user_info, team_id, &req.eid)
+        let username = if !svc
+            .team
+            .can_delete_job(team_id.clone(), &user_info.user_id)
             .await?
         {
-            return Err(NoPermission().into());
-        }
+            if team_id.is_none() {
+                Some(user_info.username.clone())
+            } else {
+                return_err!("no permission to delete the bundle script");
+            }
+        } else {
+            None
+        };
 
-        let ret = svc
-            .job
-            .delete_bundle_script(user_info.username.clone(), req.eid)
-            .await?;
+        let ret = svc.job.delete_bundle_script(username, req.eid).await?;
         return_ok!(ret)
     }
 
@@ -1532,16 +1657,24 @@ impl JobApi {
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
-        Json(req): Json<types::DeleteJobReq>,
-    ) -> Result<ApiStdResponse<u64>> {
+        Json(req): Json<types::DeleteJobTimerReq>,
+    ) -> api_response!(types::DeleteJobTimerResp) {
         let svc = state.service();
-
-        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
-            return Err(NoPermission().into());
-        }
-
-        let ret = svc.job.delete_job(req.eid).await?;
-        return_ok!(ret);
+        let username = if !svc
+            .team
+            .can_delete_job(team_id.clone(), &user_info.user_id)
+            .await?
+        {
+            if team_id.is_none() {
+                Some(user_info.username.clone())
+            } else {
+                return_err!("no permission to delete this job timer");
+            }
+        } else {
+            None
+        };
+        let result = svc.job.delete_job_timer(username, req.id).await?;
+        return_ok!(types::DeleteJobTimerResp { result });
     }
 
     #[oai(path = "/dashboard", method = "post", transform = "set_middleware")]
@@ -1730,5 +1863,36 @@ impl JobApi {
         return_ok!(types::SaveJobSupervisorResp {
             result: ret.id.as_ref().to_owned()
         });
+    }
+
+    #[oai(
+        path = "/delete-supervisor",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_supervisor(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteJobSupervisorReq>,
+    ) -> api_response!(types::DeleteJobSupervisorResp) {
+        let svc = state.service();
+        let username = if !svc
+            .team
+            .can_delete_job(team_id.clone(), &user_info.user_id)
+            .await?
+        {
+            if team_id.is_none() {
+                Some(user_info.username.clone())
+            } else {
+                return_err!("no permission to delete this job supervisor");
+            }
+        } else {
+            None
+        };
+
+        let result = svc.job.delete_job_supervisor(username, req.id).await?;
+        return_ok!(types::DeleteJobSupervisorResp { result });
     }
 }

@@ -82,6 +82,7 @@ pub struct JobRelatedExecutorModel {
     pub created_user: String,
     pub updated_user: String,
     pub display_on_dashboard: bool,
+    pub completed_callback: Option<serde_json::Value>,
     pub args: Option<serde_json::Value>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,

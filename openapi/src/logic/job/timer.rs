@@ -1,13 +1,13 @@
 use anyhow::Result;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Set,
+    QueryOrder, QuerySelect, QueryTrait,
 };
 use sea_query::Query;
 
 use super::{types::JobTimerRelatedJobModel, JobLogic};
 use crate::{
-    entity::{executor, job, job_exec_history, job_timer, prelude::*, tag_resource, team},
+    entity::{executor, job, job_timer, prelude::*, tag_resource, team},
     logic::types::ResourceType,
 };
 
@@ -110,21 +110,14 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
-    pub async fn delete_job_timer(&self, eid: String) -> Result<u64> {
-        let record = JobExecHistory::find()
-            .filter(job_exec_history::Column::Eid.eq(&eid))
-            .one(&self.ctx.db)
+    pub async fn delete_job_timer(&self, username: Option<String>, id: u64) -> Result<u64> {
+        let ret = JobTimer::delete_many()
+            .apply_if(username, |q, v| {
+                q.filter(job_timer::Column::CreatedUser.eq(v))
+            })
+            .filter(job_timer::Column::Id.eq(id))
+            .exec(&self.ctx.db)
             .await?;
-        if record.is_some() {
-            anyhow::bail!("forbidden to delete the executed jobs")
-        }
-
-        let ret = JobTimer::delete(job_timer::ActiveModel {
-            eid: Set(eid),
-            ..Default::default()
-        })
-        .exec(&self.ctx.db)
-        .await?;
         Ok(ret.rows_affected)
     }
 }

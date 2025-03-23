@@ -1,4 +1,3 @@
-use automate::return_response;
 use poem_openapi::OpenApi;
 use sea_orm::{ActiveValue::NotSet, Set};
 

@@ -95,7 +95,7 @@ impl<'a> JobLogic<'a> {
     }
 
     pub async fn completed_callback(&self, params: UpdateJobParams) -> Result<()> {
-        let completed_callback = match JobScheduleHistory::find()
+        let (completed_callback, job_record) = match JobScheduleHistory::find()
             .filter(job_schedule_history::Column::ScheduleId.eq(&params.schedule_id))
             .one(&self.ctx.db)
             .await?
@@ -105,11 +105,14 @@ impl<'a> JobLogic<'a> {
                 ..
             }) => {
                 let job_record = serde_json::from_value::<job::Model>(v)?;
-                let Some(v) = job_record.completed_callback else {
+                let Some(v) = job_record.completed_callback.clone() else {
                     return Ok(());
                 };
 
-                serde_json::from_value::<CompletedCallbackOpts>(v)?
+                (
+                    serde_json::from_value::<CompletedCallbackOpts>(v)?,
+                    job_record,
+                )
             }
             _ => return Ok(()),
         };
@@ -151,11 +154,13 @@ impl<'a> JobLogic<'a> {
                     header.insert(key, value);
                 });
             }
+            let mut body = serde_json::to_value(&params)?;
+            body["base_job"] = json!(job_record);
 
             let response = http_client
                 .post(api_url)
                 .headers(header)
-                .json(&params)
+                .json(&body)
                 .send()
                 .await?;
             debug!("callback response: {:?}", response.text().await)

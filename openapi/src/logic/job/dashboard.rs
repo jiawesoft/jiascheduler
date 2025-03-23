@@ -114,7 +114,7 @@ impl<'a> JobLogic<'a> {
     async fn get_bundle_script_exec_count_result(
         &self,
         schedule_id: String,
-        run_time: Option<String>,
+        run_id: Option<String>,
     ) -> Result<Vec<BundleScriptExecCount>> {
         let mut sb = SqlBuilder::select_from("job_exec_history jeh")
             .and_table(
@@ -133,8 +133,8 @@ impl<'a> JobLogic<'a> {
             ])
             .and_where("jeh.schedule_id = ?".bind(&schedule_id))
             .to_owned();
-        if let Some(run_time) = run_time {
-            sb.and_where("DATE_FORMAT(jeh.start_time, '%Y-%m-%d %H:%i')=?".bind(&run_time));
+        if let Some(run_id) = run_id {
+            sb.and_where("jeh.run_id=?".bind(&run_id));
         }
         sb.group_by("bst.eid,bst.exit_code,bst.result,eval_err");
 

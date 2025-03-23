@@ -134,4 +134,40 @@ impl<'a> JobLogic<'a> {
 
         Ok((list, total))
     }
+
+    pub async fn delete_exec_history(
+        &self,
+        ids: Option<Vec<u64>>,
+        schedule_id: Option<String>,
+        instance_id: Option<String>,
+        eid: Option<String>,
+        team_id: Option<u64>,
+        username: Option<String>,
+        time_range_start: Option<String>,
+        time_range_end: Option<String>,
+    ) -> Result<u64> {
+        let ret = JobExecHistory::delete_many()
+            .apply_if(ids, |q, v| q.filter(job_exec_history::Column::Id.is_in(v)))
+            .apply_if(instance_id, |q, v| {
+                q.filter(job_exec_history::Column::InstanceId.eq(v))
+            })
+            .apply_if(schedule_id, |q, v| {
+                q.filter(job_exec_history::Column::ScheduleId.eq(v))
+            })
+            .apply_if(username, |q, v| {
+                q.filter(job_exec_history::Column::CreatedUser.eq(v))
+            })
+            .apply_if(eid, |q, v| q.filter(job_exec_history::Column::Eid.eq(v)))
+            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
+            .apply_if(time_range_start, |query, v| {
+                query.filter(job_exec_history::Column::StartTime.gt(v))
+            })
+            .apply_if(time_range_end, |query, v| {
+                query.filter(job_exec_history::Column::EndTime.gt(v))
+            })
+            .exec(&self.ctx.db)
+            .await?;
+
+        Ok(ret.rows_affected)
+    }
 }
