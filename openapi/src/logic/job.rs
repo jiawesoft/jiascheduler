@@ -9,14 +9,14 @@ mod timer;
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Set,
+    QuerySelect, QueryTrait,
 };
 use sea_query::{Expr, Query};
 
 use crate::{
     entity::{
         self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
-        job_schedule_history, prelude::*, tag_resource, team,
+        job_schedule_history, job_supervisor, job_timer, prelude::*, tag_resource, team,
     },
     state::AppContext,
 };
@@ -303,21 +303,47 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
-    pub async fn delete_job(&self, eid: String) -> Result<u64> {
-        let record = JobExecHistory::find()
-            .filter(job_exec_history::Column::Eid.eq(&eid))
+    pub async fn delete_job(&self, username: Option<String>, eid: String) -> Result<u64> {
+        if Job::find()
+            .apply_if(username, |q, v| q.filter(job::Column::Eid.eq(v)))
             .one(&self.ctx.db)
-            .await?;
-        if record.is_some() {
-            anyhow::bail!("forbidden to delete the executed jobs")
+            .await?
+            .is_none()
+        {
+            return Ok(0);
         }
 
-        let ret = Job::delete(entity::job::ActiveModel {
-            eid: Set(eid),
-            ..Default::default()
-        })
-        .exec(&self.ctx.db)
-        .await?;
+        if JobTimer::find()
+            .filter(job_timer::Column::Eid.eq(&eid))
+            .one(&self.ctx.db)
+            .await?
+            .is_some()
+        {
+            anyhow::bail!("forbidden to delete the timer's jobs")
+        }
+
+        if JobSupervisor::find()
+            .filter(job_supervisor::Column::Eid.eq(&eid))
+            .one(&self.ctx.db)
+            .await?
+            .is_some()
+        {
+            anyhow::bail!("forbidden to delete the supervisor's jobs")
+        }
+
+        JobScheduleHistory::delete_many()
+            .filter(job_schedule_history::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        let ret = Job::delete_many()
+            .filter(job::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
         Ok(ret.rows_affected)
     }
 
@@ -390,7 +416,7 @@ impl<'a> JobLogic<'a> {
                 query.filter(job_running_status::Column::JobType.eq(v))
             })
             .apply_if(created_user, |query, v| {
-                query.filter(job_running_status::Column::UpdatedUser.eq(v))
+                query.filter(job::Column::CreatedUser.eq(v))
             })
             .apply_if(bind_ip, |query, v| {
                 query.filter(instance::Column::Ip.contains(v))

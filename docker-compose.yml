@@ -1,7 +1,7 @@
 # 更新命令
 # sudo docker compose up -d
 # 更新指定服务
-# sudo docker compose up -d clash
+# sudo docker compose up -d jiascheduler-console
 # 停止命令
 # sudo docker compose stop
 # 重启命令

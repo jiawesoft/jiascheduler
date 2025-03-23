@@ -9,7 +9,9 @@ use api::{
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
 use ::migration::{Migrator, MigratorTrait};
+use chrono::Local;
 use config::Conf;
+use logic::user::UserLogic;
 use middleware::AuthMiddleware;
 use poem::{get, IntoEndpoint};
 
@@ -111,6 +113,10 @@ impl IdGenerator {
 
     fn get_id(prefix: &str) -> String {
         format!("{prefix}-{}", nanoid!(10)).into()
+    }
+
+    pub fn get_run_id() -> String {
+        Local::now().format("%Y%m%d%H%M%S").to_string()
     }
 }
 
@@ -226,6 +232,10 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     let conn = Database::connect(connect_opts.clone())
         .await
         .expect("failed connect to database");
+
+    UserLogic::init_admin(&conn, &conf.admin.username, &conf.admin.password)
+        .await
+        .context("failed initialize admin user")?;
 
     // conn.execute_unprepared(" SET time_zone = '+8:00'").await?;
 

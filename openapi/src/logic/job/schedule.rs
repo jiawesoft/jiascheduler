@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::{anyhow, Result};
 
@@ -10,6 +10,7 @@ use automate::{
 
 use evalexpr::eval_boolean;
 
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use sea_orm::{
     ActiveValue::NotSet, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, Set,
@@ -19,7 +20,7 @@ use sea_query::{OnConflict, Query};
 
 use serde_json::{json, Value};
 use tokio::fs;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     entity::{
@@ -30,7 +31,7 @@ use crate::{
     logic::{
         executor::ExecutorLogic,
         job::types::DispatchResult,
-        types::{ResourceType, UserInfo},
+        types::{CompletedCallbackOpts, CompletedCallbackTriggerType, ResourceType, UserInfo},
     },
     utils, IdGenerator,
 };
@@ -91,6 +92,81 @@ impl<'a> JobLogic<'a> {
                 };
             })
             .collect()
+    }
+
+    pub async fn completed_callback(&self, params: UpdateJobParams) -> Result<()> {
+        let (completed_callback, job_record) = match JobScheduleHistory::find()
+            .filter(job_schedule_history::Column::ScheduleId.eq(&params.schedule_id))
+            .one(&self.ctx.db)
+            .await?
+        {
+            Some(job_schedule_history::Model {
+                snapshot_data: Some(v),
+                ..
+            }) => {
+                let job_record = serde_json::from_value::<job::Model>(v)?;
+                let Some(v) = job_record.completed_callback.clone() else {
+                    return Ok(());
+                };
+
+                (
+                    serde_json::from_value::<CompletedCallbackOpts>(v)?,
+                    job_record,
+                )
+            }
+            _ => return Ok(()),
+        };
+
+        if !completed_callback.enable {
+            return Ok(());
+        }
+
+        if params.run_status != Some(RunStatus::Stop) {
+            return Ok(());
+        }
+
+        let http_client = self.ctx.http_client.clone();
+        let api_url = format!("{}", completed_callback.url);
+
+        if match completed_callback.trigger_on {
+            CompletedCallbackTriggerType::All => true,
+            CompletedCallbackTriggerType::Error => params.exit_code != Some(0),
+        } {
+            let mut header = HeaderMap::new();
+
+            if let Some(kv) = completed_callback.header {
+                kv.into_iter().for_each(|(k, v)| {
+                    let key = match HeaderName::from_str(&k) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("failed to parse header key: {}", e);
+                            return;
+                        }
+                    };
+
+                    let value = match HeaderValue::from_str(&v) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("failed to parse header value: {}", e);
+                            return;
+                        }
+                    };
+                    header.insert(key, value);
+                });
+            }
+            let mut body = serde_json::to_value(&params)?;
+            body["base_job"] = json!(job_record);
+
+            let response = http_client
+                .post(api_url)
+                .headers(header)
+                .json(&body)
+                .send()
+                .await?;
+            debug!("callback response: {:?}", response.text().await)
+        }
+
+        Ok(())
     }
 
     pub async fn update_job_status(&self, params: UpdateJobParams) -> Result<u64> {
@@ -169,6 +245,12 @@ impl<'a> JobLogic<'a> {
             .clone()
             .map_or_else(|| NotSet, |v| Set(v.to_string()));
 
+        let job_type = if params.base_job.bundle_script.is_some() {
+            "bundle"
+        } else {
+            "default"
+        };
+
         let active_model = JobRunningStatus::insert(job_running_status::ActiveModel {
             schedule_type,
             eid: Set(params.base_job.eid.clone()),
@@ -177,10 +259,7 @@ impl<'a> JobLogic<'a> {
             schedule_status,
             run_status,
             start_time: Set(params.start_time),
-            job_type: Set(params
-                .base_job
-                .bundle_script
-                .map_or("default".to_string(), |_v| "bundle".to_string())),
+            job_type: Set(job_type.to_string()),
             prev_time: Set(params.prev_time),
             updated_user: Set(params.created_user.clone()),
             ..Default::default()
@@ -199,6 +278,9 @@ impl<'a> JobLogic<'a> {
 
         match params.run_status {
             Some(RunStatus::Stop) => {
+                if let Err(e) = self.completed_callback(params.clone()).await {
+                    error!("failed to send callback request: {}", e);
+                }
                 let (bundle_script_result, job_type) = if params.bundle_output.is_some() {
                     let schedule_record = self.get_schedule(&params.schedule_id).await?.ok_or(
                         anyhow::format_err!("cannot get schedule record {}", params.schedule_id),
@@ -233,6 +315,7 @@ impl<'a> JobLogic<'a> {
                     exit_status: Set(params.exit_status.clone().unwrap_or_default()),
                     exit_code: Set(params.exit_code.unwrap_or_default()),
                     output: Set(output),
+                    run_id: Set(params.run_id),
                     eid: Set(params.base_job.eid),
                     start_time: Set(params.start_time),
                     end_time: Set(params.end_time),
@@ -243,6 +326,7 @@ impl<'a> JobLogic<'a> {
                 })
                 .exec(&self.ctx.db)
                 .await?;
+
                 Ok(ret.last_insert_id)
             }
             _ => Ok(ret.last_insert_id),
@@ -389,6 +473,7 @@ impl<'a> JobLogic<'a> {
                 max_parallel: job_record.max_parallel as u8,
                 read_code_from_stdin: false,
             },
+            run_id: IdGenerator::get_run_id(),
             instance_id: None,
             fields: None,
             restart_interval,
@@ -659,10 +744,12 @@ impl<'a> JobLogic<'a> {
         job_schedule_record: job_schedule_history::Model,
         created_user: String,
     ) -> Result<Vec<Result<DispatchResult>>> {
-        let dispatch_data: DispatchData = job_schedule_record
+        let mut dispatch_data: DispatchData = job_schedule_record
             .dispatch_data
             .ok_or(anyhow!("cannot found job dispatch data"))?
             .try_into()?;
+
+        dispatch_data.params.run_id = IdGenerator::get_run_id();
 
         let logic = automate::Logic::new(self.ctx.redis().clone());
 
@@ -962,6 +1049,7 @@ impl<'a> JobLogic<'a> {
             dispatch_params: dispatch_data.params.clone(),
         };
         body.dispatch_params.action = action.clone();
+        body.dispatch_params.run_id = IdGenerator::get_run_id();
 
         let resp = match self
             .ctx
@@ -990,6 +1078,8 @@ impl<'a> JobLogic<'a> {
         };
 
         if ret["code"] != 20000 {
+            self.update_run_status(user_info, &instance_id, &eid, action.clone())
+                .await?;
             anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 

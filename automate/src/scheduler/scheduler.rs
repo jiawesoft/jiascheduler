@@ -10,7 +10,7 @@ use crate::{
         SftpRemoveParams, SftpUploadParams, UpdateJobParams,
     },
     comet::types::SshLoginParams,
-    get_comet_addr, get_local_ip, get_mac_address,
+    get_comet_addr, get_local_ip, get_mac_address, run_id,
     scheduler::types::JobAction,
     set_comet_addr,
     ssh::{self, ConnectParams, Session},
@@ -411,6 +411,7 @@ impl
                 bind_ip: react.local_ip.clone(),
                 schedule_type: schedule_type.clone(),
                 created_user: job_params.created_user.clone(),
+                run_id: job_params.run_id.clone(),
                 start_time: Some(start_time.clone()),
                 instance_id: instance_id.clone(),
                 ..Default::default()
@@ -444,6 +445,7 @@ impl
                         end_time: Some(Local::now()),
                         created_user: job_params.created_user.clone(),
                         bundle_output,
+                        run_id: job_params.run_id.clone(),
                         ..Default::default()
                     })
                     .await?;
@@ -470,6 +472,7 @@ impl
                 end_time: Some(Local::now()),
                 created_user: job_params.created_user.clone(),
                 bundle_output: BundleOutputParams::parse(&output),
+                run_id: job_params.run_id.clone(),
                 ..Default::default()
             })
             .await?;
@@ -494,7 +497,8 @@ impl
                 let base_job = base_job.clone();
                 let (kill_signal_tx, kill_signal_rx) = channel::<()>(1);
                 let mut react_clone = react_clone.clone();
-                let dispatch_params = dispatch_params.clone();
+                let mut dispatch_params = dispatch_params.clone();
+                dispatch_params.run_id = run_id!();
 
                 Box::pin(async move {
                     let next_time = job_scheduler

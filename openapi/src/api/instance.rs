@@ -140,6 +140,17 @@ pub mod types {
         pub instance_online_num: u64,
         pub instance_offline_num: u64,
     }
+
+    #[derive(Object, Serialize, Deserialize)]
+    pub struct SaveInstanceStatusReq {
+        pub status: bool,
+        pub instance_ids: Vec<u64>,
+    }
+
+    #[derive(Object, Serialize, Deserialize)]
+    pub struct SaveInstanceStatusResp {
+        pub result: u64,
+    }
 }
 
 pub struct InstanceApi;
@@ -385,6 +396,26 @@ impl InstanceApi {
             })
             .await?;
         return_ok!(types::SaveInstanceResp { result: 0 })
+    }
+
+    #[oai(path = "/set_status", method = "post")]
+    pub async fn set_instance_status(
+        &self,
+        state: Data<&AppState>,
+        _session: &Session,
+        user_info: Data<&logic::types::UserInfo>,
+        Json(req): Json<types::SaveInstanceStatusReq>,
+    ) -> api_response!(types::SaveInstanceStatusResp) {
+        if !state.can_manage_instance(&user_info.user_id).await? {
+            return Err(NoPermission().into());
+        }
+        let result = state
+            .service()
+            .instance
+            .set_status(state.clone(), &user_info, req.instance_ids, req.status)
+            .await?;
+
+        return_ok!(types::SaveInstanceStatusResp { result })
     }
 
     #[oai(path = "/group/save", method = "post")]

@@ -22,9 +22,11 @@ struct WebapiArgs {
     #[arg(long, value_name = "FILE", default_value_t = String::from("~/.jiascheduler/console.toml"))]
     config: String,
     /// redis connect address, eg: "redis://:wang@127.0.0.1"
+    /// can be used to override configuration items in the configuration file
     #[arg(long)]
     redis_url: Option<String>,
     /// mysql connect address, eg: "mysql://root:root@localhost:3306/jiascheduler"
+    /// can be used to override configuration items in the configuration file
     #[arg(long)]
     database_url: Option<String>,
 }

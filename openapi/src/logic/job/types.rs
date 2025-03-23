@@ -38,6 +38,7 @@ pub struct RunStatusRelatedScheduleJobModel {
 pub struct ExecHistoryRelatedScheduleModel {
     pub id: u64,
     pub job_id: u64,
+    pub job_name: String,
     pub schedule_id: String,
     pub ip: String,
     pub namespace: String,
@@ -81,6 +82,7 @@ pub struct JobRelatedExecutorModel {
     pub created_user: String,
     pub updated_user: String,
     pub display_on_dashboard: bool,
+    pub completed_callback: Option<serde_json::Value>,
     pub args: Option<serde_json::Value>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
