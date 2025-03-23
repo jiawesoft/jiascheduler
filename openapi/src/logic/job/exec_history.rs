@@ -158,7 +158,6 @@ impl<'a> JobLogic<'a> {
                 q.filter(job_exec_history::Column::CreatedUser.eq(v))
             })
             .apply_if(eid, |q, v| q.filter(job_exec_history::Column::Eid.eq(v)))
-            .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
             .apply_if(time_range_start, |query, v| {
                 query.filter(job_exec_history::Column::StartTime.gt(v))
             })
