@@ -180,7 +180,6 @@ impl Executor {
                 AppendCount::new(2),
                 file_rotate::ContentLimit::Bytes(1 << 20),
                 Compression::None,
-                #[cfg(unix)]
                 None,
             ))
         };
