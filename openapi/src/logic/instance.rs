@@ -1,3 +1,4 @@
+use anyhow::Context;
 use automate::scheduler::types::SshConnectionOption;
 use chrono::Local;
 
@@ -15,6 +16,7 @@ use sea_orm::{
 use sea_query::MysqlQueryBuilder;
 use sea_query::UnionType;
 use sea_query::{ConditionType, Expr, IntoCondition, OnConflict};
+use tracing::warn;
 
 use crate::entity::instance_role;
 use crate::entity::tag;
@@ -71,26 +73,28 @@ impl<'a> InstanceLogic<'a> {
                 .filter(instance::Column::Ip.eq(&agent_ip))
                 .all(&self.ctx.db)
                 .await?;
-            if ins_vec.len() > 0 {
-                Instance::update(instance::ActiveModel {
-                    id: Set(ins_vec[0].id),
-                    mac_addr: Set(mac_addr.clone()),
-                    ..Default::default()
-                })
-                .exec(&self.ctx.db)
-                .await?;
-            }
-            if ins_vec.len() > 1 {
-                let id_vec = ins_vec.iter().map(|v| v.id).collect::<Vec<u64>>();
-                if id_vec.len() > 0 {
-                    Instance::update_many()
-                        .set(instance::ActiveModel {
-                            status: Set(0),
-                            ..Default::default()
-                        })
-                        .filter(instance::Column::Id.is_in(id_vec[1..].to_vec()))
-                        .exec(&self.ctx.db)
-                        .await?;
+            if !ins_vec.iter().any(|v| v.mac_addr == mac_addr.clone()) {
+                if ins_vec.len() > 0 {
+                    Instance::update(instance::ActiveModel {
+                        id: Set(ins_vec[0].id),
+                        mac_addr: Set(mac_addr.clone()),
+                        ..Default::default()
+                    })
+                    .exec(&self.ctx.db)
+                    .await?;
+                }
+                if ins_vec.len() > 1 {
+                    let id_vec = ins_vec.iter().map(|v| v.id).collect::<Vec<u64>>();
+                    if id_vec.len() > 0 {
+                        Instance::update_many()
+                            .set(instance::ActiveModel {
+                                status: Set(0),
+                                ..Default::default()
+                            })
+                            .filter(instance::Column::Id.is_in(id_vec[1..].to_vec()))
+                            .exec(&self.ctx.db)
+                            .await?;
+                    }
                 }
             }
         }
@@ -116,20 +120,34 @@ impl<'a> InstanceLogic<'a> {
 
         let instance_id = IdGenerator::get_instance_uid();
 
-        Instance::insert(instance::ActiveModel {
-            ip: Set(agent_ip.clone()),
-            namespace: namespace.clone().map_or(NotSet, |v| Set(v)),
-            status: Set(status),
-            instance_id: Set(instance_id),
-            mac_addr: Set(mac_addr),
-            sys_user,
-            password,
-            ssh_port,
-            ..Default::default()
-        })
-        .on_conflict(updated)
-        .exec(&self.ctx.db)
-        .await?;
+        if status == 1 {
+            let _ = Instance::insert(instance::ActiveModel {
+                ip: Set(agent_ip.clone()),
+                namespace: namespace.clone().map_or(NotSet, |v| Set(v)),
+                status: Set(status),
+                instance_id: Set(instance_id),
+                mac_addr: Set(mac_addr.clone()),
+                sys_user,
+                password,
+                ssh_port,
+                ..Default::default()
+            })
+            .on_conflict(updated)
+            .exec(&self.ctx.db)
+            .await
+            .context("failed insert instance")
+            .map_err(|v| warn!("{v:?}"));
+        } else {
+            Instance::update_many()
+                .set(instance::ActiveModel {
+                    status: Set(status),
+                    ..Default::default()
+                })
+                .filter(instance::Column::Ip.eq(&agent_ip))
+                .filter(instance::Column::MacAddr.eq(&mac_addr))
+                .exec(&self.ctx.db)
+                .await?;
+        }
 
         if status == 0 {
             return Ok(());
@@ -152,7 +170,7 @@ impl<'a> InstanceLogic<'a> {
                     anyhow::bail!("invalid assign user password")
                 }
 
-                UserServer::insert(user_server::ActiveModel {
+                let _ = UserServer::insert(user_server::ActiveModel {
                     user_id: Set(u.user_id),
                     instance_id: Set(ins.instance_id),
                     ..Default::default()
@@ -166,7 +184,9 @@ impl<'a> InstanceLogic<'a> {
                     .to_owned(),
                 )
                 .exec(&self.ctx.db)
-                .await?;
+                .await
+                .context("failed insert user server")
+                .map_err(|v| warn!("{v:?}"));
             }
         }
 

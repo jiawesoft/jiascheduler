@@ -949,7 +949,7 @@ impl<'a> JobLogic<'a> {
         match action {
             JobAction::StopSupervising | JobAction::StopTimer | JobAction::Kill => {
                 let schedule_status = if action == JobAction::StopSupervising {
-                    Set(ScheduleStatus::Supervising.to_string())
+                    Set(ScheduleStatus::Unsupervised.to_string())
                 } else if action == JobAction::StopTimer {
                     Set(ScheduleStatus::Unscheduled.to_string())
                 } else {

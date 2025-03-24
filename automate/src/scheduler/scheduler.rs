@@ -597,6 +597,31 @@ impl
     ) -> Result<Value> {
         let eid = dispatch_params.base_job.eid.clone();
         let (tx, mut rx) = unbounded_channel();
+        let instance_id = dispatch_params
+            .instance_id
+            .to_owned()
+            .ok_or(anyhow!("not found instance_id in params"))?;
+        let _ = react
+            .send_update_job_msg(UpdateJobParams {
+                base_job: dispatch_params.base_job.to_pure_job(),
+                schedule_status: Some(types::ScheduleStatus::Supervising),
+                run_status: None,
+                schedule_id: dispatch_params.schedule_id.clone(),
+                instance_id,
+                exit_status: None,
+                exit_code: None,
+                stdout: None,
+                stderr: None,
+                next_time: None,
+                bind_namespace: react.namespace.clone(),
+                bind_ip: react.local_ip.clone(),
+                schedule_type: Some(ScheduleType::Daemon),
+                created_user: dispatch_params.created_user.clone(),
+                start_time: None,
+                ..Default::default()
+            })
+            .await?;
+
         if !react.start_supervising(eid.clone(), tx).await {
             return Ok(json!(null));
         }
@@ -661,7 +686,7 @@ impl
                 next_time: None,
                 bind_namespace: react.namespace.clone(),
                 bind_ip: react.local_ip.clone(),
-                schedule_type: Some(ScheduleType::Timer),
+                schedule_type: Some(ScheduleType::Daemon),
                 created_user: dispatch_params.created_user,
                 start_time: None,
                 ..Default::default()

@@ -141,7 +141,7 @@ impl<'a> JobLogic<'a> {
         schedule_id: Option<String>,
         instance_id: Option<String>,
         eid: Option<String>,
-        team_id: Option<u64>,
+        _team_id: Option<u64>,
         username: Option<String>,
         time_range_start: Option<String>,
         time_range_end: Option<String>,
