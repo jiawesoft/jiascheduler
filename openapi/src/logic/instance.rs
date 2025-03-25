@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use automate::scheduler::types::SshConnectionOption;
 use chrono::Local;
 
+use chrono::Utc;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
 use sea_orm::DbBackend;
@@ -479,6 +482,36 @@ impl<'a> InstanceLogic<'a> {
             .fetch_page(page)
             .await?;
         Ok((list, total))
+    }
+
+    pub async fn offline_inactive_instance(&self, secs: u64) -> Result<()> {
+        let sub = Utc::now() - Duration::from_secs(secs);
+        let ret = Instance::find()
+            .filter(instance::Column::UpdatedTime.lt(sub.naive_utc()))
+            .filter(instance::Column::Status.eq(true))
+            .all(&self.ctx.db)
+            .await?;
+
+        let logic = automate::Logic::new(self.ctx.redis().clone());
+
+        for ins in ret {
+            if logic
+                .get_link_pair(ins.ip.clone(), ins.mac_addr.clone())
+                .await
+                .is_err()
+            {
+                Instance::update(instance::ActiveModel {
+                    id: Set(ins.id),
+                    status: Set(0),
+                    ..Default::default()
+                })
+                .filter(instance::Column::Status.eq(true))
+                .exec(&self.ctx.db)
+                .await?;
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn get_instance_summary(

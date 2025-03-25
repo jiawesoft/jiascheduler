@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use automate::{
     bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams},
     bus::{Bus, Msg},
@@ -7,12 +7,22 @@ use tracing::{error, info};
 
 use crate::AppState;
 
-async fn heartbeat(state: AppState, msg: HeartbeatParams) -> Result<()> {
+async fn heartbeat(mut state: AppState, msg: HeartbeatParams) -> Result<()> {
     state
         .service()
         .instance
         .update_instance(msg.mac_addr, msg.source_ip)
         .await?;
+
+    if state.can_execute().await {
+        let svc = state.service();
+        let _ = svc
+            .instance
+            .offline_inactive_instance(600)
+            .await
+            .context("failed offline inactive instance")
+            .map_err(|e| error!("{e:?}"));
+    }
     Ok(())
 }
 

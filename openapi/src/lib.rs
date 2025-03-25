@@ -261,6 +261,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
         .conf(conf.clone())
         .redis(client)
         .enforcer(e)
+        .rate_limit(600)
         .http_client(
             reqwest::Client::builder()
                 .default_headers(headers)

@@ -16,9 +16,11 @@ use redis::Client;
 use rustc_serialize::hex::{FromHex, ToHex};
 use sea_orm::DatabaseConnection;
 use simple_crypt::{decrypt, encrypt};
+use tokio::time::Instant;
 
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 pub struct Service<'a> {
@@ -65,6 +67,7 @@ pub struct AppContextBuilder {
     conf: Option<Conf>,
     http_client: Option<reqwest::Client>,
     enforcer: Option<Arc<RwLock<Enforcer>>>,
+    rate_limiter: Option<RateLimiter>,
 }
 
 impl AppContextBuilder {
@@ -84,6 +87,10 @@ impl AppContextBuilder {
     }
     pub fn http_client(mut self, client: reqwest::Client) -> Self {
         self.http_client = Some(client);
+        self
+    }
+    pub fn rate_limit(mut self, secs: u64) -> Self {
+        self.rate_limiter = Some(RateLimiter::new(secs));
         self
     }
 
@@ -108,7 +115,35 @@ impl AppContextBuilder {
             enforcer: self
                 .enforcer
                 .ok_or(anyhow::anyhow!("enforcer is required"))?,
+            rate_limiter: Arc::new(RwLock::new(
+                self.rate_limiter
+                    .ok_or(anyhow::anyhow!("rate limiter is required"))?,
+            )),
         })
+    }
+}
+
+pub struct RateLimiter {
+    last_executed: Instant,
+    interval: Duration,
+}
+
+impl RateLimiter {
+    pub fn new(interval_secs: u64) -> Self {
+        RateLimiter {
+            last_executed: Instant::now() - Duration::from_secs(interval_secs),
+            interval: Duration::from_secs(interval_secs),
+        }
+    }
+
+    pub fn can_execute(&mut self) -> bool {
+        let now = Instant::now();
+        if now.duration_since(self.last_executed) >= self.interval {
+            self.last_executed = now;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -117,6 +152,7 @@ pub struct AppContext {
     pub db: DatabaseConnection,
     redis: Client,
     pub conf: Conf,
+    rate_limiter: Arc<RwLock<RateLimiter>>,
     pub http_client: reqwest::Client,
     pub enforcer: Arc<RwLock<Enforcer>>,
 }
@@ -129,6 +165,7 @@ impl AppContext {
             redis: None,
             conf: None,
             http_client: None,
+            rate_limiter: None,
         }
     }
 
@@ -148,6 +185,11 @@ impl AppContext {
 
     pub fn redis(&self) -> Client {
         self.redis.clone()
+    }
+
+    pub async fn can_execute(&mut self) -> bool {
+        let mut limiter = self.rate_limiter.write().await;
+        limiter.can_execute()
     }
 
     pub fn encrypt(&self, data: String) -> Result<String> {
