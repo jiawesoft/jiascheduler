@@ -198,7 +198,14 @@ pub async fn proxy_webssh(
             }
         };
 
-        let password = match state_clone.decrypt(instance_record.password.unwrap_or_default()) {
+        let Some(password_raw) = instance_record.password else {
+            return_err_to_wsconn!(
+                clientsink,
+                format!("Notice: please set the instance password first")
+            );
+        };
+
+        let password = match state_clone.decrypt(password_raw) {
             Ok(v) => v,
             Err(e) => {
                 return_err_to_wsconn!(
@@ -208,16 +215,12 @@ pub async fn proxy_webssh(
             }
         };
 
-        let user = if let Some(v) = instance_record.sys_user {
-            v
-        } else {
-            return_err_to_wsconn!(clientsink, "Notice: failed get system user");
+        let Some(user) = instance_record.sys_user  else {
+            return_err_to_wsconn!(clientsink, "Notice: please set the system user first");
         };
 
-        let port = if let Some(v) = instance_record.ssh_port {
-            v
-        } else {
-            return_err_to_wsconn!(clientsink, "Notice: failed get system ssh port");
+        let Some(port) =  instance_record.ssh_port else {
+            return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
         };
 
         let uri = format!(
