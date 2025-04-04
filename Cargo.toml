@@ -1,5 +1,11 @@
 [workspace]
-members = ["automate", "openapi", "openapi-derive", "migration"]
+members = [
+    "automate",
+    "openapi",
+    "openapi-derive",
+    "migration",
+    "crates/leader-election",
+]
 
 [package]
 name = "jiascheduler"
@@ -129,6 +135,7 @@ rust-crypto = "*"
 automate = { path = "automate" }
 openapi = { path = "openapi" }
 migration = { path = "migration" }
+leader-election = { path = "crates/leader-election" }
 sea-query = "0.32.2"
 rust-embed = "*"
 reqwest = { version = "*", features = ["json"] }

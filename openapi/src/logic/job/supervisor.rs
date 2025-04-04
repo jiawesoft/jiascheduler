@@ -1,8 +1,11 @@
 use crate::{
-    entity::{executor, job, job_supervisor, prelude::*, tag_resource, team},
+    entity::{
+        executor, instance, job, job_running_status, job_supervisor, prelude::*, tag_resource, team,
+    },
     logic::types::ResourceType,
 };
 use anyhow::Result;
+use automate::scheduler::types::{RunStatus, ScheduleStatus, ScheduleType};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, QueryTrait,
@@ -117,5 +120,48 @@ impl<'a> JobLogic<'a> {
             .exec(&self.ctx.db)
             .await?;
         Ok(ret.rows_affected)
+    }
+
+    pub async fn fix_running_status(&self, ip: &str, mac_addr: &str) -> Result<()> {
+        let instance_ids = Instance::find()
+            .filter(instance::Column::Ip.eq(ip))
+            .filter(instance::Column::MacAddr.eq(mac_addr))
+            .select_only()
+            .column(instance::Column::InstanceId)
+            .into_tuple::<String>()
+            .all(&self.ctx.db)
+            .await?;
+        if instance_ids.is_empty() {
+            return Ok(());
+        }
+
+        let _ = JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                schedule_status: sea_orm::ActiveValue::Set(
+                    ScheduleStatus::Unsupervised.to_string(),
+                ),
+                run_status: sea_orm::ActiveValue::Set(RunStatus::Stop.to_string()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::InstanceId.is_in(instance_ids.clone()))
+            .filter(job_running_status::Column::ScheduleType.eq(ScheduleType::Daemon.to_string()))
+            .filter(
+                job_running_status::Column::ScheduleStatus
+                    .eq(ScheduleStatus::Supervising.to_string()),
+            )
+            .exec(&self.ctx.db)
+            .await?;
+
+        let _ = JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                run_status: sea_orm::ActiveValue::Set(RunStatus::Stop.to_string()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::InstanceId.is_in(instance_ids))
+            .filter(job_running_status::Column::ScheduleType.eq(ScheduleType::Once.to_string()))
+            .exec(&self.ctx.db)
+            .await?;
+
+        Ok(())
     }
 }

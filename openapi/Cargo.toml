@@ -55,6 +55,8 @@ git-version.workspace = true
 http.workspace = true
 tokio-tungstenite.workspace = true
 sql-builder.workspace = true
+leader-election.workspace = true
+
 
 [target.'cfg(unix)'.dependencies]
 termion = "*"

@@ -6,7 +6,11 @@ use automate::{
     bus::{Bus, Msg},
 };
 
-use tokio::time::sleep;
+use leader_election::LeaderElection;
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::sleep,
+};
 use tracing::{error, info};
 
 use crate::AppState;
@@ -15,14 +19,14 @@ async fn heartbeat(mut state: AppState, msg: HeartbeatParams) -> Result<()> {
     state
         .service()
         .instance
-        .update_instance(msg.mac_addr, msg.source_ip)
+        .set_instance_online(msg.mac_addr, msg.source_ip)
         .await?;
 
     if state.can_execute().await {
         let svc = state.service();
         let _ = svc
             .instance
-            .offline_inactive_instance(600)
+            .offline_inactive_instance(60)
             .await
             .context("failed offline inactive instance")
             .map_err(|e| error!("{e:?}"));
@@ -50,6 +54,11 @@ async fn agent_online(state: AppState, msg: AgentOnlineParams) -> Result<()> {
             "start initialize runnable job on {}:{}",
             msg.agent_ip, msg.namespace,
         );
+        svc.job
+            .fix_running_status(&msg.agent_ip, &msg.mac_addr)
+            .await
+            .map_or_else(|v| error!("failed fix running_status, {v:?}"), |n| n);
+
         if let Err(e) = svc
             .job
             .dispatch_runnable_job_to_endpoint(
@@ -79,8 +88,36 @@ async fn agent_offline(state: AppState, msg: AgentOfflineParams) -> Result<()> {
         .await?)
 }
 
+pub async fn instance_health_check(state: AppState) {
+    tokio::spawn(async move {
+        let mut l = LeaderElection::new(state.redis(), "jiascheduler:leader_election", 60)
+            .expect("failed initialize leader election");
+
+        l.run_election(|ok| {
+            let state = state.clone();
+            Box::pin(async move {
+                if ok {
+                    let svc = state.service();
+                    let _ = svc
+                        .instance
+                        .offline_inactive_instance(60)
+                        .await
+                        .context("failed offline inactive instance")
+                        .map_err(|e| error!("{e:?}"));
+                }
+
+                ()
+            })
+        })
+        .await
+        .expect("faild run leader election");
+    });
+}
+
 pub async fn start(state: AppState) -> Result<()> {
     let bus = Bus::new(state.redis().clone());
+
+    instance_health_check(state.clone()).await;
 
     tokio::spawn(async move {
         loop {

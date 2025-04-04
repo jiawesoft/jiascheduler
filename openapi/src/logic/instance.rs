@@ -196,7 +196,7 @@ impl<'a> InstanceLogic<'a> {
         Ok(())
     }
 
-    pub async fn update_instance(&mut self, mac_addr: String, ip: String) -> Result<u64> {
+    pub async fn set_instance_online(&mut self, mac_addr: String, ip: String) -> Result<u64> {
         let ret = Instance::update_many()
             .set(instance::ActiveModel {
                 status: Set(1),
