@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use automate::{
@@ -7,30 +7,18 @@ use automate::{
 };
 
 use leader_election::LeaderElection;
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::sleep,
-};
+use tokio::{sync::RwLock, time::sleep};
 use tracing::{error, info};
 
 use crate::AppState;
 
-async fn heartbeat(mut state: AppState, msg: HeartbeatParams) -> Result<()> {
+async fn heartbeat(state: AppState, msg: HeartbeatParams) -> Result<()> {
     state
         .service()
         .instance
         .set_instance_online(msg.mac_addr, msg.source_ip)
         .await?;
 
-    if state.can_execute().await {
-        let svc = state.service();
-        let _ = svc
-            .instance
-            .offline_inactive_instance(60)
-            .await
-            .context("failed offline inactive instance")
-            .map_err(|e| error!("{e:?}"));
-    }
     Ok(())
 }
 
@@ -89,14 +77,21 @@ async fn agent_offline(state: AppState, msg: AgentOfflineParams) -> Result<()> {
 }
 
 pub async fn instance_health_check(state: AppState) {
+    let is_master = Arc::new(RwLock::new(false));
+    let state_clone = state.clone();
+    let is_master_clone = is_master.clone();
     tokio::spawn(async move {
-        let mut l = LeaderElection::new(state.redis(), "jiascheduler:leader_election", 60)
+        let mut l = LeaderElection::new(state_clone.redis(), "jiascheduler:leader_election", 60)
             .expect("failed initialize leader election");
 
         l.run_election(|ok| {
-            let state = state.clone();
+            let state = state_clone.clone();
+            let is_master_clone = is_master_clone.clone();
             Box::pin(async move {
+                let mut val = is_master_clone.write().await;
+                *val = ok;
                 if ok {
+                    info!("got leader election result {ok}");
                     let svc = state.service();
                     let _ = svc
                         .instance
@@ -111,6 +106,24 @@ pub async fn instance_health_check(state: AppState) {
         })
         .await
         .expect("faild run leader election");
+    });
+
+    tokio::spawn(async move {
+        let svc = state.service();
+        loop {
+            let ok = is_master.read().await;
+            if *ok {
+                info!("start offline inactive instance");
+                let _ = svc
+                    .instance
+                    .offline_inactive_instance(60)
+                    .await
+                    .context("failed offline inactive instance")
+                    .map_err(|e| error!("{e:?}"));
+
+                sleep(Duration::from_secs(30)).await;
+            }
+        }
     });
 }
 

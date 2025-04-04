@@ -185,6 +185,7 @@ mod types {
         pub team_id: Option<u64>,
         pub team_name: Option<String>,
         pub instance_id: String,
+        pub is_online: bool,
         pub bind_ip: String,
         pub bind_namespace: String,
         pub schedule_type: String,
@@ -1026,6 +1027,7 @@ impl JobApi {
             .map(|v| types::RunRecord {
                 id: v.id,
                 instance_id: v.instance_id,
+                is_online: v.is_online,
                 eid: v.eid,
                 executor_id: v.executor_id,
                 executor_name: v.executor_name,

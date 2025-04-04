@@ -32,6 +32,7 @@ pub struct RunStatusRelatedScheduleJobModel {
     pub prev_time: Option<DateTimeLocal>,
     pub updated_user: String,
     pub updated_time: DateTimeLocal,
+    pub is_online: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]

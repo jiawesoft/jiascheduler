@@ -364,6 +364,7 @@ impl<'a> JobLogic<'a> {
             .column_as(job::Column::Id, "job_id")
             .column_as(instance::Column::Ip, "bind_ip")
             .column_as(instance::Column::Namespace, "bind_namespace")
+            .column_as(instance::Column::Status, "is_online")
             .column_as(job_schedule_history::Column::Name, "schedule_name")
             .column_as(job_schedule_history::Column::DispatchData, "dispatch_data")
             .column_as(executor::Column::Name, "executor_name")
