@@ -1,8 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use automate::{
     bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams},
     bus::{Bus, Msg},
 };
+
+use tokio::time::sleep;
 use tracing::{error, info};
 
 use crate::AppState;
@@ -100,6 +104,7 @@ pub async fn start(state: AppState) -> Result<()> {
                 .await;
             if let Err(e) = ret {
                 error!("failed to recv bus msg - {e}");
+                sleep(Duration::from_millis(500)).await;
             }
             info!("restart recv bus msg");
         }
