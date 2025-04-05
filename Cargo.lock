@@ -2302,7 +2302,7 @@ checksum = "b1a46d1a171d865aa5f83f92695765caa047a9b4cbae2cbf37dbd613a793fd4c"
 
 [[package]]
 name = "jiascheduler"
-version = "1.0.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "automate",
