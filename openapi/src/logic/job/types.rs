@@ -56,6 +56,7 @@ pub struct ExecHistoryRelatedScheduleModel {
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
     pub schedule_name: String,
+    pub is_online: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]

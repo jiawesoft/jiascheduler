@@ -40,6 +40,7 @@ impl<'a> JobLogic<'a> {
             .column_as(job::Column::Name, "job_name")
             .column(instance::Column::Ip)
             .column(instance::Column::Namespace)
+            .column_as(instance::Column::Status, "is_online")
             .join_rev(
                 JoinType::LeftJoin,
                 Job::belongs_to(JobExecHistory)
