@@ -81,26 +81,15 @@ pub async fn instance_health_check(state: AppState) {
     let state_clone = state.clone();
     let is_master_clone = is_master.clone();
     tokio::spawn(async move {
-        let mut l = LeaderElection::new(state_clone.redis(), "jiascheduler:leader_election", 60)
+        let mut l = LeaderElection::new(state_clone.redis(), "jiascheduler:leader_election", 10)
             .expect("failed initialize leader election");
 
         l.run_election(|ok| {
-            let state = state_clone.clone();
             let is_master_clone = is_master_clone.clone();
             Box::pin(async move {
+                info!("got leader election result {ok}");
                 let mut val = is_master_clone.write().await;
                 *val = ok;
-                if ok {
-                    info!("got leader election result {ok}");
-                    let svc = state.service();
-                    let _ = svc
-                        .instance
-                        .offline_inactive_instance(60)
-                        .await
-                        .context("failed offline inactive instance")
-                        .map_err(|e| error!("{e:?}"));
-                }
-
                 ()
             })
         })
@@ -122,6 +111,8 @@ pub async fn instance_health_check(state: AppState) {
                     .map_err(|e| error!("{e:?}"));
 
                 sleep(Duration::from_secs(30)).await;
+            } else {
+                sleep(Duration::from_secs(1)).await;
             }
         }
     });
