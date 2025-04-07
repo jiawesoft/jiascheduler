@@ -3,6 +3,7 @@ use crate::entity::{
 };
 use crate::logic::types::ResourceType;
 use anyhow::Result;
+use automate::scheduler::types::ScheduleType;
 use sea_orm::{
     ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait,
@@ -140,14 +141,37 @@ impl<'a> JobLogic<'a> {
         &self,
         ids: Option<Vec<u64>>,
         schedule_id: Option<String>,
+        schedule_type: Option<ScheduleType>,
         instance_id: Option<String>,
         eid: Option<String>,
-        _team_id: Option<u64>,
+        team_id: Option<u64>,
         username: Option<String>,
         time_range_start: Option<String>,
         time_range_end: Option<String>,
     ) -> Result<u64> {
         let ret = JobExecHistory::delete_many()
+            .apply_if(schedule_type, |q, v| {
+                q.filter(
+                    job_exec_history::Column::ScheduleId.in_subquery(
+                        Query::select()
+                            .column(job_schedule_history::Column::ScheduleId)
+                            .from(job_schedule_history::Entity)
+                            .and_where(job_schedule_history::Column::ScheduleType.eq(v.to_string()))
+                            .to_owned(),
+                    ),
+                )
+            })
+            .apply_if(team_id, |q, v| {
+                q.filter(
+                    job_exec_history::Column::Eid.in_subquery(
+                        Query::select()
+                            .column(job::Column::Eid)
+                            .from(job::Entity)
+                            .and_where(job::Column::TeamId.eq(v))
+                            .to_owned(),
+                    ),
+                )
+            })
             .apply_if(ids, |q, v| q.filter(job_exec_history::Column::Id.is_in(v)))
             .apply_if(instance_id, |q, v| {
                 q.filter(job_exec_history::Column::InstanceId.eq(v))

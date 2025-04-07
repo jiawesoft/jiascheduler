@@ -42,6 +42,7 @@ impl<'a> TeamLogic<'a> {
             .await?)
     }
 
+    // only global admin and team admin can delete job, if team_id is None and not global admin, return false
     pub async fn can_delete_job(&self, team_id: Option<u64>, user_id: &str) -> Result<bool> {
         let ret = self.ctx.can_manage_job(&user_id).await?;
         if ret {

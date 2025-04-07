@@ -11,7 +11,7 @@ use crate::{
     return_err, return_ok, AppState, IdGenerator,
 };
 
-use automate::JobAction;
+use automate::{scheduler::types::ScheduleType, JobAction};
 use poem::{session::Session, web::Data, Endpoint, EndpointExt, Result};
 use poem_openapi::{
     param::{Header, Query},
@@ -582,6 +582,7 @@ mod types {
     pub struct DeleteExecHistoryReq {
         pub eid: Option<String>,
         pub schedule_id: Option<String>,
+        pub schedule_type: Option<String>,
         pub ids: Option<Vec<u64>>,
         pub instance_id: Option<String>,
         pub time_range_start: Option<String>,
@@ -1305,6 +1306,11 @@ impl JobApi {
         Json(req): Json<types::DeleteExecHistoryReq>,
         _session: &Session,
     ) -> api_response!(types::DeleteExecHistoryResp) {
+        let schedule_type: Option<ScheduleType> = req
+            .schedule_type
+            .map(|v| v.as_str().try_into())
+            .transpose()?;
+
         let svc = state.service();
         let username = if !svc
             .team
@@ -1325,6 +1331,7 @@ impl JobApi {
             .delete_exec_history(
                 req.ids,
                 req.schedule_id,
+                schedule_type,
                 req.instance_id,
                 req.eid,
                 team_id,
