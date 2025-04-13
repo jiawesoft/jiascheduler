@@ -57,6 +57,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job_supervisor::Column::IsDeleted.eq(false))
             .apply_if(name, |query, v| {
                 query.filter(job_supervisor::Column::Name.contains(v))
             })

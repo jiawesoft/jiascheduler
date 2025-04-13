@@ -55,6 +55,7 @@ impl<'a> JobLogic<'a> {
                     .to(job_bundle_script::Column::TeamId)
                     .into(),
             )
+            .filter(job_bundle_script::Column::IsDeleted.eq(false))
             .apply_if(username, |q, v| {
                 q.filter(job_bundle_script::Column::CreatedUser.eq(v))
             })

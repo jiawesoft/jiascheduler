@@ -513,6 +513,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job::Column::IsDeleted.eq(false))
             .apply_if(created_user, |query, v| {
                 query.filter(job::Column::CreatedUser.eq(v))
             })
@@ -569,6 +570,7 @@ impl<'a> JobLogic<'a> {
     pub async fn delete_job(&self, user_info: &UserInfo, eid: String) -> Result<u64> {
         if JobTimer::find()
             .filter(job_timer::Column::Eid.eq(&eid))
+            .filter(job_timer::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .is_some()
@@ -578,6 +580,7 @@ impl<'a> JobLogic<'a> {
 
         if JobSupervisor::find()
             .filter(job_supervisor::Column::Eid.eq(&eid))
+            .filter(job_supervisor::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .is_some()
@@ -694,6 +697,8 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job::Column::IsDeleted.eq(false))
+            .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_running_status::Column::ScheduleType.eq(v))
             })

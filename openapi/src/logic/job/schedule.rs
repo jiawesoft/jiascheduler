@@ -393,7 +393,8 @@ impl<'a> JobLogic<'a> {
         }
 
         let job_record = Job::find()
-            .filter(entity::job::Column::Eid.eq(eid.clone()))
+            .filter(job::Column::Eid.eq(eid.clone()))
+            .filter(job::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .ok_or(anyhow!("cannot found job {}", eid))?;
@@ -889,6 +890,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(created_user, |q, v| {
                 q.filter(job_schedule_history::Column::CreatedUser.eq(v))
             })
@@ -1114,9 +1116,10 @@ impl<'a> JobLogic<'a> {
     pub async fn get_schedule(
         &self,
         schedule_id: &str,
-    ) -> Result<Option<entity::job_schedule_history::Model>> {
+    ) -> Result<Option<job_schedule_history::Model>> {
         let ret = JobScheduleHistory::find()
-            .filter(entity::job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?;
 
