@@ -1320,7 +1320,17 @@ impl JobApi {
 
         let result = svc
             .job
-            .delete_exec_history(None, req.schedule_id, None, None, None, None, None, None)
+            .delete_exec_history(
+                None,
+                req.schedule_id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
             .await?;
 
         return_ok!(types::DeleteScheduleHistoryResp { result })

@@ -8,7 +8,7 @@ mod supervisor;
 mod timer;
 
 use automate::scheduler::types::ScheduleType;
-use chrono::{Local, Utc};
+use chrono::Local;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait,
@@ -17,9 +17,8 @@ use sea_query::{Expr, Query};
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
-        job_schedule_history, job_supervisor, job_timer, prelude::*, tag_resource, team,
-        team_member,
+        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
+        job_supervisor, job_timer, prelude::*, tag_resource, team, team_member,
     },
     state::AppContext,
 };

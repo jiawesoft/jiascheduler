@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     job::types::TeamMemberModel,
-    types::{self, TeamRecord, UserInfo},
+    types::{self, TeamRecord},
 };
 
 #[derive(Clone)]
