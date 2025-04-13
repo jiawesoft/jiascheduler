@@ -946,6 +946,7 @@ impl<'a> JobLogic<'a> {
         user_info: &UserInfo,
         instance_id: &str,
         eid: &str,
+        schedule_type: ScheduleType,
         action: JobAction,
     ) -> Result<()> {
         match action {
@@ -967,6 +968,7 @@ impl<'a> JobLogic<'a> {
                     })
                     .filter(job_running_status::Column::InstanceId.eq(instance_id))
                     .filter(job_running_status::Column::Eid.eq(eid))
+                    .filter(job_running_status::Column::ScheduleType.eq(schedule_type.to_string()))
                     .exec(&self.ctx.db)
                     .await?;
             }
@@ -1034,10 +1036,17 @@ impl<'a> JobLogic<'a> {
 
         let logic = automate::Logic::new(self.ctx.redis());
         let eid = schedule_record.eid.clone();
+        let schedule_type = ScheduleType::try_from(schedule_record.schedule_type.as_str())?;
 
         let Ok(pair) = logic.get_link_pair(&ins.ip, &ins.mac_addr).await else {
-            self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                .await?;
+            self.update_run_status(
+                user_info,
+                &instance_id,
+                &eid,
+                schedule_type.clone(),
+                action.clone(),
+            )
+            .await?;
             anyhow::bail!("Unable to find agent registration information.");
         };
 
@@ -1064,8 +1073,14 @@ impl<'a> JobLogic<'a> {
         {
             Ok(v) => v,
             Err(e) => {
-                self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                    .await?;
+                self.update_run_status(
+                    user_info,
+                    &instance_id,
+                    &eid,
+                    schedule_type.clone(),
+                    action.clone(),
+                )
+                .await?;
                 anyhow::bail!("failed dispatch job, {e}");
             }
         };
@@ -1073,15 +1088,27 @@ impl<'a> JobLogic<'a> {
         let ret: Value = match resp.json::<serde_json::Value>().await {
             Ok(v) => v,
             Err(e) => {
-                self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                    .await?;
+                self.update_run_status(
+                    user_info,
+                    &instance_id,
+                    &eid,
+                    schedule_type.clone(),
+                    action.clone(),
+                )
+                .await?;
                 anyhow::bail!("failed dispatch job, {e}");
             }
         };
 
         if ret["code"] != 20000 {
-            self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                .await?;
+            self.update_run_status(
+                user_info,
+                &instance_id,
+                &eid,
+                schedule_type.clone(),
+                action.clone(),
+            )
+            .await?;
             anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 
