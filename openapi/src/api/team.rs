@@ -145,7 +145,7 @@ impl TeamApi {
         user_info: Data<&logic::types::UserInfo>,
     ) -> api_response!(types::QueryTeamResp) {
         let svc = state.service();
-        let username = if svc.team.can_write_job(None, &user_info.user_id).await? {
+        let username = if svc.job.can_write_job(&user_info, None, None).await? {
             username
         } else {
             Some(user_info.username.clone())

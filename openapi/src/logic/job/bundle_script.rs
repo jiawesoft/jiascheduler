@@ -3,7 +3,10 @@ use crate::entity::job;
 use crate::entity::job_bundle_script;
 use crate::entity::prelude::*;
 use crate::entity::team;
+use crate::logic::types::UserInfo;
 use anyhow::Result;
+use chrono::Local;
+use sea_orm::ActiveValue::Set;
 use sea_orm::Condition;
 use sea_orm::JoinType;
 use sea_orm::QuerySelect;
@@ -82,7 +85,7 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
-    pub async fn delete_bundle_script(&self, username: Option<String>, eid: String) -> Result<u64> {
+    pub async fn delete_bundle_script(&self, user_info: &UserInfo, eid: String) -> Result<u64> {
         let cond = Condition::all().add(Expr::cust_with_values(
             "JSON_CONTAIN(bunle_script, ?)",
             vec![serde_json::json!({ "eid": eid.clone() })],
@@ -97,9 +100,12 @@ impl<'a> JobLogic<'a> {
             anyhow::bail!("this bundle script is used by job");
         }
 
-        let ret = JobBundleScript::delete_many()
-            .apply_if(username, |q, v| {
-                q.filter(job_bundle_script::Column::CreatedUser.eq(v))
+        let ret = JobBundleScript::update_many()
+            .set(job_bundle_script::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
             })
             .filter(job_bundle_script::Column::Eid.eq(eid))
             .exec(&self.ctx.db)

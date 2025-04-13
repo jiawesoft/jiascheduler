@@ -1,14 +1,16 @@
 use crate::{
     entity::{
-        executor, instance, job, job_running_status, job_supervisor, prelude::*, tag_resource, team,
+        executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
+        job_supervisor, prelude::*, tag_resource, team,
     },
-    logic::types::ResourceType,
+    logic::types::{ResourceType, UserInfo},
 };
 use anyhow::Result;
 use automate::scheduler::types::{RunStatus, ScheduleStatus, ScheduleType};
+use chrono::Local;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 use sea_query::Query;
 
@@ -111,14 +113,58 @@ impl<'a> JobLogic<'a> {
         Ok(active_model.save(&self.ctx.db).await?)
     }
 
-    pub async fn delete_job_supervisor(&self, username: Option<String>, id: u64) -> Result<u64> {
-        let ret = JobSupervisor::delete_many()
-            .apply_if(username.clone(), |q, v| {
-                q.filter(job_supervisor::Column::CreatedUser.eq(v))
+    pub async fn delete_job_supervisor(&self, user_info: &UserInfo, id: u64) -> Result<u64> {
+        let job_supervisor_record = JobSupervisor::find()
+            .filter(job_supervisor::Column::Id.eq(id))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow::anyhow!(
+                "cannot found this job's supervisor by id {id}"
+            ))?;
+
+        let ret = JobSupervisor::update_many()
+            .set(job_supervisor::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
             })
             .filter(job_supervisor::Column::Id.eq(id))
             .exec(&self.ctx.db)
             .await?;
+
+        JobScheduleHistory::update_many()
+            .set(job_schedule_history::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_schedule_history::Column::Eid.eq(&job_supervisor_record.eid))
+            .filter(job_schedule_history::Column::ScheduleType.eq(ScheduleType::Daemon.to_string()))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(&job_supervisor_record.eid))
+            .filter(
+                Condition::any().add(
+                    job_exec_history::Column::ScheduleId.in_subquery(
+                        Query::select()
+                            .column(job_schedule_history::Column::ScheduleId)
+                            .and_where(
+                                job_schedule_history::Column::ScheduleType
+                                    .eq(ScheduleType::Daemon.to_string()),
+                            )
+                            .and_where(job_schedule_history::Column::IsDeleted.eq(true))
+                            .from(JobScheduleHistory)
+                            .to_owned(),
+                    ),
+                ),
+            )
+            .exec(&self.ctx.db)
+            .await?;
+
         Ok(ret.rows_affected)
     }
 

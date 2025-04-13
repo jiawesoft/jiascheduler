@@ -53,8 +53,8 @@ where
 
         let ok = state
             .service()
-            .team
-            .can_write_job(team_id, &user_info.user_id)
+            .job
+            .can_write_job(&user_info, team_id, None)
             .await?;
         if !ok {
             return Ok(resp);
