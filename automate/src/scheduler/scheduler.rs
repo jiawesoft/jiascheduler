@@ -64,8 +64,13 @@ pub struct React {
     local_ip: String,
     client_key: String,
     schedule_uuid_mapping: Arc<Mutex<HashMap<String, Uuid>>>,
-    supervisor_jobs: Arc<Mutex<HashMap<String, UnboundedSender<()>>>>,
+    supervisor_jobs: Arc<Mutex<HashMap<String, UnboundedSender<SupervisorSignal>>>>,
     kill_signal_mapping: Arc<Mutex<HashMap<String, Vec<Sender<()>>>>>,
+}
+
+pub enum SupervisorSignal {
+    UpdateRestartInterval(Duration),
+    Exit,
 }
 
 impl React {
@@ -156,9 +161,17 @@ impl React {
         Ok(())
     }
 
-    async fn start_supervising(&mut self, eid: String, tx: UnboundedSender<()>) -> bool {
+    async fn update_supervising(
+        &mut self,
+        eid: String,
+        restart_interval: Duration,
+        tx: UnboundedSender<SupervisorSignal>,
+    ) -> bool {
         let mut jobs = self.supervisor_jobs.lock().await;
-        if jobs.contains_key(&eid) {
+        if let Some(v) = jobs.get(&eid) {
+            let _ = v
+                .send(SupervisorSignal::UpdateRestartInterval(restart_interval))
+                .map_err(|v| error!("failed update supervising job options, {v:?}"));
             false
         } else {
             jobs.insert(eid, tx);
@@ -175,7 +188,9 @@ impl React {
         let mut jobs = self.supervisor_jobs.lock().await;
         let val = jobs.remove(eid);
         if let Some(supervisor_job) = val {
-            let _ = supervisor_job.send(());
+            let _ = supervisor_job
+                .send(SupervisorSignal::Exit)
+                .map_err(|v| error!("failed stop supervising job, {v:?}"));
         }
         Ok(())
     }
@@ -622,25 +637,28 @@ impl
             })
             .await?;
 
-        if !react.start_supervising(eid.clone(), tx).await {
+        let dur = dispatch_params
+            .restart_interval
+            .map_or(Duration::from_secs(1), |v| {
+                if v.as_secs() > 0 {
+                    v
+                } else {
+                    Duration::from_secs(1)
+                }
+            });
+
+        if !react.update_supervising(eid.clone(), dur, tx).await {
             return Ok(json!(null));
         }
 
-        let dur = dispatch_params
-            .restart_interval
-            .filter(|v| v.as_millis() > 0);
-
         tokio::spawn(async move {
+            let mut dur = dur.to_owned();
             'main: loop {
                 let ret = Scheduler::wait_exec(dispatch_params.clone(), react.clone()).await;
                 if let Err(e) = ret {
                     error!("supervising: failed exec job - {e}");
                 }
-                let sleep_time = if let Some(ref d) = dur {
-                    sleep(d.to_owned())
-                } else {
-                    sleep(Duration::from_millis(50))
-                };
+                let sleep_time = sleep(dur.to_owned());
 
                 tokio::pin!(sleep_time);
 
@@ -648,9 +666,18 @@ impl
                     _ = &mut sleep_time => {
                         info!("supervising: sleep, waiting restart")
                     },
-                    _ = rx.recv() => {
-                        info!("supervising: exited");
-                        return;
+                    Some(v) = rx.recv() => {
+                        match v {
+                            SupervisorSignal::UpdateRestartInterval(interval) => {
+                                dur = interval;
+                                info!("supervising: update restart interval to {:?}", dur);
+                            },
+                            SupervisorSignal::Exit => {
+                                info!("supervising: exited");
+                                return;
+                            }
+                        }
+
                     },
                 }
                 continue 'main;
