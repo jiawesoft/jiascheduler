@@ -69,7 +69,7 @@ pub struct React {
 }
 
 pub enum SupervisorSignal {
-    UpdateRestartInterval(Duration),
+    UpdateOptions(DispatchJobParams),
     Exit,
 }
 
@@ -164,13 +164,13 @@ impl React {
     async fn update_supervising(
         &mut self,
         eid: String,
-        restart_interval: Duration,
+        opts: DispatchJobParams,
         tx: UnboundedSender<SupervisorSignal>,
     ) -> bool {
         let mut jobs = self.supervisor_jobs.lock().await;
         if let Some(v) = jobs.get(&eid) {
             let _ = v
-                .send(SupervisorSignal::UpdateRestartInterval(restart_interval))
+                .send(SupervisorSignal::UpdateOptions(opts))
                 .map_err(|v| error!("failed update supervising job options, {v:?}"));
             false
         } else {
@@ -647,17 +647,31 @@ impl
                 }
             });
 
-        if !react.update_supervising(eid.clone(), dur, tx).await {
+        if !react
+            .update_supervising(eid.clone(), dispatch_params.clone(), tx)
+            .await
+        {
             return Ok(json!(null));
         }
 
         tokio::spawn(async move {
-            let mut dur = dur.to_owned();
+            let mut dispatch_params = dispatch_params;
             'main: loop {
                 let ret = Scheduler::wait_exec(dispatch_params.clone(), react.clone()).await;
                 if let Err(e) = ret {
                     error!("supervising: failed exec job - {e}");
                 }
+                let dur =
+                    dispatch_params
+                        .restart_interval
+                        .clone()
+                        .map_or(Duration::from_secs(1), |v| {
+                            if v.as_secs() > 0 {
+                                v
+                            } else {
+                                Duration::from_secs(1)
+                            }
+                        });
                 let sleep_time = sleep(dur.to_owned());
 
                 tokio::pin!(sleep_time);
@@ -668,9 +682,9 @@ impl
                     },
                     Some(v) = rx.recv() => {
                         match v {
-                            SupervisorSignal::UpdateRestartInterval(interval) => {
-                                dur = interval;
-                                info!("supervising: update restart interval to {:?}", dur);
+                            SupervisorSignal::UpdateOptions(opts) => {
+                                 dispatch_params = opts.clone();
+                                info!("supervising: update options {:?}", opts);
                             },
                             SupervisorSignal::Exit => {
                                 info!("supervising: exited");
