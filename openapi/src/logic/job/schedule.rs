@@ -8,6 +8,7 @@ use automate::{
     JobAction,
 };
 
+use chrono::Local;
 use evalexpr::eval_boolean;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -24,8 +25,8 @@ use tracing::{debug, error};
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*,
-        tag_resource, team,
+        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
+        prelude::*, tag_resource, team,
     },
     file_name,
     logic::{
@@ -1151,5 +1152,30 @@ impl<'a> JobLogic<'a> {
             .await?;
 
         Ok(ret)
+    }
+
+    pub async fn delete_schedule_history(
+        &self,
+        user_info: &UserInfo,
+        eid: &str,
+        schedule_id: &str,
+    ) -> Result<u64> {
+        let ret = JobScheduleHistory::update_many()
+            .set(job_schedule_history::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_schedule_history::Column::Eid.eq(eid))
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .exec(&self.ctx.db)
+            .await?;
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(eid))
+            .filter(job_exec_history::Column::ScheduleId.eq(schedule_id))
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
     }
 }

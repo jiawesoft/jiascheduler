@@ -698,7 +698,7 @@ impl<'a> JobLogic<'a> {
                     .into(),
             )
             .filter(job::Column::IsDeleted.eq(false))
-            .filter(job_schedule_history::Column::IsDeleted.eq(false))
+            // .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_running_status::Column::ScheduleType.eq(v))
             })

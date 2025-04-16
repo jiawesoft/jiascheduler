@@ -596,8 +596,8 @@ mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct DeleteScheduleHistoryReq {
-        pub eid: Option<String>,
-        pub schedule_id: Option<String>,
+        pub eid: String,
+        pub schedule_id: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -1312,7 +1312,7 @@ impl JobApi {
         let svc = state.service();
         if !svc
             .job
-            .can_write_schedule_by_id(&user_info, team_id.clone(), req.schedule_id.clone())
+            .can_write_schedule_by_id(&user_info, team_id.clone(), Some(req.schedule_id.clone()))
             .await?
         {
             return_err!("no permission to delete this schedule history");
@@ -1320,17 +1320,7 @@ impl JobApi {
 
         let result = svc
             .job
-            .delete_exec_history(
-                None,
-                req.schedule_id,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
+            .delete_schedule_history(&user_info, &req.eid, &req.schedule_id)
             .await?;
 
         return_ok!(types::DeleteScheduleHistoryResp { result })
