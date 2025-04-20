@@ -88,7 +88,7 @@ impl<'a> JobLogic<'a> {
 
     pub async fn delete_bundle_script(&self, user_info: &UserInfo, eid: String) -> Result<u64> {
         let cond = Condition::all().add(Expr::cust_with_values(
-            "JSON_CONTAIN(bunle_script, ?)",
+            "JSON_CONTAINS(bundle_script, ?)",
             vec![serde_json::json!({ "eid": eid.clone() })],
         ));
 

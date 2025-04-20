@@ -17,8 +17,9 @@ use sea_query::{Expr, Query};
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
-        job_supervisor, job_timer, prelude::*, tag_resource, team, team_member,
+        self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
+        job_schedule_history, job_supervisor, job_timer, prelude::*, tag_resource, team,
+        team_member,
     },
     state::AppContext,
 };
@@ -70,8 +71,8 @@ impl<'a> JobLogic<'a> {
             return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
         };
 
-        let Some(job_record) = Job::find()
-            .filter(job::Column::Eid.eq(eid))
+        let Some(job_record) = JobBundleScript::find()
+            .filter(job_bundle_script::Column::Eid.eq(eid))
             .one(&self.ctx.db)
             .await?
         else {
@@ -122,7 +123,7 @@ impl<'a> JobLogic<'a> {
             return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
         };
 
-        let Some(job_record) = Job::find()
+        let Some(bundle_script_record) = JobBundleScript::find()
             .filter(job::Column::Id.eq(id))
             .one(&self.ctx.db)
             .await?
@@ -130,15 +131,15 @@ impl<'a> JobLogic<'a> {
             return Ok(false);
         };
 
-        if job_record.created_user == user_info.username {
+        if bundle_script_record.created_user == user_info.username {
             return Ok(true);
         }
 
         if is_team_user.is_some() {
-            return Ok(Some(job_record.team_id) == team_id);
+            return Ok(Some(bundle_script_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
-            .apply_if(Some(job_record.team_id), |q, v| {
+            .apply_if(Some(bundle_script_record.team_id), |q, v| {
                 q.filter(team_member::Column::TeamId.eq(v))
             })
             .filter(team_member::Column::UserId.eq(&user_info.user_id))
@@ -596,6 +597,17 @@ impl<'a> JobLogic<'a> {
                 ..Default::default()
             })
             .filter(job::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::Eid.eq(&eid))
             .exec(&self.ctx.db)
             .await?;
 
