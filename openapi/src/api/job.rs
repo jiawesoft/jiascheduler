@@ -772,6 +772,7 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobResp>> {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
+        let default_eid = default_eid.filter(|v| v != "");
 
         let team_id = svc
             .job
@@ -1567,6 +1568,7 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobBundleScriptResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+        let default_eid = default_eid.filter(|v| v != "");
         let team_id = svc
             .job
             .get_default_validate_team_id_by_bundle_script(
