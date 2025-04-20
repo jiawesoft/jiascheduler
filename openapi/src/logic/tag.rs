@@ -142,6 +142,7 @@ impl<'a> TagLogic<'a> {
                         .to(tag_resource::Column::ResourceId)
                         .into(),
                 )
+                .filter(job::Column::IsDeleted.eq(false))
                 .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
                 .apply_if(username, |q, v| q.filter(job::Column::CreatedUser.eq(v))),
             ResourceType::Instance => select.join_rev(
