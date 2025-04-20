@@ -773,6 +773,11 @@ impl JobApi {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
 
+        let team_id = svc
+            .job
+            .get_default_validate_team_id_by_job(&user_info, default_eid.as_deref(), team_id)
+            .await?;
+
         let search_username = if state.can_manage_job(&user_info.user_id).await? {
             search_username
         } else {
@@ -1562,6 +1567,14 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobBundleScriptResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+        let team_id = svc
+            .job
+            .get_default_validate_team_id_by_bundle_script(
+                &user_info,
+                default_eid.as_deref(),
+                team_id,
+            )
+            .await?;
 
         let search_username = if state.can_manage_job(&user_info.user_id).await? {
             search_username

@@ -1,4 +1,4 @@
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 mod bundle_script;
 mod dashboard;
@@ -790,5 +790,41 @@ impl<'a> JobLogic<'a> {
             .await?;
 
         Ok(ret.rows_affected)
+    }
+
+    pub async fn get_job_by_eid(&self, eid: &str) -> Result<Option<job::Model>> {
+        let model = Job::find()
+            .filter(job::Column::Eid.eq(eid))
+            .one(&self.ctx.db)
+            .await?;
+        Ok(model)
+    }
+
+    pub async fn get_default_validate_team_id_by_job(
+        &self,
+        user_info: &UserInfo,
+        eid: Option<&str>,
+        default_team_id: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let Some(eid) = eid else {
+            return Ok(default_team_id);
+        };
+
+        let record = self
+            .get_job_by_eid(eid)
+            .await?
+            .ok_or(anyhow!("not found the job by {eid}"))?;
+        let team_id = if record.team_id == 0 {
+            return Ok(default_team_id);
+        } else {
+            Some(record.team_id)
+        };
+        let ok = self.can_write_job(user_info, team_id, None).await?;
+
+        if ok {
+            Ok(team_id)
+        } else {
+            Ok(None)
+        }
     }
 }
