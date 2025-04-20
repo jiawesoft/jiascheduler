@@ -1147,7 +1147,6 @@ impl<'a> JobLogic<'a> {
     ) -> Result<Option<job_schedule_history::Model>> {
         let ret = JobScheduleHistory::find()
             .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
-            .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?;
 
