@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Ok, Result};
 
 mod bundle_script;
 mod dashboard;
@@ -607,27 +607,11 @@ impl<'a> JobLogic<'a> {
                 ..Default::default()
             })
             .filter(job_schedule_history::Column::Eid.eq(&eid))
-            .filter(job_schedule_history::Column::ScheduleType.eq(ScheduleType::Once.to_string()))
             .exec(&self.ctx.db)
             .await?;
 
         JobExecHistory::delete_many()
             .filter(job_exec_history::Column::Eid.eq(&eid))
-            .filter(
-                Condition::any().add(
-                    job_exec_history::Column::ScheduleId.in_subquery(
-                        Query::select()
-                            .column(job_schedule_history::Column::ScheduleId)
-                            .and_where(
-                                job_schedule_history::Column::ScheduleType
-                                    .eq(ScheduleType::Once.to_string()),
-                            )
-                            .and_where(job_schedule_history::Column::IsDeleted.eq(true))
-                            .from(JobScheduleHistory)
-                            .to_owned(),
-                    ),
-                ),
-            )
             .exec(&self.ctx.db)
             .await?;
 
@@ -697,7 +681,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
-            .filter(job::Column::IsDeleted.eq(false))
+            .filter(job_running_status::Column::IsDeleted.eq(false))
             // .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_running_status::Column::ScheduleType.eq(v))
@@ -753,5 +737,46 @@ impl<'a> JobLogic<'a> {
             .fetch_page(page)
             .await?;
         Ok((list, total))
+    }
+
+    pub async fn delete_running_status(
+        &self,
+        user_info: &UserInfo,
+        eid: &str,
+        schedule_type: ScheduleType,
+        instance_id: &str,
+    ) -> Result<u64> {
+        let ret = JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::Eid.eq(eid))
+            .filter(job_running_status::Column::ScheduleType.eq(schedule_type.to_string()))
+            .filter(job_running_status::Column::InstanceId.eq(instance_id))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(eid))
+            .filter(
+                job_exec_history::Column::ScheduleId.in_subquery(
+                    Query::select()
+                        .column(job_schedule_history::Column::ScheduleId)
+                        .from(job_schedule_history::Entity)
+                        .and_where(
+                            job_schedule_history::Column::ScheduleType
+                                .eq(schedule_type.to_string()),
+                        )
+                        .to_owned(),
+                ),
+            )
+            .filter(job_exec_history::Column::InstanceId.eq(instance_id))
+            .exec(&self.ctx.db)
+            .await?;
+
+        Ok(ret.rows_affected)
     }
 }

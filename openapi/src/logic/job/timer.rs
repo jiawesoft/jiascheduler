@@ -1,5 +1,4 @@
 use anyhow::Result;
-use automate::scheduler::types::ScheduleType;
 use chrono::Local;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
@@ -9,10 +8,7 @@ use sea_query::Query;
 
 use super::{types::JobTimerRelatedJobModel, JobLogic};
 use crate::{
-    entity::{
-        executor, job, job_exec_history, job_schedule_history, job_timer, prelude::*, tag_resource,
-        team,
-    },
+    entity::{executor, job, job_timer, prelude::*, tag_resource, team},
     logic::types::{ResourceType, UserInfo},
 };
 
@@ -117,14 +113,6 @@ impl<'a> JobLogic<'a> {
     }
 
     pub async fn delete_job_timer(&self, user_info: &UserInfo, id: u64) -> Result<u64> {
-        let job_timer_record = JobTimer::find()
-            .filter(job_timer::Column::Id.eq(id))
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow::anyhow!(
-                "cannot found this job's supervisor by id {id}"
-            ))?;
-
         let ret = JobTimer::update_many()
             .set(job_timer::ActiveModel {
                 is_deleted: Set(true),
@@ -133,38 +121,6 @@ impl<'a> JobLogic<'a> {
                 ..Default::default()
             })
             .filter(job_timer::Column::Id.eq(id))
-            .exec(&self.ctx.db)
-            .await?;
-
-        JobScheduleHistory::update_many()
-            .set(job_schedule_history::ActiveModel {
-                is_deleted: Set(true),
-                deleted_at: Set(Some(Local::now())),
-                deleted_by: Set(user_info.username.clone()),
-                ..Default::default()
-            })
-            .filter(job_schedule_history::Column::Eid.eq(&job_timer_record.eid))
-            .filter(job_schedule_history::Column::ScheduleType.eq(ScheduleType::Timer.to_string()))
-            .exec(&self.ctx.db)
-            .await?;
-
-        JobExecHistory::delete_many()
-            .filter(job_exec_history::Column::Eid.eq(&job_timer_record.eid))
-            .filter(
-                Condition::any().add(
-                    job_exec_history::Column::ScheduleId.in_subquery(
-                        Query::select()
-                            .column(job_schedule_history::Column::ScheduleId)
-                            .and_where(
-                                job_schedule_history::Column::ScheduleType
-                                    .eq(ScheduleType::Timer.to_string()),
-                            )
-                            .and_where(job_schedule_history::Column::IsDeleted.eq(true))
-                            .from(JobScheduleHistory)
-                            .to_owned(),
-                    ),
-                ),
-            )
             .exec(&self.ctx.db)
             .await?;
 

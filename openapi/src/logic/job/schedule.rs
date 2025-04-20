@@ -180,6 +180,7 @@ impl<'a> JobLogic<'a> {
                 job_running_status::Column::UpdatedUser,
                 params.created_user.clone().into(),
             ),
+            (job_running_status::Column::IsDeleted, false.into()),
         ];
 
         params.start_time.clone().inspect(|v| {

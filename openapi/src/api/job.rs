@@ -595,6 +595,18 @@ mod types {
     }
 
     #[derive(Object, Serialize, Default)]
+    pub struct DeleteRunStatusReq {
+        pub eid: String,
+        pub instance_id: String,
+        pub schedule_type: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteRunStatusResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
     pub struct DeleteScheduleHistoryReq {
         pub eid: String,
         pub schedule_id: String,
@@ -968,8 +980,12 @@ impl JobApi {
         return_ok!(ret)
     }
 
-    #[oai(path = "/run-list", method = "get", transform = "set_middleware")]
-    pub async fn query_run_list(
+    #[oai(
+        path = "/running-status-list",
+        method = "get",
+        transform = "set_middleware"
+    )]
+    pub async fn query_running_status_list(
         &self,
         state: Data<&AppState>,
         _session: &Session,
@@ -1294,6 +1310,47 @@ impl JobApi {
             total: ret.1,
             list: list,
         })
+    }
+
+    #[oai(
+        path = "/delete-running-status",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_running_status(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteRunStatusReq>,
+        _session: &Session,
+    ) -> api_response!(types::DeleteRunStatusResp) {
+        let schedule_type: ScheduleType = req.schedule_type.as_str().try_into()?;
+
+        let svc = state.service();
+        if !svc
+            .job
+            .can_write_job(&user_info, team_id.clone(), Some(req.eid.clone()))
+            .await?
+        {
+            return_err!("no permission to delete the running status");
+        }
+
+        if svc
+            .instance
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id.clone())
+            .await?
+            .is_none()
+        {
+            return_err!("no permission to delete the running status");
+        }
+
+        let result = svc
+            .job
+            .delete_running_status(&user_info, &req.eid, schedule_type, &req.instance_id)
+            .await?;
+
+        return_ok!(types::DeleteRunStatusResp { result })
     }
 
     #[oai(

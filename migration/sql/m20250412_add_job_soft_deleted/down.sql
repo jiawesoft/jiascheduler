@@ -23,7 +23,7 @@ drop column is_deleted,
 drop column deleted_at,
 drop column deleted_by;
 
-alter table job_supervisor
+alter table job_running_status
 drop column is_deleted,
 drop column deleted_at,
 drop column deleted_by;
