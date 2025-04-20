@@ -637,16 +637,6 @@ impl
             })
             .await?;
 
-        let dur = dispatch_params
-            .restart_interval
-            .map_or(Duration::from_secs(1), |v| {
-                if v.as_secs() > 0 {
-                    v
-                } else {
-                    Duration::from_secs(1)
-                }
-            });
-
         if !react
             .update_supervising(eid.clone(), dispatch_params.clone(), tx)
             .await
