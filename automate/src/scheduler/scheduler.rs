@@ -369,7 +369,8 @@ impl
             .set_namespace(self.namespace.clone())
             .set_local_ip(local_ip.clone())
             .set_comet_secret(self.comet_secret.clone())
-            .set_mac_address(self.mac_addr.clone());
+            .set_mac_address(self.mac_addr.clone())
+            .set_initialized(self.is_initialized);
 
         if let Some(ref opt) = self.assign_user_option {
             client.set_assign_user(opt.to_owned());
