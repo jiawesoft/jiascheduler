@@ -814,7 +814,7 @@ impl
                 "stderr":output.get_stderr(),
             }));
         }
-        let juid = base_job.eid.clone();
+        let eid = base_job.eid.clone();
 
         task::spawn(async move {
             match Self::exec_job(
@@ -832,7 +832,7 @@ impl
                 Err(e) => error!("failed exec {} - detail: {e}", base_job.eid),
             }
 
-            react.remove_job(juid).await
+            react.remove_job(eid).await
         });
 
         return Ok(json!(null));
