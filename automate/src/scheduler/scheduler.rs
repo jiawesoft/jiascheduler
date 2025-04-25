@@ -843,7 +843,7 @@ impl
         Ok(json!(null))
     }
 
-    pub async fn dispath_job(dispatch_params: DispatchJobParams, react: React) -> Result<Value> {
+    pub async fn dispatch_job(dispatch_params: DispatchJobParams, react: React) -> Result<Value> {
         let mut base_job = dispatch_params.base_job.clone();
         let upload_file = base_job.upload_file.take();
 
@@ -933,7 +933,7 @@ impl
 
     pub async fn handle(msg: MsgReqKind, _bridge: Bridge, react: React) -> Value {
         let ret = match msg {
-            MsgReqKind::DispatchJobRequest(v) => Self::dispath_job(v, react.clone()).await,
+            MsgReqKind::DispatchJobRequest(v) => Self::dispatch_job(v, react.clone()).await,
             MsgReqKind::RuntimeActionRequest(v) => Self::runtime_action(v, react.clone()).await,
             MsgReqKind::SftpReadDirRequest(v) => Self::sftp_read_dir(v).await,
             MsgReqKind::SftpUploadRequest(v) => Self::sftp_upload(v).await,
