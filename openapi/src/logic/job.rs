@@ -576,7 +576,7 @@ impl<'a> JobLogic<'a> {
             .await?
             .is_some()
         {
-            anyhow::bail!("forbidden to delete the timer's jobs")
+            anyhow::bail!("do not delete jobs linked to timers")
         }
 
         if JobSupervisor::find()
@@ -586,7 +586,7 @@ impl<'a> JobLogic<'a> {
             .await?
             .is_some()
         {
-            anyhow::bail!("forbidden to delete the supervisor's jobs")
+            anyhow::bail!("do not delete jobs linked to supervisors")
         }
 
         let ret = Job::update_many()
