@@ -121,4 +121,4 @@ https://www.bilibili.com/video/BV19wzKYVEHL
 
 **wechat:** cg1472580369
 
-<img src="./assets/good.jpg" width="350px" />
+<img src="./assets/qrcode-qq-group.jpg" width="350px" />
