@@ -233,13 +233,11 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
         .await
         .expect("failed connect to database");
 
+    upgrade(&conn).await.context("upgrade version")?;
+
     UserLogic::init_admin(&conn, &conf.admin.username, &conf.admin.password)
         .await
         .context("failed initialize admin user")?;
-
-    // conn.execute_unprepared(" SET time_zone = '+8:00'").await?;
-
-    upgrade(&conn).await.context("upgrade version")?;
 
     let client = Client::open(Url::parse(&conf.redis_url).expect("redis url")).unwrap();
     let m = DefaultModel::from_str(RBAL_RESOURCE_ROLES_MODEL)
