@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Ok, Result};
 
 mod bundle_script;
 mod dashboard;
@@ -7,9 +7,11 @@ mod schedule;
 mod supervisor;
 mod timer;
 
+use automate::scheduler::types::ScheduleType;
+use chrono::Local;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 use sea_query::{Expr, Query};
 
@@ -17,6 +19,7 @@ use crate::{
     entity::{
         self, executor, instance, job, job_bundle_script, job_exec_history, job_running_status,
         job_schedule_history, job_supervisor, job_timer, prelude::*, tag_resource, team,
+        team_member,
     },
     state::AppContext,
 };
@@ -46,130 +49,388 @@ impl<'a> JobLogic<'a> {
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        eid: &str,
+        eid: Option<String>,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if ok {
-            Ok(true)
-        } else {
-            let v = JobBundleScript::find()
-                .apply_if(team_id, |q, v| {
-                    q.filter(
-                        job_bundle_script::Column::TeamId
-                            .eq(v)
-                            .and(job_bundle_script::Column::Eid.eq(eid)),
-                    )
-                })
-                .apply_if(
-                    team_id.map_or(Some(user_info.username.clone()), |_| None),
-                    |q, v| {
-                        q.filter(
-                            job_bundle_script::Column::Eid
-                                .eq(eid)
-                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
-                        )
-                    },
-                )
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
                 .one(&self.ctx.db)
                 .await?
-                .map_or(false, |_| true);
-            Ok(v)
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(eid) = eid else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(job_record) = JobBundleScript::find()
+            .filter(job_bundle_script::Column::Eid.eq(eid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if job_record.created_user == user_info.username {
+            return Ok(true);
         }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
     }
 
     pub async fn can_write_bundle_script_by_id(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        id: u64,
+        id: Option<u64>,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if ok {
-            Ok(true)
-        } else {
-            let v = JobBundleScript::find()
-                .apply_if(team_id, |q, v| {
-                    q.filter(
-                        job_bundle_script::Column::TeamId
-                            .eq(v)
-                            .and(job_bundle_script::Column::Id.eq(id)),
-                    )
-                })
-                .apply_if(
-                    team_id.map_or(Some(user_info.username.clone()), |_| None),
-                    |q, v| {
-                        q.filter(
-                            job_bundle_script::Column::Id
-                                .eq(id)
-                                .and(job_bundle_script::Column::CreatedUser.eq(v)),
-                        )
-                    },
-                )
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
                 .one(&self.ctx.db)
                 .await?
-                .map_or(false, |_| true);
-            Ok(v)
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(id) = id else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(bundle_script_record) = JobBundleScript::find()
+            .filter(job::Column::Id.eq(id))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if bundle_script_record.created_user == user_info.username {
+            return Ok(true);
         }
+
+        if is_team_user.is_some() {
+            return Ok(Some(bundle_script_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(bundle_script_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
     }
 
     pub async fn can_write_job(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        eid: &str,
+        eid: Option<String>,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if ok {
-            Ok(Job::find()
-                .filter(job::Column::Eid.eq(eid))
-                .one(&self.ctx.db)
-                .await?
-                .is_some())
-        } else {
-            let v = Job::find()
-                .apply_if(team_id, |q, v| {
-                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Eid.eq(eid)))
-                })
-                .apply_if(
-                    team_id.map_or(Some(&user_info.username), |_| None),
-                    |q, v| q.filter(job::Column::Eid.eq(eid).and(job::Column::CreatedUser.eq(v))),
-                )
-                .one(&self.ctx.db)
-                .await?
-                .is_some();
-            Ok(v)
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
         }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(eid) = eid else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(job_record) = Job::find()
+            .filter(job::Column::Eid.eq(eid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if job_record.created_user == user_info.username {
+            return Ok(true);
+        }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
     }
 
     pub async fn can_write_job_by_id(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        job_id: u64,
+        job_id: Option<u64>,
     ) -> Result<bool> {
-        let ok = self.ctx.can_manage_job(&user_info.username).await?;
-        if ok {
-            Ok(true)
-        } else {
-            let v = Job::find()
-                .apply_if(team_id, |q, v| {
-                    q.filter(job::Column::TeamId.eq(v).and(job::Column::Id.eq(job_id)))
-                })
-                .apply_if(
-                    team_id.map_or(Some(&user_info.username), |_| None),
-                    |q, v| {
-                        q.filter(
-                            job::Column::Id
-                                .eq(job_id)
-                                .and(job::Column::CreatedUser.eq(v)),
-                        )
-                    },
-                )
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
                 .one(&self.ctx.db)
                 .await?
-                .map_or(false, |_| true);
-            Ok(v)
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(job_id) = job_id else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(job_record) = Job::find()
+            .filter(job::Column::Id.eq(job_id))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if job_record.created_user == user_info.username {
+            return Ok(true);
         }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
+    }
+
+    pub async fn can_write_schedule_by_id(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        schedule_id: Option<String>,
+    ) -> Result<bool> {
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(schedule_id) = schedule_id else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(schedule_record) = JobScheduleHistory::find()
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        let Some(job_record) = Job::find()
+            .filter(job::Column::Id.eq(schedule_record.eid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if schedule_record.created_user == user_info.username {
+            return Ok(true);
+        }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
+    }
+
+    pub async fn can_write_job_timer_by_id(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        timer_id: Option<u64>,
+    ) -> Result<bool> {
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(timer_id) = timer_id else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(timer_record) = JobTimer::find()
+            .filter(job_timer::Column::Id.eq(timer_id))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        let Some(job_record) = Job::find()
+            .filter(job::Column::Eid.eq(timer_record.eid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if timer_record.created_user == user_info.username {
+            return Ok(true);
+        }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
+    }
+
+    pub async fn can_write_job_supervisor_by_id(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        supvervisor_id: Option<u64>,
+    ) -> Result<bool> {
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(supervisor_id) = supvervisor_id else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        let Some(supervisor_record) = JobSupervisor::find()
+            .filter(job_supervisor::Column::Id.eq(supervisor_id))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        let Some(job_record) = Job::find()
+            .filter(job::Column::Eid.eq(supervisor_record.eid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        if supervisor_record.created_user == user_info.username {
+            return Ok(true);
+        }
+
+        if is_team_user.is_some() {
+            return Ok(Some(job_record.team_id) == team_id);
+        }
+        return Ok(TeamMember::find()
+            .apply_if(Some(job_record.team_id), |q, v| {
+                q.filter(team_member::Column::TeamId.eq(v))
+            })
+            .filter(team_member::Column::UserId.eq(&user_info.user_id))
+            .one(&self.ctx.db)
+            .await?
+            .map(|_| true)
+            == Some(true));
     }
 
     pub async fn can_dispatch_job(
@@ -179,7 +440,10 @@ impl<'a> JobLogic<'a> {
         schedule_user: Option<&str>,
         eid: &str,
     ) -> Result<bool> {
-        if !self.can_write_job(user_info, team_id, eid).await? {
+        if !self
+            .can_write_job(user_info, team_id, Some(eid.to_string()))
+            .await?
+        {
             return Ok(false);
         }
         let Some(schedule_user) = schedule_user else {
@@ -250,6 +514,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job::Column::IsDeleted.eq(false))
             .apply_if(created_user, |query, v| {
                 query.filter(job::Column::CreatedUser.eq(v))
             })
@@ -303,47 +568,65 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
-    pub async fn delete_job(&self, username: Option<String>, eid: String) -> Result<u64> {
-        if Job::find()
-            .apply_if(username, |q, v| q.filter(job::Column::Eid.eq(v)))
-            .one(&self.ctx.db)
-            .await?
-            .is_none()
-        {
-            return Ok(0);
-        }
-
+    pub async fn delete_job(&self, user_info: &UserInfo, eid: String) -> Result<u64> {
         if JobTimer::find()
             .filter(job_timer::Column::Eid.eq(&eid))
+            .filter(job_timer::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .is_some()
         {
-            anyhow::bail!("forbidden to delete the timer's jobs")
+            anyhow::bail!("do not delete jobs linked to timers")
         }
 
         if JobSupervisor::find()
             .filter(job_supervisor::Column::Eid.eq(&eid))
+            .filter(job_supervisor::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .is_some()
         {
-            anyhow::bail!("forbidden to delete the supervisor's jobs")
+            anyhow::bail!("do not delete jobs linked to supervisors")
         }
 
-        JobScheduleHistory::delete_many()
+        let ret = Job::update_many()
+            .set(job::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::Eid.eq(&eid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobScheduleHistory::update_many()
+            .set(job_schedule_history::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
             .filter(job_schedule_history::Column::Eid.eq(&eid))
             .exec(&self.ctx.db)
             .await?;
+
         JobExecHistory::delete_many()
             .filter(job_exec_history::Column::Eid.eq(&eid))
             .exec(&self.ctx.db)
             .await?;
 
-        let ret = Job::delete_many()
-            .filter(job::Column::Eid.eq(&eid))
-            .exec(&self.ctx.db)
-            .await?;
         Ok(ret.rows_affected)
     }
 
@@ -410,6 +693,8 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job_running_status::Column::IsDeleted.eq(false))
+            // .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(schedule_type, |query, v| {
                 query.filter(job_running_status::Column::ScheduleType.eq(v))
             })
@@ -464,5 +749,82 @@ impl<'a> JobLogic<'a> {
             .fetch_page(page)
             .await?;
         Ok((list, total))
+    }
+
+    pub async fn delete_running_status(
+        &self,
+        user_info: &UserInfo,
+        eid: &str,
+        schedule_type: ScheduleType,
+        instance_id: &str,
+    ) -> Result<u64> {
+        let ret = JobRunningStatus::update_many()
+            .set(job_running_status::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_running_status::Column::Eid.eq(eid))
+            .filter(job_running_status::Column::ScheduleType.eq(schedule_type.to_string()))
+            .filter(job_running_status::Column::InstanceId.eq(instance_id))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(eid))
+            .filter(
+                job_exec_history::Column::ScheduleId.in_subquery(
+                    Query::select()
+                        .column(job_schedule_history::Column::ScheduleId)
+                        .from(job_schedule_history::Entity)
+                        .and_where(
+                            job_schedule_history::Column::ScheduleType
+                                .eq(schedule_type.to_string()),
+                        )
+                        .to_owned(),
+                ),
+            )
+            .filter(job_exec_history::Column::InstanceId.eq(instance_id))
+            .exec(&self.ctx.db)
+            .await?;
+
+        Ok(ret.rows_affected)
+    }
+
+    pub async fn get_job_by_eid(&self, eid: &str) -> Result<Option<job::Model>> {
+        let model = Job::find()
+            .filter(job::Column::Eid.eq(eid))
+            .one(&self.ctx.db)
+            .await?;
+        Ok(model)
+    }
+
+    pub async fn get_default_validate_team_id_by_job(
+        &self,
+        user_info: &UserInfo,
+        eid: Option<&str>,
+        default_team_id: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let Some(eid) = eid else {
+            return Ok(default_team_id);
+        };
+
+        let record = self
+            .get_job_by_eid(eid)
+            .await?
+            .ok_or(anyhow!("not found the job by {eid}"))?;
+        let team_id = if record.team_id == 0 {
+            return Ok(default_team_id);
+        } else {
+            Some(record.team_id)
+        };
+        let ok = self.can_write_job(user_info, team_id, None).await?;
+
+        if ok {
+            Ok(team_id)
+        } else {
+            Ok(None)
+        }
     }
 }

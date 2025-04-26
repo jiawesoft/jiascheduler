@@ -8,6 +8,7 @@ use automate::{
     JobAction,
 };
 
+use chrono::Local;
 use evalexpr::eval_boolean;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -24,8 +25,8 @@ use tracing::{debug, error};
 
 use crate::{
     entity::{
-        self, executor, instance, job, job_running_status, job_schedule_history, prelude::*,
-        tag_resource, team,
+        self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
+        prelude::*, tag_resource, team,
     },
     file_name,
     logic::{
@@ -179,6 +180,7 @@ impl<'a> JobLogic<'a> {
                 job_running_status::Column::UpdatedUser,
                 params.created_user.clone().into(),
             ),
+            (job_running_status::Column::IsDeleted, false.into()),
         ];
 
         params.start_time.clone().inspect(|v| {
@@ -393,7 +395,8 @@ impl<'a> JobLogic<'a> {
         }
 
         let job_record = Job::find()
-            .filter(entity::job::Column::Eid.eq(eid.clone()))
+            .filter(job::Column::Eid.eq(eid.clone()))
+            .filter(job::Column::IsDeleted.eq(false))
             .one(&self.ctx.db)
             .await?
             .ok_or(anyhow!("cannot found job {}", eid))?;
@@ -889,6 +892,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job_schedule_history::Column::IsDeleted.eq(false))
             .apply_if(created_user, |q, v| {
                 q.filter(job_schedule_history::Column::CreatedUser.eq(v))
             })
@@ -944,6 +948,7 @@ impl<'a> JobLogic<'a> {
         user_info: &UserInfo,
         instance_id: &str,
         eid: &str,
+        schedule_type: ScheduleType,
         action: JobAction,
     ) -> Result<()> {
         match action {
@@ -965,6 +970,7 @@ impl<'a> JobLogic<'a> {
                     })
                     .filter(job_running_status::Column::InstanceId.eq(instance_id))
                     .filter(job_running_status::Column::Eid.eq(eid))
+                    .filter(job_running_status::Column::ScheduleType.eq(schedule_type.to_string()))
                     .exec(&self.ctx.db)
                     .await?;
             }
@@ -1032,10 +1038,17 @@ impl<'a> JobLogic<'a> {
 
         let logic = automate::Logic::new(self.ctx.redis());
         let eid = schedule_record.eid.clone();
+        let schedule_type = ScheduleType::try_from(schedule_record.schedule_type.as_str())?;
 
         let Ok(pair) = logic.get_link_pair(&ins.ip, &ins.mac_addr).await else {
-            self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                .await?;
+            self.update_run_status(
+                user_info,
+                &instance_id,
+                &eid,
+                schedule_type.clone(),
+                action.clone(),
+            )
+            .await?;
             anyhow::bail!("Unable to find agent registration information.");
         };
 
@@ -1062,8 +1075,14 @@ impl<'a> JobLogic<'a> {
         {
             Ok(v) => v,
             Err(e) => {
-                self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                    .await?;
+                self.update_run_status(
+                    user_info,
+                    &instance_id,
+                    &eid,
+                    schedule_type.clone(),
+                    action.clone(),
+                )
+                .await?;
                 anyhow::bail!("failed dispatch job, {e}");
             }
         };
@@ -1071,15 +1090,27 @@ impl<'a> JobLogic<'a> {
         let ret: Value = match resp.json::<serde_json::Value>().await {
             Ok(v) => v,
             Err(e) => {
-                self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                    .await?;
+                self.update_run_status(
+                    user_info,
+                    &instance_id,
+                    &eid,
+                    schedule_type.clone(),
+                    action.clone(),
+                )
+                .await?;
                 anyhow::bail!("failed dispatch job, {e}");
             }
         };
 
         if ret["code"] != 20000 {
-            self.update_run_status(user_info, &instance_id, &eid, action.clone())
-                .await?;
+            self.update_run_status(
+                user_info,
+                &instance_id,
+                &eid,
+                schedule_type.clone(),
+                action.clone(),
+            )
+            .await?;
             anyhow::bail!("failed to dispatch job, {}", ret["msg"].to_string());
         }
 
@@ -1114,12 +1145,37 @@ impl<'a> JobLogic<'a> {
     pub async fn get_schedule(
         &self,
         schedule_id: &str,
-    ) -> Result<Option<entity::job_schedule_history::Model>> {
+    ) -> Result<Option<job_schedule_history::Model>> {
         let ret = JobScheduleHistory::find()
-            .filter(entity::job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
             .one(&self.ctx.db)
             .await?;
 
         Ok(ret)
+    }
+
+    pub async fn delete_schedule_history(
+        &self,
+        user_info: &UserInfo,
+        eid: &str,
+        schedule_id: &str,
+    ) -> Result<u64> {
+        let ret = JobScheduleHistory::update_many()
+            .set(job_schedule_history::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_schedule_history::Column::Eid.eq(eid))
+            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+            .exec(&self.ctx.db)
+            .await?;
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(eid))
+            .filter(job_exec_history::Column::ScheduleId.eq(schedule_id))
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
     }
 }

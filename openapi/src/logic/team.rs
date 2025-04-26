@@ -42,55 +42,6 @@ impl<'a> TeamLogic<'a> {
             .await?)
     }
 
-    pub async fn can_delete_job(&self, team_id: Option<u64>, user_id: &str) -> Result<bool> {
-        let ret = self.ctx.can_manage_job(&user_id).await?;
-        if ret {
-            return Ok(true);
-        }
-
-        let team_id = if let Some(team_id) = team_id {
-            team_id
-        } else {
-            return Ok(false);
-        };
-
-        if let Some(_) = TeamMember::find()
-            .filter(team_member::Column::TeamId.eq(team_id))
-            .filter(team_member::Column::UserId.eq(user_id))
-            .filter(team_member::Column::IsAdmin.eq(true))
-            .one(&self.ctx.db)
-            .await?
-        {
-            return Ok(true);
-        }
-
-        Ok(false)
-    }
-
-    pub async fn can_write_job(&self, team_id: Option<u64>, user_id: &str) -> Result<bool> {
-        let ret = self.ctx.can_manage_job(&user_id).await?;
-        if ret {
-            return Ok(true);
-        }
-
-        let team_id = if let Some(team_id) = team_id {
-            team_id
-        } else {
-            return Ok(false);
-        };
-
-        if let Some(_) = TeamMember::find()
-            .filter(team_member::Column::TeamId.eq(team_id))
-            .filter(team_member::Column::UserId.eq(user_id))
-            .one(&self.ctx.db)
-            .await?
-        {
-            return Ok(true);
-        }
-
-        Ok(false)
-    }
-
     pub async fn can_write_team(&self, team_id: Option<u64>, user_id: String) -> Result<bool> {
         let Some(team_id) = team_id else {
             return Ok(true);

@@ -64,8 +64,13 @@ pub struct React {
     local_ip: String,
     client_key: String,
     schedule_uuid_mapping: Arc<Mutex<HashMap<String, Uuid>>>,
-    supervisor_jobs: Arc<Mutex<HashMap<String, UnboundedSender<()>>>>,
+    supervisor_jobs: Arc<Mutex<HashMap<String, UnboundedSender<SupervisorSignal>>>>,
     kill_signal_mapping: Arc<Mutex<HashMap<String, Vec<Sender<()>>>>>,
+}
+
+pub enum SupervisorSignal {
+    UpdateOptions(DispatchJobParams),
+    Exit,
 }
 
 impl React {
@@ -156,9 +161,17 @@ impl React {
         Ok(())
     }
 
-    async fn start_supervising(&mut self, eid: String, tx: UnboundedSender<()>) -> bool {
+    async fn update_supervising(
+        &mut self,
+        eid: String,
+        opts: DispatchJobParams,
+        tx: UnboundedSender<SupervisorSignal>,
+    ) -> bool {
         let mut jobs = self.supervisor_jobs.lock().await;
-        if jobs.contains_key(&eid) {
+        if let Some(v) = jobs.get(&eid) {
+            let _ = v
+                .send(SupervisorSignal::UpdateOptions(opts))
+                .map_err(|v| error!("failed update supervising job options, {v:?}"));
             false
         } else {
             jobs.insert(eid, tx);
@@ -175,7 +188,9 @@ impl React {
         let mut jobs = self.supervisor_jobs.lock().await;
         let val = jobs.remove(eid);
         if let Some(supervisor_job) = val {
-            let _ = supervisor_job.send(());
+            let _ = supervisor_job
+                .send(SupervisorSignal::Exit)
+                .map_err(|v| error!("failed stop supervising job, {v:?}"));
         }
         Ok(())
     }
@@ -354,7 +369,8 @@ impl
             .set_namespace(self.namespace.clone())
             .set_local_ip(local_ip.clone())
             .set_comet_secret(self.comet_secret.clone())
-            .set_mac_address(self.mac_addr.clone());
+            .set_mac_address(self.mac_addr.clone())
+            .set_initialized(self.is_initialized);
 
         if let Some(ref opt) = self.assign_user_option {
             client.set_assign_user(opt.to_owned());
@@ -622,25 +638,32 @@ impl
             })
             .await?;
 
-        if !react.start_supervising(eid.clone(), tx).await {
+        if !react
+            .update_supervising(eid.clone(), dispatch_params.clone(), tx)
+            .await
+        {
             return Ok(json!(null));
         }
 
-        let dur = dispatch_params
-            .restart_interval
-            .filter(|v| v.as_millis() > 0);
-
         tokio::spawn(async move {
+            let mut dispatch_params = dispatch_params;
             'main: loop {
                 let ret = Scheduler::wait_exec(dispatch_params.clone(), react.clone()).await;
                 if let Err(e) = ret {
                     error!("supervising: failed exec job - {e}");
                 }
-                let sleep_time = if let Some(ref d) = dur {
-                    sleep(d.to_owned())
-                } else {
-                    sleep(Duration::from_millis(50))
-                };
+                let dur =
+                    dispatch_params
+                        .restart_interval
+                        .clone()
+                        .map_or(Duration::from_secs(1), |v| {
+                            if v.as_secs() > 0 {
+                                v
+                            } else {
+                                Duration::from_secs(1)
+                            }
+                        });
+                let sleep_time = sleep(dur.to_owned());
 
                 tokio::pin!(sleep_time);
 
@@ -648,9 +671,18 @@ impl
                     _ = &mut sleep_time => {
                         info!("supervising: sleep, waiting restart")
                     },
-                    _ = rx.recv() => {
-                        info!("supervising: exited");
-                        return;
+                    Some(v) = rx.recv() => {
+                        match v {
+                            SupervisorSignal::UpdateOptions(opts) => {
+                                 dispatch_params = opts.clone();
+                                info!("supervising: update options {:?}", opts);
+                            },
+                            SupervisorSignal::Exit => {
+                                info!("supervising: exited");
+                                return;
+                            }
+                        }
+
                     },
                 }
                 continue 'main;
@@ -782,7 +814,7 @@ impl
                 "stderr":output.get_stderr(),
             }));
         }
-        let juid = base_job.eid.clone();
+        let eid = base_job.eid.clone();
 
         task::spawn(async move {
             match Self::exec_job(
@@ -800,7 +832,7 @@ impl
                 Err(e) => error!("failed exec {} - detail: {e}", base_job.eid),
             }
 
-            react.remove_job(juid).await
+            react.remove_job(eid).await
         });
 
         return Ok(json!(null));
@@ -811,7 +843,7 @@ impl
         Ok(json!(null))
     }
 
-    pub async fn dispath_job(dispatch_params: DispatchJobParams, react: React) -> Result<Value> {
+    pub async fn dispatch_job(dispatch_params: DispatchJobParams, react: React) -> Result<Value> {
         let mut base_job = dispatch_params.base_job.clone();
         let upload_file = base_job.upload_file.take();
 
@@ -901,7 +933,7 @@ impl
 
     pub async fn handle(msg: MsgReqKind, _bridge: Bridge, react: React) -> Value {
         let ret = match msg {
-            MsgReqKind::DispatchJobRequest(v) => Self::dispath_job(v, react.clone()).await,
+            MsgReqKind::DispatchJobRequest(v) => Self::dispatch_job(v, react.clone()).await,
             MsgReqKind::RuntimeActionRequest(v) => Self::runtime_action(v, react.clone()).await,
             MsgReqKind::SftpReadDirRequest(v) => Self::sftp_read_dir(v).await,
             MsgReqKind::SftpUploadRequest(v) => Self::sftp_upload(v).await,

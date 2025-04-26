@@ -7,14 +7,14 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
-        let sql = include_str!("../sql/v1_1_0_002/up.sql");
+        let sql = include_str!("../sql/m20250420_modify_job_index/up.sql");
         db.execute_unprepared(sql).await?;
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
-        let sql = include_str!("../sql/v1_1_0_002/down.sql");
+        let sql = include_str!("../sql/m20250420_modify_job_index/down.sql");
         db.execute_unprepared(sql).await?;
         Ok(())
     }

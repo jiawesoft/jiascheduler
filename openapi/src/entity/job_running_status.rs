@@ -24,6 +24,11 @@ pub struct Model {
     pub prev_time: Option<DateTimeLocal>,
     pub updated_user: String,
     pub updated_time: DateTimeLocal,
+    #[serde(default)]
+    pub is_deleted: bool,
+    pub deleted_at: Option<DateTimeLocal>,
+    #[serde(default)]
+    pub deleted_by: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

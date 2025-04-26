@@ -21,6 +21,11 @@ pub struct Model {
     pub args: Option<Json>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
+    #[serde(default)]
+    pub is_deleted: bool,
+    pub deleted_at: Option<DateTimeLocal>,
+    #[serde(default)]
+    pub deleted_by: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

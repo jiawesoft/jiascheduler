@@ -138,6 +138,11 @@ impl<W, R> WsClient<W, R> {
         self.is_initialized.unwrap_or_default()
     }
 
+    pub fn set_initialized(&mut self, ok: bool) -> &mut Self {
+        self.is_initialized.replace(ok);
+        self
+    }
+
     pub fn get_namespace(&self) -> String {
         self.namespace.clone().unwrap_or_default()
     }

@@ -11,7 +11,7 @@ use crate::{
     return_err, return_ok, AppState, IdGenerator,
 };
 
-use automate::JobAction;
+use automate::{scheduler::types::ScheduleType, JobAction};
 use poem::{session::Session, web::Data, Endpoint, EndpointExt, Result};
 use poem_openapi::{
     param::{Header, Query},
@@ -582,6 +582,7 @@ mod types {
     pub struct DeleteExecHistoryReq {
         pub eid: Option<String>,
         pub schedule_id: Option<String>,
+        pub schedule_type: Option<String>,
         pub ids: Option<Vec<u64>>,
         pub instance_id: Option<String>,
         pub time_range_start: Option<String>,
@@ -590,6 +591,29 @@ mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct DeleteExecHistoryResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteRunStatusReq {
+        pub eid: String,
+        pub instance_id: String,
+        pub schedule_type: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteRunStatusResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteScheduleHistoryReq {
+        pub eid: String,
+        pub schedule_id: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteScheduleHistoryResp {
         pub result: u64,
     }
 
@@ -637,14 +661,12 @@ impl JobApi {
         }
         let svc = state.service();
 
-        if let Some(job_id) = req.id {
-            if !svc
-                .job
-                .can_write_job_by_id(&user_info, team_id, job_id)
-                .await?
-            {
-                return Err(NoPermission().into());
-            }
+        if !svc
+            .job
+            .can_write_job_by_id(&user_info, team_id, req.id)
+            .await?
+        {
+            return Err(NoPermission().into());
         }
 
         let args = req
@@ -750,6 +772,12 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobResp>> {
         let svc = state.service();
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
+        let default_eid = default_eid.filter(|v| v != "");
+
+        let team_id = svc
+            .job
+            .get_default_validate_team_id_by_job(&user_info, default_eid.as_deref(), team_id)
+            .await?;
 
         let search_username = if state.can_manage_job(&user_info.user_id).await? {
             search_username
@@ -845,21 +873,15 @@ impl JobApi {
         Json(req): Json<types::DeleteJobReq>,
     ) -> api_response!(types::DeleteJobResp) {
         let svc = state.service();
-        let username = if !svc
-            .team
-            .can_delete_job(team_id.clone(), &user_info.user_id)
+        if !svc
+            .job
+            .can_write_job(&user_info, team_id.clone(), Some(req.eid.clone()))
             .await?
         {
-            if team_id.is_none() {
-                Some(user_info.username.clone())
-            } else {
-                return_err!("no permission to delete this job");
-            }
-        } else {
-            None
-        };
+            return_err!("no permission to delete this job");
+        }
 
-        let result = svc.job.delete_job(username, req.eid).await?;
+        let result = svc.job.delete_job(&user_info, req.eid).await?;
         return_ok!(types::DeleteJobResp { result })
     }
 
@@ -964,8 +986,12 @@ impl JobApi {
         return_ok!(ret)
     }
 
-    #[oai(path = "/run-list", method = "get", transform = "set_middleware")]
-    pub async fn query_run_list(
+    #[oai(
+        path = "/running-status-list",
+        method = "get",
+        transform = "set_middleware"
+    )]
+    pub async fn query_running_status_list(
         &self,
         state: Data<&AppState>,
         _session: &Session,
@@ -1293,6 +1319,77 @@ impl JobApi {
     }
 
     #[oai(
+        path = "/delete-running-status",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_running_status(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteRunStatusReq>,
+        _session: &Session,
+    ) -> api_response!(types::DeleteRunStatusResp) {
+        let schedule_type: ScheduleType = req.schedule_type.as_str().try_into()?;
+
+        let svc = state.service();
+        if !svc
+            .job
+            .can_write_job(&user_info, team_id.clone(), Some(req.eid.clone()))
+            .await?
+        {
+            return_err!("no permission to delete the running status");
+        }
+
+        if svc
+            .instance
+            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id.clone())
+            .await?
+            .is_none()
+        {
+            return_err!("no permission to delete the running status");
+        }
+
+        let result = svc
+            .job
+            .delete_running_status(&user_info, &req.eid, schedule_type, &req.instance_id)
+            .await?;
+
+        return_ok!(types::DeleteRunStatusResp { result })
+    }
+
+    #[oai(
+        path = "/delete-schedule-history",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_schedule_history(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteScheduleHistoryReq>,
+        _session: &Session,
+    ) -> api_response!(types::DeleteScheduleHistoryResp) {
+        let svc = state.service();
+        if !svc
+            .job
+            .can_write_schedule_by_id(&user_info, team_id.clone(), Some(req.schedule_id.clone()))
+            .await?
+        {
+            return_err!("no permission to delete this schedule history");
+        }
+
+        let result = svc
+            .job
+            .delete_schedule_history(&user_info, &req.eid, &req.schedule_id)
+            .await?;
+
+        return_ok!(types::DeleteScheduleHistoryResp { result })
+    }
+
+    #[oai(
         path = "/delete-exec-history",
         method = "post",
         transform = "set_middleware"
@@ -1305,17 +1402,18 @@ impl JobApi {
         Json(req): Json<types::DeleteExecHistoryReq>,
         _session: &Session,
     ) -> api_response!(types::DeleteExecHistoryResp) {
+        let schedule_type: Option<ScheduleType> = req
+            .schedule_type
+            .map(|v| v.as_str().try_into())
+            .transpose()?;
+
         let svc = state.service();
         let username = if !svc
-            .team
-            .can_delete_job(team_id.clone(), &user_info.user_id)
+            .job
+            .can_write_job(&user_info, team_id.clone(), None)
             .await?
         {
-            if team_id.is_none() {
-                Some(user_info.username.clone())
-            } else {
-                return_err!("no permission to delete job execution history");
-            }
+            Some(user_info.username.clone())
         } else {
             None
         };
@@ -1325,6 +1423,7 @@ impl JobApi {
             .delete_exec_history(
                 req.ids,
                 req.schedule_id,
+                schedule_type,
                 req.instance_id,
                 req.eid,
                 team_id,
@@ -1381,14 +1480,12 @@ impl JobApi {
         };
         let svc = state.service();
 
-        if let Some(bundle_script_id) = req.id {
-            if !svc
-                .job
-                .can_write_bundle_script_by_id(&user_info, team_id, bundle_script_id)
-                .await?
-            {
-                return Err(NoPermission().into());
-            }
+        if !svc
+            .job
+            .can_write_bundle_script_by_id(&user_info, team_id.clone(), req.id)
+            .await?
+        {
+            return_err!("no permission to delete this job");
         }
 
         let (eid, id) = match req.id {
@@ -1431,21 +1528,15 @@ impl JobApi {
         Json(req): Json<types::DeleteJobBundleScriptReq>,
     ) -> Result<ApiStdResponse<u64>> {
         let svc = state.service();
-        let username = if !svc
-            .team
-            .can_delete_job(team_id.clone(), &user_info.user_id)
+        if !svc
+            .job
+            .can_write_bundle_script(&user_info, team_id.clone(), Some(req.eid.clone()))
             .await?
         {
-            if team_id.is_none() {
-                Some(user_info.username.clone())
-            } else {
-                return_err!("no permission to delete the bundle script");
-            }
-        } else {
-            None
-        };
+            return_err!("no permission to delete this job");
+        }
 
-        let ret = svc.job.delete_bundle_script(username, req.eid).await?;
+        let ret = svc.job.delete_bundle_script(&user_info, req.eid).await?;
         return_ok!(ret)
     }
 
@@ -1477,6 +1568,15 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::QueryJobBundleScriptResp>> {
         let updated_time_range = updated_time_range.map(|v| (v[0].clone(), v[1].clone()));
         let svc = state.service();
+        let default_eid = default_eid.filter(|v| v != "");
+        let team_id = svc
+            .job
+            .get_default_validate_team_id_by_bundle_script(
+                &user_info,
+                default_eid.as_deref(),
+                team_id,
+            )
+            .await?;
 
         let search_username = if state.can_manage_job(&user_info.user_id).await? {
             search_username
@@ -1629,7 +1729,11 @@ impl JobApi {
     ) -> Result<ApiStdResponse<types::SaveJobTimerResp>> {
         let svc = state.service();
 
-        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
+        if !svc
+            .job
+            .can_write_job(&user_info, team_id, Some(req.eid.clone()))
+            .await?
+        {
             return Err(NoPermission().into());
         }
 
@@ -1664,20 +1768,14 @@ impl JobApi {
         Json(req): Json<types::DeleteJobTimerReq>,
     ) -> api_response!(types::DeleteJobTimerResp) {
         let svc = state.service();
-        let username = if !svc
-            .team
-            .can_delete_job(team_id.clone(), &user_info.user_id)
+        if !svc
+            .job
+            .can_write_job_timer_by_id(&user_info, team_id.clone(), Some(req.id))
             .await?
         {
-            if team_id.is_none() {
-                Some(user_info.username.clone())
-            } else {
-                return_err!("no permission to delete this job timer");
-            }
-        } else {
-            None
-        };
-        let result = svc.job.delete_job_timer(username, req.id).await?;
+            return_err!("no permission to delete this job");
+        }
+        let result = svc.job.delete_job_timer(&user_info, req.id).await?;
         return_ok!(types::DeleteJobTimerResp { result });
     }
 
@@ -1840,7 +1938,11 @@ impl JobApi {
     ) -> api_response!(types::SaveJobSupervisorResp) {
         let svc = state.service();
 
-        if !svc.job.can_write_job(&user_info, team_id, &req.eid).await? {
+        if !svc
+            .job
+            .can_write_job(&user_info, team_id, Some(req.eid.clone()))
+            .await?
+        {
             return Err(NoPermission().into());
         }
 
@@ -1882,21 +1984,15 @@ impl JobApi {
         Json(req): Json<types::DeleteJobSupervisorReq>,
     ) -> api_response!(types::DeleteJobSupervisorResp) {
         let svc = state.service();
-        let username = if !svc
-            .team
-            .can_delete_job(team_id.clone(), &user_info.user_id)
+        if !svc
+            .job
+            .can_write_job_supervisor_by_id(&user_info, team_id.clone(), Some(req.id))
             .await?
         {
-            if team_id.is_none() {
-                Some(user_info.username.clone())
-            } else {
-                return_err!("no permission to delete this job supervisor");
-            }
-        } else {
-            None
-        };
+            return_err!("no permission to delete this job supervisor");
+        }
 
-        let result = svc.job.delete_job_supervisor(username, req.id).await?;
+        let result = svc.job.delete_job_supervisor(&user_info, req.id).await?;
         return_ok!(types::DeleteJobSupervisorResp { result });
     }
 }

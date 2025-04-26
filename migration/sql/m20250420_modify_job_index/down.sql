@@ -1,0 +1,2 @@
+show
+create table job;

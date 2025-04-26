@@ -1,14 +1,15 @@
 use anyhow::Result;
+use chrono::Local;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 use sea_query::Query;
 
 use super::{types::JobTimerRelatedJobModel, JobLogic};
 use crate::{
     entity::{executor, job, job_timer, prelude::*, tag_resource, team},
-    logic::types::ResourceType,
+    logic::types::{ResourceType, UserInfo},
 };
 
 impl<'a> JobLogic<'a> {
@@ -59,6 +60,7 @@ impl<'a> JobLogic<'a> {
                     .to(job::Column::TeamId)
                     .into(),
             )
+            .filter(job_timer::Column::IsDeleted.eq(false))
             .apply_if(name, |query, v| {
                 query.filter(job_timer::Column::Name.contains(v))
             })
@@ -110,14 +112,18 @@ impl<'a> JobLogic<'a> {
         Ok((list, total))
     }
 
-    pub async fn delete_job_timer(&self, username: Option<String>, id: u64) -> Result<u64> {
-        let ret = JobTimer::delete_many()
-            .apply_if(username, |q, v| {
-                q.filter(job_timer::Column::CreatedUser.eq(v))
+    pub async fn delete_job_timer(&self, user_info: &UserInfo, id: u64) -> Result<u64> {
+        let ret = JobTimer::update_many()
+            .set(job_timer::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
             })
             .filter(job_timer::Column::Id.eq(id))
             .exec(&self.ctx.db)
             .await?;
+
         Ok(ret.rows_affected)
     }
 }
