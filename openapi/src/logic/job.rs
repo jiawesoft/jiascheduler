@@ -288,7 +288,7 @@ impl<'a> JobLogic<'a> {
         };
 
         let Some(job_record) = Job::find()
-            .filter(job::Column::Id.eq(schedule_record.eid))
+            .filter(job::Column::Eid.eq(schedule_record.eid))
             .one(&self.ctx.db)
             .await?
         else {
