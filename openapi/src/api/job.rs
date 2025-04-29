@@ -704,9 +704,13 @@ impl JobApi {
             None => (Set("default".to_string()), NotSet),
         };
 
-        let (eid, id) = match req.id {
-            Some(v) => (NotSet, Set(v)),
-            None => (Set(IdGenerator::get_job_eid()), NotSet),
+        let (eid, id, created_user) = match req.id {
+            Some(v) => (NotSet, Set(v), NotSet),
+            None => (
+                Set(IdGenerator::get_job_eid()),
+                NotSet,
+                Set(user_info.username.clone()),
+            ),
         };
 
         let ret = svc
@@ -731,10 +735,10 @@ impl JobApi {
                     false => 0,
                 })),
                 display_on_dashboard: Set(req.display_on_dashboard.unwrap_or(false)),
-                created_user: Set(user_info.username.clone()),
+                created_user,
                 updated_user: Set(user_info.username.clone()),
                 args: Set(args),
-                team_id: Set(team_id.unwrap_or_default()),
+                team_id: team_id.map_or(NotSet, |v| Set(v)),
                 completed_callback,
                 ..Default::default()
             })
@@ -1488,9 +1492,13 @@ impl JobApi {
             return_err!("no permission to delete this job");
         }
 
-        let (eid, id) = match req.id {
-            Some(v) => (NotSet, Set(v)),
-            None => (Set(IdGenerator::get_job_bundle_script_uid()), NotSet),
+        let (eid, id, created_user) = match req.id {
+            Some(v) => (NotSet, Set(v), NotSet),
+            None => (
+                Set(IdGenerator::get_job_bundle_script_uid()),
+                NotSet,
+                Set(user_info.username.clone()),
+            ),
         };
 
         let ret = svc
@@ -1499,11 +1507,11 @@ impl JobApi {
                 id,
                 eid,
                 executor_id: Set(req.executor_id),
-                team_id: Set(team_id.unwrap_or_default()),
+                team_id: team_id.map_or(NotSet, |v| Set(v)),
                 name: Set(req.name),
                 code: Set(req.code),
                 info: Set(req.info),
-                created_user: Set(user_info.username.clone()),
+                created_user,
                 updated_user: Set(user_info.username.clone()),
                 args: Set(args),
                 ..Default::default()
@@ -1653,7 +1661,7 @@ impl JobApi {
         let search_username = if state.can_manage_job(&user_info.user_id).await? {
             search_username.as_ref()
         } else {
-            team_id.map_or_else(|| Some(&user_info.username), |_| search_username.as_ref())
+            team_id.map_or(Some(&user_info.username), |_| search_username.as_ref())
         };
 
         let ret = svc
@@ -1748,7 +1756,7 @@ impl JobApi {
                 )),
                 job_type: Set(req.job_type),
                 info: Set(req.info),
-                created_user: Set(user_info.username.clone()),
+                created_user: req.id.map_or(Set(user_info.username.clone()), |_| NotSet),
                 updated_user: Set(user_info.username.clone()),
                 ..Default::default()
             })
@@ -1960,7 +1968,7 @@ impl JobApi {
                     }
                 }),
                 info: Set(req.info),
-                created_user: Set(user_info.username.clone()),
+                created_user: req.id.map_or(Set(user_info.username.clone()), |_| NotSet),
                 updated_user: Set(user_info.username.clone()),
                 ..Default::default()
             })

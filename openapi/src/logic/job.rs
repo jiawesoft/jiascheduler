@@ -124,7 +124,7 @@ impl<'a> JobLogic<'a> {
         };
 
         let Some(bundle_script_record) = JobBundleScript::find()
-            .filter(job::Column::Id.eq(id))
+            .filter(job_bundle_script::Column::Id.eq(id))
             .one(&self.ctx.db)
             .await?
         else {
