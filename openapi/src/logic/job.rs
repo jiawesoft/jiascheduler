@@ -702,7 +702,7 @@ impl<'a> JobLogic<'a> {
                 query.filter(job_running_status::Column::JobType.eq(v))
             })
             .apply_if(created_user, |query, v| {
-                query.filter(job::Column::CreatedUser.eq(v))
+                query.filter(job_running_status::Column::UpdatedUser.eq(v))
             })
             .apply_if(bind_ip, |query, v| {
                 query.filter(instance::Column::Ip.contains(v))
