@@ -4,13 +4,14 @@ use anyhow::Result;
 use automate::{
     comet::{self, CometOptions},
     scheduler::{
-        types::{AssignUserOption, SshConnectionOption},
         Scheduler,
+        types::{AssignUserOption, SshConnectionOption},
     },
 };
 use clap::Parser;
-use openapi::{config::Conf, WebapiOptions};
-use tokio::sync::{oneshot::channel, Mutex};
+use openapi::WebapiOptions;
+use service::config::Conf;
+use tokio::sync::{Mutex, oneshot::channel};
 use tracing::{error, info};
 
 /// A high-performance, scalable, dynamically configured job scheduler developed with rust
@@ -63,13 +64,16 @@ struct WebapiArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = WebapiArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
-    if args.debug {
-        std::env::set_var("RUST_LOG", "debug");
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+        if args.debug {
+            std::env::set_var("RUST_LOG", "debug");
+        }
     }
+
     tracing_subscriber::fmt::init();
 
-    let (console_tx, console_rx) = channel::<openapi::config::Conf>();
+    let (console_tx, console_rx) = channel::<Conf>();
     let (comet_tx, comet_rx) = channel::<()>();
 
     let console_conf: Arc<Mutex<Option<Conf>>> = Arc::new(Mutex::new(None));

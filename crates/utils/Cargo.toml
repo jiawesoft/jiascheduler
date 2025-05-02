@@ -1,10 +1,9 @@
 [package]
-name = "leader-election"
+name = "utils"
 edition = "2024"
-publish = false
 
 [dependencies]
-redis.workspace = true
-nanoid.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 anyhow.workspace = true

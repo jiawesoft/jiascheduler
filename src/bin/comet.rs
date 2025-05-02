@@ -28,7 +28,9 @@ struct CometArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CometArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+    }
 
     tracing_subscriber::fmt::init();
 

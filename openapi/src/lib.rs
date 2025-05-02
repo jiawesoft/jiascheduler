@@ -9,14 +9,14 @@ use api::{
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
 use ::migration::{Migrator, MigratorTrait};
-use chrono::Local;
-use config::Conf;
+
 use logic::user::UserLogic;
 use middleware::AuthMiddleware;
 use poem::{get, IntoEndpoint};
+use service::config::Conf;
 
 pub use error::custom_error;
-use nanoid::nanoid;
+
 pub use openapi_derive::ApiStdResponse;
 use poem::{
     endpoint::{EmbeddedFileEndpoint, EmbeddedFilesEndpoint},
@@ -27,6 +27,7 @@ use poem::{
 use poem_openapi::{ContactObject, OpenApiService};
 use redis::{aio::ConnectionManager, Client};
 
+pub use entity;
 use git_version::git_version;
 use reqwest::header;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -38,14 +39,14 @@ use tracing::info;
 use url::Url;
 
 pub mod api;
-pub mod config;
-pub mod entity;
+
 mod error;
 mod job;
-mod logic;
+pub use service::logic;
 pub mod middleware;
 mod migration;
-mod state;
+
+pub use service::state;
 pub mod utils;
 
 #[derive(Clone)]
@@ -75,48 +76,6 @@ impl WebapiOptions {
             .map(|v| conf.bind_addr = v.to_string());
 
         Ok(conf)
-    }
-}
-
-pub struct IdGenerator;
-
-impl IdGenerator {
-    const JOB_PREFIX: &'static str = "j";
-    const JOB_BUNDLE_SCRIPT_PREFIX: &'static str = "b";
-    const TIMER_JOB_PREFIX: &'static str = "t";
-    const FLOW_JOB_PREFIX: &'static str = "f";
-    const SCHEDULE_ID_PREFIX: &'static str = "s";
-    const INSTANCE_PREFIX: &'static str = "i";
-
-    pub fn get_job_eid() -> String {
-        Self::get_id(Self::JOB_PREFIX)
-    }
-
-    pub fn get_job_bundle_script_uid() -> String {
-        Self::get_id(Self::JOB_BUNDLE_SCRIPT_PREFIX)
-    }
-
-    pub fn get_timer_uid() -> String {
-        Self::get_id(Self::TIMER_JOB_PREFIX)
-    }
-
-    pub fn get_flow_job_uid() -> String {
-        Self::get_id(Self::FLOW_JOB_PREFIX)
-    }
-    pub fn get_schedule_uid() -> String {
-        Self::get_id(Self::SCHEDULE_ID_PREFIX)
-    }
-
-    pub fn get_instance_uid() -> String {
-        Self::get_id(Self::INSTANCE_PREFIX)
-    }
-
-    fn get_id(prefix: &str) -> String {
-        format!("{prefix}-{}", nanoid!(10)).into()
-    }
-
-    pub fn get_run_id() -> String {
-        Local::now().format("%Y%m%d%H%M%S").to_string()
     }
 }
 

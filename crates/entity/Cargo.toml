@@ -1,0 +1,8 @@
+[package]
+name = "entity"
+edition = "2024"
+publish = false
+
+[dependencies]
+sea-orm.workspace = true
+serde.workspace = true

@@ -4,8 +4,8 @@ use clap::Parser;
 use tracing::error;
 
 use automate::scheduler::{
-    types::{AssignUserOption, SshConnectionOption},
     Scheduler,
+    types::{AssignUserOption, SshConnectionOption},
 };
 
 #[derive(Parser, Debug)]
@@ -52,7 +52,9 @@ struct AgentArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = AgentArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+    }
     tracing_subscriber::fmt::init();
 
     let mut scheduler = Scheduler::new(

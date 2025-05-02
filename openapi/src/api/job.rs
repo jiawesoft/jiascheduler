@@ -8,8 +8,10 @@ use crate::{
     logic::{self, job::types::BundleScriptRecord},
     middleware,
     response::{std_into_error, ApiStdResponse},
-    return_err, return_ok, AppState, IdGenerator,
+    return_err, return_ok, AppState,
 };
+
+use service::IdGenerator;
 
 use automate::{scheduler::types::ScheduleType, JobAction};
 use poem::{session::Session, web::Data, Endpoint, EndpointExt, Result};

@@ -4,12 +4,12 @@ pub mod executor;
 pub mod instance;
 pub mod job;
 pub mod migration;
-pub(crate) mod role;
+pub mod role;
 pub mod ssh;
 pub mod tag;
 pub mod team;
 pub mod types;
-pub(crate) mod user;
+pub mod user;
 
 pub fn omit_empty_active_value<T>(val: T) -> ActiveValue<T>
 where

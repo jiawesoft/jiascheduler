@@ -1,0 +1,36 @@
+[package]
+name = "service"
+edition = "2024"
+publish = false
+
+[dependencies]
+sea-orm.workspace = true
+serde.workspace = true
+entity.workspace = true
+sea-query.workspace = true
+automate.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+futures.workspace = true
+sql-builder.workspace = true
+poem.workspace = true
+russh.workspace = true
+russh-keys.workspace = true
+async-trait.workspace = true
+russh-sftp.workspace = true
+nanoid.workspace = true
+rust-crypto.workspace = true
+casbin = "*"
+simple_crypt.workspace = true
+redis.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+rustc-serialize.workspace = true
+reqwest.workspace = true
+toml.workspace = true
+shellexpand.workspace = true
+config.workspace = true
+utils.workspace = true
+evalexpr.workspace = true
+serde_repr.workspace = true

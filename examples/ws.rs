@@ -1,17 +1,16 @@
-use automate::bridge::{client::WsClient, Bridge};
+use automate::bridge::{Bridge, client::WsClient};
 use futures_util::{
-    stream::{SplitSink, SplitStream},
     StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 use local_ip_address::local_ip;
 use poem::{
-    get, handler,
+    EndpointExt, IntoResponse, Route, Server, get, handler,
     listener::TcpListener,
     web::{
-        websocket::{Message, WebSocket, WebSocketStream},
         Data, Html,
+        websocket::{Message, WebSocket, WebSocketStream},
     },
-    EndpointExt, IntoResponse, Route, Server,
 };
 use tracing::info;
 
@@ -89,7 +88,9 @@ fn ws(ws: WebSocket, mut bridge: Data<&Bridge>) -> impl IntoResponse {
 #[tokio::main]
 async fn main() {
     if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var("RUST_LOG", "comet=debug");
+        unsafe {
+            std::env::set_var("RUST_LOG", "comet=debug");
+        }
     }
     tracing_subscriber::fmt::init();
     info!("start es example");

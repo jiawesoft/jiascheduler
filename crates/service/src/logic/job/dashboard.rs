@@ -9,17 +9,19 @@ use sea_orm::{
 };
 use sea_query::{Alias, Expr};
 use serde::{Deserialize, Serialize};
-use sql_builder::{bind::Bind, SqlBuilder};
+use sql_builder::{SqlBuilder, bind::Bind};
 
 use super::{
-    types::{self, BundleScriptRecord, JobStatSummary, RunResultSummary},
     JobLogic,
+    types::{self, BundleScriptRecord, JobStatSummary, RunResultSummary},
 };
 
 use crate::{
     entity::{job, job_exec_history, job_running_status, job_schedule_history, prelude::*},
-    local_time, logic,
+    logic,
 };
+
+use utils::local_time;
 
 #[derive(Debug, FromQueryResult)]
 pub struct JobExecCount {
