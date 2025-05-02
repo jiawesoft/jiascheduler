@@ -12,8 +12,7 @@ use automate::scheduler::{
 #[command(
     author = "iwannay <772648576@qq.com>",
     about = "A high-performance, scalable, dynamically configured job scheduler developed with rust",
-    version = "0.0.1",
-    long_about = None
+    version
 )]
 struct AgentArgs {
     #[arg(short, long, default_value_t = String::from("0.0.0.0:3001"))]
