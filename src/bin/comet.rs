@@ -6,8 +6,7 @@ use clap::Parser;
 #[command(
     author = "iwannay <772648576@qq.com>",
     about = "A high-performance, scalable, dynamically configured job scheduler developed with rust",
-    version = "0.0.1",
-    long_about = None
+    version
 )]
 struct CometArgs {
     /// if enable debug mode
@@ -28,7 +27,9 @@ struct CometArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = CometArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+    }
 
     tracing_subscriber::fmt::init();
 

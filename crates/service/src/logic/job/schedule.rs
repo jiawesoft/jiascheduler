@@ -1,11 +1,11 @@
 use std::{path::PathBuf, str::FromStr, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use automate::{
+    JobAction,
     bridge::msg::{BundleOutputParams, UpdateJobParams},
     scheduler::types::{BundleScript, RunStatus, ScheduleStatus, ScheduleType, UploadFile},
-    JobAction,
 };
 
 use chrono::Local;
@@ -19,27 +19,28 @@ use sea_orm::{
 
 use sea_query::{OnConflict, Query};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::fs;
 use tracing::{debug, error};
 
 use crate::{
+    IdGenerator,
     entity::{
         self, executor, instance, job, job_exec_history, job_running_status, job_schedule_history,
         prelude::*, tag_resource, team,
     },
-    file_name,
     logic::{
         executor::ExecutorLogic,
         job::types::DispatchResult,
         types::{CompletedCallbackOpts, CompletedCallbackTriggerType, ResourceType, UserInfo},
     },
-    utils, IdGenerator,
 };
 
+use utils::file_name;
+
 use super::{
-    types::{self, BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
     JobLogic,
+    types::{self, BundleScriptRecord, BundleScriptResult, DispatchData, DispatchTarget},
 };
 
 #[test]
@@ -526,7 +527,7 @@ impl<'a> JobLogic<'a> {
                             response: json!(null),
                             has_err: true,
                             err: Some(e.to_string()),
-                        })
+                        });
                     }
                 };
                 let api_url = format!(
@@ -572,7 +573,7 @@ impl<'a> JobLogic<'a> {
                             instance_id: v.instance_id.clone(),
                             has_err: true,
                             err: Some(e.to_string()),
-                        })
+                        });
                     }
                 };
 
@@ -782,7 +783,7 @@ impl<'a> JobLogic<'a> {
                             response: json!(null),
                             has_err: true,
                             err: Some(e.to_string()),
-                        })
+                        });
                     }
                 };
 
@@ -798,7 +799,7 @@ impl<'a> JobLogic<'a> {
                             has_err: true,
                             err: Some(e.to_string()),
                             instance_id: v.instance_id.clone(),
-                        })
+                        });
                     }
                 };
 
@@ -812,7 +813,7 @@ impl<'a> JobLogic<'a> {
                             has_err: true,
                             instance_id: v.instance_id.clone(),
                             err: Some(e.to_string()),
-                        })
+                        });
                     }
                 };
                 let (has_err, err) = if ret["code"] != 20000 {

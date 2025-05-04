@@ -1,5 +1,5 @@
 use anyhow::Result;
-use file_rotate::{compression::Compression, suffix::AppendCount, FileRotate};
+use file_rotate::{FileRotate, compression::Compression, suffix::AppendCount};
 
 use std::io::Write;
 
@@ -11,7 +11,7 @@ use std::{
 };
 use tokio::sync::mpsc::Receiver;
 
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tracing::error;
 
 use crate::scheduler::cmd::Cmd;
@@ -209,7 +209,10 @@ async fn test_command_exec() {
     use std::time::Duration;
     use tokio::time::sleep;
     use tracing::info;
-    std::env::set_var("RUST_LOG", "debug");
+    unsafe {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+
     tracing_subscriber::fmt::init();
     let c = Executor::builder()
         .job(BaseJob {

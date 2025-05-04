@@ -5,12 +5,15 @@ members = [
     "openapi-derive",
     "migration",
     "crates/leader-election",
+    "crates/entity",
+    "crates/service",
+    "crates/utils",
 ]
 
 [package]
 name = "jiascheduler"
 version = "1.1.4"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -67,6 +70,8 @@ uuid.workspace = true
 automate.workspace = true
 openapi.workspace = true
 watchexec-supervisor.workspace = true
+service.workspace = true
+
 # terminal-keycode = "1.1.1"
 
 
@@ -136,6 +141,9 @@ automate = { path = "automate" }
 openapi = { path = "openapi" }
 migration = { path = "migration" }
 leader-election = { path = "crates/leader-election" }
+entity = { path = "crates/entity" }
+service = { path = "crates/service" }
+utils = { path = "crates/utils" }
 sea-query = "0.32.2"
 rust-embed = "*"
 reqwest = { version = "*", features = ["json"] }

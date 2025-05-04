@@ -63,18 +63,6 @@ macro_rules! default_local_time {
 }
 
 #[macro_export]
-macro_rules! file_name {
-    ($file:expr) => {
-        PathBuf::from($file)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
-    };
-}
-
-#[macro_export]
 macro_rules! return_err_to_wsconn {
     ($client:expr, $err_msg:expr) => {
         if let Err(e) = $client

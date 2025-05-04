@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Local};
 use futures::{SinkExt, StreamExt};
 
@@ -17,22 +17,21 @@ use crate::{
 };
 use futures_util::stream::{SplitSink, SplitStream};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::{
     net::TcpStream,
     select,
     sync::{
-        mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedSender},
         Mutex,
+        mpsc::{Receiver, Sender, UnboundedSender, channel, unbounded_channel},
     },
     task,
     time::{sleep, timeout},
 };
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tokio_tungstenite::{
-    connect_async,
+    MaybeTlsStream, WebSocketStream, connect_async,
     tungstenite::{ClientRequestBuilder, Message},
-    MaybeTlsStream, WebSocketStream,
 };
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -47,9 +46,9 @@ use super::{
 
 use crate::{
     bridge::{
+        Bridge,
         client::WsClient,
         msg::{DispatchJobParams, HeartbeatParams, MsgReqKind},
-        Bridge,
     },
     get_endpoint,
     scheduler::executor::Executor,
@@ -517,6 +516,7 @@ impl
                 dispatch_params.run_id = run_id!();
 
                 Box::pin(async move {
+                    sleep(Duration::from_millis(10)).await;
                     let next_time = job_scheduler
                         .next_tick_for_job(job_id)
                         .await

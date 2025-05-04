@@ -1,11 +1,12 @@
 use crate::{
     entity::{self, role, user},
     state::AppContext,
-    AppState,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use crypto::digest::Digest;
 use crypto::md5::Md5;
+
+use crate::state::AppState;
 
 use futures::Future;
 use nanoid::nanoid;

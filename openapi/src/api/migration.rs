@@ -10,11 +10,11 @@ use url::Url;
 
 use crate::{
     api_response,
-    config::Conf,
     logic::{self, user::UserLogic},
     response::{std_into_error, ApiStdResponse},
     return_err, return_ok, AppState, InstallState,
 };
+use service::config::Conf;
 
 mod types {
     use poem_openapi::Object;

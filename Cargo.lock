@@ -423,7 +423,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "automate"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1413,6 +1413,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity"
+version = "0.0.0"
+dependencies = [
+ "sea-orm",
+ "serde",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2321,6 +2329,7 @@ dependencies = [
  "redis-macros",
  "serde",
  "serde_json",
+ "service",
  "tokio",
  "tokio-cron-scheduler",
  "tokio-nsq",
@@ -2372,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "leader-election"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "nanoid",
@@ -2531,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "migration"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-std",
  "sea-orm-migration",
@@ -2845,7 +2854,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openapi"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2853,6 +2862,7 @@ dependencies = [
  "casbin",
  "chrono",
  "config",
+ "entity",
  "evalexpr",
  "futures",
  "git-version",
@@ -2877,6 +2887,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "service",
  "shellexpand",
  "simple_crypt",
  "sql-builder",
@@ -2892,7 +2903,7 @@ dependencies = [
 
 [[package]]
 name = "openapi-derive"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "poem",
@@ -4809,6 +4820,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "service"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "automate",
+ "casbin",
+ "chrono",
+ "config",
+ "entity",
+ "evalexpr",
+ "futures",
+ "nanoid",
+ "poem",
+ "redis 0.27.4",
+ "reqwest",
+ "russh",
+ "russh-keys",
+ "russh-sftp",
+ "rust-crypto",
+ "rustc-serialize",
+ "sea-orm",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "shellexpand",
+ "simple_crypt",
+ "sql-builder",
+ "tokio",
+ "toml 0.8.19",
+ "tracing",
+ "utils",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5994,6 +6041,16 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
+
+[[package]]
+name = "utils"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "uuid"

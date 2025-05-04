@@ -4,16 +4,15 @@ use clap::Parser;
 use tracing::error;
 
 use automate::scheduler::{
-    types::{AssignUserOption, SshConnectionOption},
     Scheduler,
+    types::{AssignUserOption, SshConnectionOption},
 };
 
 #[derive(Parser, Debug)]
 #[command(
     author = "iwannay <772648576@qq.com>",
     about = "A high-performance, scalable, dynamically configured job scheduler developed with rust",
-    version = "0.0.1",
-    long_about = None
+    version
 )]
 struct AgentArgs {
     #[arg(short, long, default_value_t = String::from("0.0.0.0:3001"))]
@@ -52,7 +51,9 @@ struct AgentArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = AgentArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+    }
     tracing_subscriber::fmt::init();
 
     let mut scheduler = Scheduler::new(

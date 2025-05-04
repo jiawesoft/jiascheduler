@@ -4,7 +4,11 @@ use openapi::WebapiOptions;
 
 /// A high-performance, scalable, dynamically configured job scheduler developed with rust
 #[derive(Parser, Debug)]
-#[command(author = "iwannay <772648576@qq.com>", about, version)]
+#[command(
+    author = "iwannay <772648576@qq.com>",
+    about = "A high-performance, scalable, dynamically configured job scheduler developed with rust",
+    version
+)]
 struct WebapiArgs {
     /// if enable debug mode
     #[arg(short, long)]
@@ -34,7 +38,10 @@ struct WebapiArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = WebapiArgs::parse();
-    std::env::set_var("RUST_LOG", args.log_level);
+    unsafe {
+        std::env::set_var("RUST_LOG", args.log_level);
+    }
+
     tracing_subscriber::fmt::init();
 
     openapi::run(

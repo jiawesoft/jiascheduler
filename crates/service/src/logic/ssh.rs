@@ -16,13 +16,33 @@ use russh_keys::*;
 use russh_sftp::client::SftpSession;
 use serde_json::Value;
 
-use crate::api::terminal::types::{Msg, MsgType};
 use crate::state::AppContext;
 
+use serde::{self, Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::ToSocketAddrs;
 use tokio::time::timeout;
 use tracing::info;
+
+#[derive(Debug, Deserialize_repr, Serialize_repr)]
+#[repr(u8)]
+pub enum MsgType {
+    Resize = 1,
+    Data = 2,
+    Ping = 3,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Msg {
+    pub r#type: MsgType,
+    #[serde(default)]
+    pub msg: String,
+    #[serde(default)]
+    pub cols: u32,
+    #[serde(default)]
+    pub rows: u32,
+}
 
 struct Client {}
 
