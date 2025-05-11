@@ -13,7 +13,7 @@ use sea_orm::{
 };
 use sea_query::Query;
 
-use super::{types::JobSupervisorRelatedJobModel, Executor, Job, JobLogic, JobSupervisor, Team};
+use super::{Executor, Job, JobLogic, JobSupervisor, Team, types::JobSupervisorRelatedJobModel};
 
 impl<'a> JobLogic<'a> {
     pub async fn query_job_supervisor(
@@ -153,7 +153,8 @@ impl<'a> JobLogic<'a> {
             .filter(job_running_status::Column::ScheduleType.eq(ScheduleType::Daemon.to_string()))
             .filter(
                 job_running_status::Column::ScheduleStatus
-                    .eq(ScheduleStatus::Supervising.to_string()),
+                    .eq(ScheduleStatus::Supervising.to_string())
+                    .or(job_running_status::Column::RunStatus.eq(RunStatus::Running.to_string())),
             )
             .exec(&self.ctx.db)
             .await?;
@@ -164,7 +165,20 @@ impl<'a> JobLogic<'a> {
                 ..Default::default()
             })
             .filter(job_running_status::Column::InstanceId.is_in(instance_ids))
-            .filter(job_running_status::Column::ScheduleType.eq(ScheduleType::Once.to_string()))
+            .filter(
+                Condition::any()
+                    .add(
+                        job_running_status::Column::ScheduleType.eq(ScheduleType::Once.to_string()),
+                    )
+                    .add(
+                        job_running_status::Column::ScheduleStatus
+                            .eq(ScheduleStatus::Unscheduled.to_string())
+                            .and(job_running_status::Column::RunStatus.is_in(vec![
+                                RunStatus::Running.to_string(),
+                                RunStatus::Prepare.to_string(),
+                            ])),
+                    ),
+            )
             .exec(&self.ctx.db)
             .await?;
 

@@ -205,7 +205,7 @@ impl React {
                     .timer_kill_senders
                     .append(&mut vec![(run_id.clone(), kill_signal_tx)]),
                 JobAction::Exec => ctx
-                    .timer_kill_senders
+                    .once_kill_senders
                     .append(&mut vec![(run_id.clone(), kill_signal_tx)]),
                 JobAction::StartSupervising => ctx
                     .daemon_kill_senders
@@ -226,7 +226,7 @@ impl React {
                     .timer_kill_senders
                     .append(&mut vec![(run_id.clone(), kill_signal_tx)]),
                 JobAction::Exec => ctx
-                    .timer_kill_senders
+                    .once_kill_senders
                     .append(&mut vec![(run_id.clone(), kill_signal_tx)]),
                 JobAction::StartSupervising => ctx
                     .daemon_kill_senders
@@ -285,7 +285,13 @@ impl React {
                     }
                 }
             }
-            ScheduleType::Daemon => {}
+            ScheduleType::Daemon => {
+                for (_, tx) in &handler.daemon_kill_senders {
+                    if let Err(e) = tx.send(()).await {
+                        error!("failed send kill signal, eid: {eid} {}", e);
+                    }
+                }
+            }
             _ => unreachable!(),
         }
     }
@@ -551,10 +557,6 @@ impl
                 base_job: base_job.to_pure_job(),
                 run_status: Some(types::RunStatus::Running),
                 schedule_id: schedule_id.clone(),
-                exit_status: None,
-                exit_code: None,
-                stdout: None,
-                stderr: None,
                 next_time,
                 prev_time,
                 bind_namespace: react.namespace.clone(),
@@ -583,8 +585,6 @@ impl
                         schedule_id: schedule_id.clone(),
                         exit_status: Some(e.to_string()),
                         exit_code: Some(99),
-                        prev_time,
-                        next_time,
                         bind_namespace: react.namespace.clone(),
                         instance_id: instance_id.clone(),
                         bind_ip: react.local_ip.clone(),
@@ -611,8 +611,6 @@ impl
                 exit_status: output.get_exit_status(),
                 exit_code: output.get_exit_code(),
                 instance_id: instance_id.clone(),
-                prev_time,
-                next_time,
                 bind_namespace: react.namespace.clone(),
                 bind_ip: react.local_ip.clone(),
                 start_time: Some(start_time),
@@ -809,24 +807,28 @@ impl
 
                 tokio::pin!(sleep_time);
 
-                select! {
-                    _ = &mut sleep_time => {
-                        info!("supervising: sleep, waiting restart")
-                    },
-                    Some(v) = rx.recv() => {
-                        match v {
-                            SupervisorSignal::UpdateOptions(opts) => {
-                                 dispatch_params = opts.clone();
-                                info!("supervising: update options {:?}", opts);
-                            },
-                            SupervisorSignal::Exit => {
-                                info!("supervising: exited");
-                                return;
+                loop {
+                    select! {
+                        _ = &mut sleep_time => {
+                            info!("supervising: sleep, waiting restart");
+                            break;
+                        },
+                        Some(v) = rx.recv() => {
+                            match v {
+                                SupervisorSignal::UpdateOptions(opts) => {
+                                     dispatch_params = opts.clone();
+                                    info!("supervising: update options {:?}", opts);
+                                },
+                                SupervisorSignal::Exit => {
+                                    info!("supervising: exited");
+                                    return;
+                                }
                             }
-                        }
 
-                    },
+                        },
+                    }
                 }
+
                 continue 'main;
             }
         });
