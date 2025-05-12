@@ -652,7 +652,7 @@ impl
                     sleep(Duration::from_millis(10)).await;
 
                     if let Err(e) = react_clone.can_execute(&dispatch_params).await {
-                        error!("cannot execute job - {e}");
+                        error!("ignore execute job - {e}");
                         return;
                     }
 
