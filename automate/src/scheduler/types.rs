@@ -120,8 +120,8 @@ pub struct BaseJob {
     pub timeout: u64,
     pub work_dir: Option<String>,
     pub work_user: Option<String>,
-    pub max_retry: u8,
-    pub max_parallel: u8,
+    pub max_retry: Option<u8>,
+    pub max_parallel: Option<u32>,
 }
 
 impl BaseJob {

@@ -226,8 +226,8 @@ async fn test_command_exec() {
             timeout: 2,
             work_dir: None,
             work_user: None,
-            max_retry: 1,
-            max_parallel: 1,
+            max_retry: None,
+            max_parallel: None,
         })
         .build();
 
