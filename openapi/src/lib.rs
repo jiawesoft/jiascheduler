@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
     migration::MigrationApi, role::RoleApi, tag::TagApi, team::TeamApi, terminal, user::UserApi,
+    workflow::WorkflowApi,
 };
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
@@ -239,6 +240,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             MigrationApi,
             ManageApi,
             TagApi,
+            WorkflowApi,
         ),
         "jiascheduler web api",
         "1.0",
