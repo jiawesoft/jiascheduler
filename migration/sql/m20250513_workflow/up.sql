@@ -12,7 +12,7 @@ CREATE TABLE `workflow` (
     `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT 'updater username',
     `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'created time',
     `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated time',
-    `is_deleted` BOOLEAN NOT NULL DEFAULT 'false' COMMENT 'is deleted',
+    `is_deleted` BOOLEAN NOT NULL DEFAULT false COMMENT 'is deleted',
     `deleted_at` timestamp NULL DEFAULT NULL COMMENT 'deleted time',
     `deleted_by` varchar(50) NOT NULL DEFAULT '' COMMENT 'deleted by',
     PRIMARY KEY (`id`)
