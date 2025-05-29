@@ -8,6 +8,8 @@ use entity::workflow;
 use sea_orm::ActiveValue::{NotSet, Set};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
 
+use super::types::{EdgeConfig, NodeConfig};
+
 pub struct WorkflowLogic<'a> {
     ctx: &'a AppContext,
 }
@@ -112,8 +114,8 @@ impl<'a> WorkflowLogic<'a> {
         info: Option<String>,
         version: String,
         version_status: String,
-        nodes: Option<serde_json::Value>,
-        edges: Option<serde_json::Value>,
+        nodes: Option<Vec<NodeConfig>>,
+        edges: Option<Vec<EdgeConfig>>,
         team_id: Option<u64>,
     ) -> Result<u64> {
         let mut active_model = workflow::ActiveModel {
@@ -123,8 +125,8 @@ impl<'a> WorkflowLogic<'a> {
             team_id: team_id.map_or(NotSet, |v| Set(v)),
             version: Set(version),
             version_status: Set(version_status),
-            nodes: Set(nodes),
-            edges: Set(edges),
+            nodes: NotSet,
+            edges: NotSet,
             created_user: Set(user_info.username.clone()),
             updated_user: Set(user_info.username.clone()),
             ..Default::default()

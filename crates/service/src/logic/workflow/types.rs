@@ -21,16 +21,16 @@ impl Display for NodeType {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Task {
-    #[serde(rename = "job")]
-    Job(String),
+    #[serde(rename = "standard")]
+    Standard(StandardJob),
     #[serde(rename = "custom")]
     Custom(CustomJob),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum TaskType {
-    #[serde(rename = "job")]
-    Job,
+    #[serde(rename = "standard")]
+    Standard,
     #[serde(rename = "custom")]
     Custom,
 }
@@ -38,7 +38,7 @@ pub enum TaskType {
 impl Display for TaskType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TaskType::Job => write!(f, "job"),
+            TaskType::Standard => write!(f, "standard"),
             TaskType::Custom => write!(f, "custom"),
         }
     }
@@ -52,6 +52,11 @@ pub struct CustomJob {
     pub upload_file: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StandardJob {
+    pub eid: String,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub id: String,
@@ -59,4 +64,14 @@ pub struct NodeConfig {
     pub node_type: NodeType,
     pub task_type: TaskType,
     pub task: Task,
+    pub data: serde_json::Value,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct EdgeConfig {
+    pub id: String,
+    pub name: String,
+    pub source_node_id: String,
+    pub target_node_id: String,
+    pub data: serde_json::Value,
 }
