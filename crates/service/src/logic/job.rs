@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{Ok, Result, anyhow};
 
 mod bundle_script;
 mod dashboard;
@@ -800,7 +800,7 @@ impl<'a> JobLogic<'a> {
         Ok(model)
     }
 
-    pub async fn get_default_validate_team_id_by_job(
+    pub async fn get_validate_team_id_by_job_or_default(
         &self,
         user_info: &UserInfo,
         eid: Option<&str>,
@@ -821,10 +821,6 @@ impl<'a> JobLogic<'a> {
         };
         let ok = self.can_write_job(user_info, team_id, None).await?;
 
-        if ok {
-            Ok(team_id)
-        } else {
-            Ok(None)
-        }
+        if ok { Ok(team_id) } else { Ok(None) }
     }
 }

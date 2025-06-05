@@ -782,7 +782,7 @@ impl JobApi {
 
         let team_id = svc
             .job
-            .get_default_validate_team_id_by_job(&user_info, default_eid.as_deref(), team_id)
+            .get_validate_team_id_by_job_or_default(&user_info, default_eid.as_deref(), team_id)
             .await?;
 
         let search_username = if state.can_manage_job(&user_info.user_id).await? {

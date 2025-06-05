@@ -1,12 +1,17 @@
 use crate::logic::types::UserInfo;
+use crate::logic::workflow::types;
 use crate::{
     entity::{prelude::*, team_member},
     state::AppContext,
 };
 use anyhow::Result;
-use entity::workflow;
+use entity::{job, team, workflow};
 use sea_orm::ActiveValue::{NotSet, Set};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait,
+};
+use sea_query::Expr;
 
 use super::types::{EdgeConfig, NodeConfig};
 
@@ -17,6 +22,63 @@ pub struct WorkflowLogic<'a> {
 impl<'a> WorkflowLogic<'a> {
     pub fn new(ctx: &'a AppContext) -> Self {
         Self { ctx }
+    }
+
+    pub async fn get_workflow_list(
+        &self,
+        _user_info: &UserInfo,
+        created_user: Option<&str>,
+        default_id: Option<u64>,
+        team_id: Option<u64>,
+        name: Option<String>,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<types::WorkflowModel>, u64)> {
+        let select = Workflow::find()
+            .column_as(team::Column::Name, "team_name")
+            .apply_if(team_id, |q, v| q.filter(workflow::Column::TeamId.eq(v)))
+            .apply_if(name, |q, v| q.filter(workflow::Column::Name.contains(v)))
+            .apply_if(created_user, |q, v| {
+                q.filter(workflow::Column::CreatedUser.eq(v))
+            })
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Job)
+                    .from(team::Column::Id)
+                    .to(job::Column::TeamId)
+                    .into(),
+            );
+
+        let total = select.clone().count(&self.ctx.db).await?;
+        let ret = select
+            .apply_if(default_id, |query, v| {
+                query.order_by_desc(Expr::expr(workflow::Column::Id.eq(v)))
+            })
+            .order_by_desc(workflow::Column::Id)
+            .into_model()
+            .paginate(&self.ctx.db, page_size)
+            .fetch_page(page)
+            .await?;
+
+        Ok((ret, total))
+    }
+
+    pub async fn get_workflow_version_list(
+        &self,
+        _user_info: &UserInfo,
+        id: u64,
+        page: u64,
+        page_size: u64,
+    ) -> Result<(Vec<workflow::Model>, u64)> {
+        let select = Workflow::find().filter(workflow::Column::Pid.eq(id));
+
+        let total = select.clone().count(&self.ctx.db).await?;
+        let ret = select
+            .paginate(&self.ctx.db, page_size)
+            .fetch_page(page)
+            .await?;
+
+        Ok((ret, total))
     }
 
     pub async fn can_write_workflow(
@@ -125,8 +187,8 @@ impl<'a> WorkflowLogic<'a> {
             team_id: team_id.map_or(NotSet, |v| Set(v)),
             version: Set(version),
             version_status: Set(version_status),
-            nodes: NotSet,
-            edges: NotSet,
+            nodes: Set(nodes.map(|v| serde_json::to_value(v)).transpose()?),
+            edges: Set(edges.map(|v| serde_json::to_value(v)).transpose()?),
             created_user: Set(user_info.username.clone()),
             updated_user: Set(user_info.username.clone()),
             ..Default::default()

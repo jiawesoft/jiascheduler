@@ -1,9 +1,7 @@
-use std::fmt::Display;
-
-use automate::DispatchJobParams;
-use sea_orm::prelude::DateTimeLocal;
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Display;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum NodeType {
@@ -74,4 +72,18 @@ pub struct EdgeConfig {
     pub source_node_id: String,
     pub target_node_id: String,
     pub data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct WorkflowModel {
+    pub id: u64,
+    pub pid: u64,
+    pub name: String,
+    pub info: String,
+    pub team_id: u64,
+    pub team_name: Option<String>,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
 }

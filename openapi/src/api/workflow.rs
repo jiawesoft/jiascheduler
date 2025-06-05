@@ -1,4 +1,4 @@
-use poem::{session::Session, web::Data};
+use poem::{session::Session, web::Data, Endpoint, EndpointExt};
 use poem_openapi::{
     param::{Header, Query},
     payload::Json,
@@ -6,13 +6,21 @@ use poem_openapi::{
 };
 use sea_orm::{ActiveValue::NotSet, Set};
 
-use crate::{api_response, local_time, logic, return_err, return_ok, state::AppState};
+use crate::{api_response, local_time, logic, middleware, return_err, return_ok, state::AppState};
 
 mod types {
     use poem_openapi::{Enum, Object};
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use std::fmt::Display;
+
+    pub fn default_page() -> u64 {
+        1
+    }
+
+    pub fn default_page_size() -> u64 {
+        20
+    }
 
     #[derive(Object, Deserialize, Serialize)]
     pub struct SaveWorkflowReq {
@@ -113,8 +121,28 @@ mod types {
     pub struct SaveWorkflowVersionResp {
         pub result: u64,
     }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct QueryWorkflowResp {
+        pub total: u64,
+        pub list: Vec<WorkflowRecord>,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct WorkflowRecord {
+        pub id: u64,
+        pub name: String,
+        pub info: String,
+        pub team_name: Option<String>,
+        pub team_id: u64,
+        pub created_time: String,
+        pub created_user: String,
+    }
 }
 
+fn set_middleware(ep: impl Endpoint) -> impl Endpoint {
+    ep.with(middleware::TeamPermissionMiddleware)
+}
 pub struct WorkflowApi;
 
 #[OpenApi(prefix_path = "/workflow", tag = super::Tag::Team)]
@@ -178,5 +206,56 @@ impl WorkflowApi {
             .await?;
 
         return_ok!(types::SaveWorkflowVersionResp { result: ret })
+    }
+
+    #[oai(path = "/list", method = "get", transform = "set_middleware")]
+    pub async fn query_workflow(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
+        Query(page): Query<u64>,
+        #[oai(
+            default = "types::default_page_size",
+            validator(maximum(value = "10000"))
+        )]
+        Query(page_size): Query<u64>,
+        Query(search_username): Query<Option<String>>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        #[oai(default)] Query(name): Query<Option<String>>,
+    ) -> api_response!(types::QueryWorkflowResp) {
+        let search_username = if state.can_manage_job(&user_info.user_id).await? {
+            search_username
+        } else {
+            team_id.map_or_else(|| Some(user_info.username.clone()), |_| search_username)
+        };
+        let svc = state.service();
+        let ret = svc
+            .workflow
+            .get_workflow_list(
+                &user_info,
+                search_username.as_deref(),
+                None,
+                team_id,
+                name,
+                page,
+                page_size,
+            )
+            .await?;
+        let list = ret
+            .0
+            .into_iter()
+            .map(|v| types::WorkflowRecord {
+                id: v.id,
+                name: v.name,
+                info: v.info,
+                team_name: v.team_name,
+                team_id: v.team_id,
+                created_time: local_time!(v.created_time),
+                created_user: v.created_user,
+            })
+            .collect();
+
+        return_ok!(types::QueryWorkflowResp { total: ret.1, list })
     }
 }

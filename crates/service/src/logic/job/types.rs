@@ -1,5 +1,5 @@
 use automate::DispatchJobParams;
-use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
