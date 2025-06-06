@@ -17,12 +17,24 @@ impl Display for NodeType {
     }
 }
 
+impl TryFrom<&str> for NodeType {
+    type Error = anyhow::Error;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "bpmn:startEvent" => Ok(NodeType::StartEvent),
+            _ => Err(anyhow::anyhow!("Invalid node type")),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Task {
     #[serde(rename = "standard")]
     Standard(StandardJob),
     #[serde(rename = "custom")]
     Custom(CustomJob),
+    #[serde(rename = "none")]
+    None,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -38,6 +50,17 @@ impl Display for TaskType {
         match self {
             TaskType::Standard => write!(f, "standard"),
             TaskType::Custom => write!(f, "custom"),
+        }
+    }
+}
+
+impl TryFrom<&str> for TaskType {
+    type Error = anyhow::Error;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "standard" => Ok(TaskType::Standard),
+            "custom" => Ok(TaskType::Custom),
+            _ => Err(anyhow::anyhow!("Invalid task type")),
         }
     }
 }

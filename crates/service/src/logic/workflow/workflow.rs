@@ -66,14 +66,25 @@ impl<'a> WorkflowLogic<'a> {
     pub async fn get_workflow_version_list(
         &self,
         _user_info: &UserInfo,
+        name: Option<String>,
+        created_user: Option<String>,
         id: u64,
+        default_id: Option<u64>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<workflow::Model>, u64)> {
-        let select = Workflow::find().filter(workflow::Column::Pid.eq(id));
+        let select = Workflow::find()
+            .filter(workflow::Column::Pid.eq(id))
+            .apply_if(created_user, |q, v| {
+                q.filter(workflow::Column::CreatedUser.eq(v))
+            })
+            .apply_if(name, |q, v| q.filter(workflow::Column::Name.contains(v)));
 
         let total = select.clone().count(&self.ctx.db).await?;
         let ret = select
+            .apply_if(default_id, |query, v| {
+                query.order_by_desc(Expr::expr(workflow::Column::Id.eq(v)))
+            })
             .paginate(&self.ctx.db, page_size)
             .fetch_page(page)
             .await?;

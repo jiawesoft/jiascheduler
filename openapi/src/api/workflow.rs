@@ -6,12 +6,16 @@ use poem_openapi::{
 };
 use sea_orm::{ActiveValue::NotSet, Set};
 
-use crate::{api_response, local_time, logic, middleware, return_err, return_ok, state::AppState};
+use crate::{
+    api::workflow::types::NodeConfig, api_response, local_time, logic, middleware, return_err,
+    return_ok, state::AppState,
+};
 
 mod types {
     use poem_openapi::{Enum, Object};
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
+    use service::logic;
     use std::fmt::Display;
 
     pub fn default_page() -> u64 {
@@ -51,8 +55,31 @@ mod types {
 
     #[derive(Serialize, Object, Deserialize, Clone)]
     pub struct Task {
-        standard: Option<StandardJob>,
-        custom: Option<CustomJob>,
+        pub standard: Option<StandardJob>,
+        pub custom: Option<CustomJob>,
+    }
+
+    impl TryInto<logic::workflow::types::Task> for Task {
+        type Error = anyhow::Error;
+
+        fn try_into(self) -> Result<logic::workflow::types::Task, Self::Error> {
+            if let Some(std_job) = self.standard {
+                Ok(logic::workflow::types::Task::Standard(
+                    logic::workflow::types::StandardJob { eid: std_job.eid },
+                ))
+            } else if let Some(job) = self.custom {
+                Ok(logic::workflow::types::Task::Custom(
+                    logic::workflow::types::CustomJob {
+                        executor_id: job.executor_id,
+                        timeout: job.timeout,
+                        code: job.code,
+                        upload_file: job.upload_file,
+                    },
+                ))
+            } else {
+                Ok(logic::workflow::types::Task::None)
+            }
+        }
     }
 
     #[derive(Serialize, Enum, Deserialize, Clone)]
@@ -95,6 +122,20 @@ mod types {
         pub data: serde_json::Value,
     }
 
+    impl TryInto<logic::workflow::types::NodeConfig> for NodeConfig {
+        type Error = anyhow::Error;
+        fn try_into(self) -> Result<logic::workflow::types::NodeConfig, Self::Error> {
+            Ok(logic::workflow::types::NodeConfig {
+                id: self.id,
+                name: self.name,
+                node_type: self.node_type.to_string().as_str().try_into()?,
+                task_type: self.task_type.to_string().as_str().try_into()?,
+                task: self.task.try_into()?,
+                data: self.data,
+            })
+        }
+    }
+
     #[derive(Clone, Object, Serialize, Deserialize)]
     pub struct EdgeConfig {
         pub id: String,
@@ -102,6 +143,19 @@ mod types {
         pub source_node_id: String,
         pub target_node_id: String,
         pub data: serde_json::Value,
+    }
+
+    impl TryInto<logic::workflow::types::EdgeConfig> for EdgeConfig {
+        type Error = anyhow::Error;
+        fn try_into(self) -> Result<logic::workflow::types::EdgeConfig, Self::Error> {
+            Ok(logic::workflow::types::EdgeConfig {
+                id: self.id,
+                name: self.name,
+                source_node_id: self.source_node_id,
+                target_node_id: self.target_node_id,
+                data: self.data,
+            })
+        }
     }
 
     #[derive(Object, Deserialize, Serialize)]
@@ -113,7 +167,7 @@ mod types {
         pub info: Option<String>,
         pub version: String,
         #[oai(validator(custom = "crate::api::OneOfValidator::new(vec![\"draft\",\"release\"])"))]
-        pub save_type: String,
+        pub version_status: String,
         pub id: Option<u64>,
     }
 
@@ -135,8 +189,25 @@ mod types {
         pub info: String,
         pub team_name: Option<String>,
         pub team_id: u64,
-        pub created_time: String,
+        pub updated_time: String,
         pub created_user: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct QueryWorkflowVersionResp {
+        pub total: u64,
+        pub list: Vec<WorkflowVersionRecord>,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct WorkflowVersionRecord {
+        pub id: u64,
+        pub name: String,
+        pub info: String,
+        pub updated_time: String,
+        pub created_user: String,
+        pub nodes: Option<Vec<NodeConfig>>,
+        pub edges: Option<Vec<EdgeConfig>>,
     }
 }
 
@@ -189,6 +260,22 @@ impl WorkflowApi {
             return_err!("no permission");
         }
 
+        let nodes: Option<Vec<_>> = req
+            .nodes
+            .map(|v| {
+                v.into_iter()
+                    .map(|v| TryInto::<logic::workflow::types::NodeConfig>::try_into(v))
+                    .collect()
+            })
+            .transpose()?;
+        let edges: Option<Vec<_>> = req
+            .edges
+            .map(|v| {
+                v.into_iter()
+                    .map(|v| TryInto::<logic::workflow::types::EdgeConfig>::try_into(v))
+                    .collect()
+            })
+            .transpose()?;
         let ret = svc
             .workflow
             .save_workflow_version(
@@ -198,9 +285,9 @@ impl WorkflowApi {
                 req.name,
                 req.info,
                 req.version,
-                req.save_type,
-                None,
-                None,
+                req.version_status,
+                nodes,
+                edges,
                 team_id,
             )
             .await?;
@@ -221,6 +308,7 @@ impl WorkflowApi {
         )]
         Query(page_size): Query<u64>,
         Query(search_username): Query<Option<String>>,
+        Query(default_id): Query<Option<u64>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         #[oai(default)] Query(name): Query<Option<String>>,
     ) -> api_response!(types::QueryWorkflowResp) {
@@ -235,7 +323,7 @@ impl WorkflowApi {
             .get_workflow_list(
                 &user_info,
                 search_username.as_deref(),
-                None,
+                default_id,
                 team_id,
                 name,
                 page,
@@ -251,11 +339,61 @@ impl WorkflowApi {
                 info: v.info,
                 team_name: v.team_name,
                 team_id: v.team_id,
-                created_time: local_time!(v.created_time),
+                updated_time: local_time!(v.updated_time),
                 created_user: v.created_user,
             })
             .collect();
 
         return_ok!(types::QueryWorkflowResp { total: ret.1, list })
+    }
+
+    #[oai(path = "/version/list", method = "get", transform = "set_middleware")]
+    pub async fn query_workflow_version(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(default = "types::default_page", validator(maximum(value = "10000")))]
+        Query(page): Query<u64>,
+        #[oai(
+            default = "types::default_page_size",
+            validator(maximum(value = "10000"))
+        )]
+        Query(page_size): Query<u64>,
+        Query(username): Query<Option<String>>,
+        Query(workflow_id): Query<u64>,
+        Query(default_id): Query<Option<u64>>,
+        #[oai(validator(custom = "super::OneOfValidator::new(vec![\"draft\",\"release\",])"))]
+        Query(version_status): Query<String>,
+        #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
+        #[oai(default)] Query(name): Query<Option<String>>,
+    ) -> api_response!(types::QueryWorkflowVersionResp) {
+        let svc = state.service();
+        let ret = svc
+            .workflow
+            .get_workflow_version_list(
+                &user_info,
+                name,
+                username,
+                workflow_id,
+                default_id,
+                page,
+                page_size,
+            )
+            .await?;
+        let list = ret
+            .0
+            .into_iter()
+            .map(|v| types::WorkflowVersionRecord {
+                id: v.id,
+                name: v.name,
+                info: v.info,
+                nodes: v.nodes.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
+                edges: v.edges.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
+                updated_time: local_time!(v.updated_time),
+                created_user: v.created_user,
+            })
+            .collect();
+
+        return_ok!(types::QueryWorkflowVersionResp { total: ret.1, list })
     }
 }
