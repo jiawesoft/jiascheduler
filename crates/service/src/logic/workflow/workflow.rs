@@ -43,9 +43,9 @@ impl<'a> WorkflowLogic<'a> {
             })
             .join_rev(
                 JoinType::LeftJoin,
-                Team::belongs_to(Job)
+                Team::belongs_to(Workflow)
                     .from(team::Column::Id)
-                    .to(job::Column::TeamId)
+                    .to(workflow::Column::TeamId)
                     .into(),
             );
 
@@ -57,7 +57,7 @@ impl<'a> WorkflowLogic<'a> {
             .order_by_desc(workflow::Column::Id)
             .into_model()
             .paginate(&self.ctx.db, page_size)
-            .fetch_page(page)
+            .fetch_page(page - 1)
             .await?;
 
         Ok((ret, total))
@@ -67,6 +67,7 @@ impl<'a> WorkflowLogic<'a> {
         &self,
         _user_info: &UserInfo,
         name: Option<String>,
+        version_status: Option<String>,
         created_user: Option<String>,
         id: u64,
         default_id: Option<u64>,
@@ -77,6 +78,9 @@ impl<'a> WorkflowLogic<'a> {
             .filter(workflow::Column::Pid.eq(id))
             .apply_if(created_user, |q, v| {
                 q.filter(workflow::Column::CreatedUser.eq(v))
+            })
+            .apply_if(version_status, |q, v| {
+                q.filter(workflow::Column::VersionStatus.eq(v))
             })
             .apply_if(name, |q, v| q.filter(workflow::Column::Name.contains(v)));
 

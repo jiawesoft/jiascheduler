@@ -28,10 +28,9 @@ mod types {
 
     #[derive(Object, Deserialize, Serialize)]
     pub struct SaveWorkflowReq {
+        pub id: Option<u64>,
         pub name: String,
         pub info: Option<String>,
-        pub version: String,
-        pub id: Option<u64>,
     }
 
     #[derive(Object, Deserialize, Serialize)]
@@ -162,9 +161,9 @@ mod types {
     pub struct SaveWorkflowVersionReq {
         pub pid: Option<u64>,
         pub name: String,
+        pub info: Option<String>,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
-        pub info: Option<String>,
         pub version: String,
         #[oai(validator(custom = "crate::api::OneOfValidator::new(vec![\"draft\",\"release\"])"))]
         pub version_status: String,
@@ -206,6 +205,7 @@ mod types {
         pub info: String,
         pub updated_time: String,
         pub created_user: String,
+        pub version_status: String,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
     }
@@ -258,6 +258,10 @@ impl WorkflowApi {
             .await?
         {
             return_err!("no permission");
+        }
+
+        if req.id.is_none() && req.pid.is_none() {
+            return_err!("pid or id is required");
         }
 
         let nodes: Option<Vec<_>> = req
@@ -363,7 +367,7 @@ impl WorkflowApi {
         Query(workflow_id): Query<u64>,
         Query(default_id): Query<Option<u64>>,
         #[oai(validator(custom = "super::OneOfValidator::new(vec![\"draft\",\"release\",])"))]
-        Query(version_status): Query<String>,
+        Query(version_status): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
         #[oai(default)] Query(name): Query<Option<String>>,
     ) -> api_response!(types::QueryWorkflowVersionResp) {
@@ -374,6 +378,7 @@ impl WorkflowApi {
                 &user_info,
                 name,
                 username,
+                version_status,
                 workflow_id,
                 default_id,
                 page,
@@ -387,6 +392,7 @@ impl WorkflowApi {
                 id: v.id,
                 name: v.name,
                 info: v.info,
+                version_status: v.version_status,
                 nodes: v.nodes.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
                 edges: v.edges.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
                 updated_time: local_time!(v.updated_time),
