@@ -7,12 +7,21 @@ use std::fmt::Display;
 pub enum NodeType {
     #[serde(rename = "bpmn:startEvent")]
     StartEvent,
+    #[serde(rename = "bpmn:serviceTask")]
+    ServiceTask,
+    #[serde(rename = "bpmn:endEvent")]
+    EndEvent,
+    #[serde(rename = "bpmn:exclusiveGateway")]
+    ExclusiveGateway,
 }
 
 impl Display for NodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NodeType::StartEvent => write!(f, "bpmn:startEvent"),
+            NodeType::ServiceTask => write!(f, "bpmn:serviceTask"),
+            NodeType::EndEvent => write!(f, "bpmn:endEvent"),
+            NodeType::ExclusiveGateway => write!(f, "bpmn:exclusiveGateway"),
         }
     }
 }
@@ -22,6 +31,9 @@ impl TryFrom<&str> for NodeType {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "bpmn:startEvent" => Ok(NodeType::StartEvent),
+            "bpmn:serviceTask" => Ok(NodeType::ServiceTask),
+            "bpmn:endEvent" => Ok(NodeType::EndEvent),
+            "bpmn:exclusiveGateway" => Ok(NodeType::ExclusiveGateway),
             _ => Err(anyhow::anyhow!("Invalid node type")),
         }
     }

@@ -40,14 +40,23 @@ mod types {
 
     #[derive(Serialize, Enum, Deserialize, Clone)]
     pub enum NodeType {
-        #[serde(rename = "bpmn:startEvent")]
+        #[oai(rename = "bpmn:startEvent")]
         StartEvent,
+        #[oai(rename = "bpmn:serviceTask")]
+        ServiceTask,
+        #[oai(rename = "bpmn:endEvent")]
+        EndEvent,
+        #[oai(rename = "bpmn:exclusiveGateway")]
+        ExclusiveGateway,
     }
 
     impl Display for NodeType {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 NodeType::StartEvent => write!(f, "bpmn:startEvent"),
+                NodeType::ServiceTask => write!(f, "bpmn:serviceTask"),
+                NodeType::EndEvent => write!(f, "bpmn:endEvent"),
+                NodeType::ExclusiveGateway => write!(f, "bpmn:exclusiveGateway"),
             }
         }
     }
@@ -83,9 +92,9 @@ mod types {
 
     #[derive(Serialize, Enum, Deserialize, Clone)]
     pub enum TaskType {
-        #[serde(rename = "standard")]
+        #[oai(rename = "standard")]
         Standard,
-        #[serde(rename = "custom")]
+        #[oai(rename = "custom")]
         Custom,
     }
 
@@ -166,7 +175,7 @@ mod types {
         pub edges: Option<Vec<EdgeConfig>>,
         pub version: String,
         #[oai(validator(custom = "crate::api::OneOfValidator::new(vec![\"draft\",\"release\"])"))]
-        pub version_status: String,
+        pub status: String,
         pub id: Option<u64>,
     }
 
@@ -289,7 +298,7 @@ impl WorkflowApi {
                 req.name,
                 req.info,
                 req.version,
-                req.version_status,
+                req.status,
                 nodes,
                 edges,
                 team_id,
