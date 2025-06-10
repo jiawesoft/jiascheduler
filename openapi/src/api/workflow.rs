@@ -1,3 +1,4 @@
+use anyhow::Context;
 use poem::{session::Session, web::Data, Endpoint, EndpointExt};
 use poem_openapi::{
     param::{Header, Query},
@@ -61,10 +62,50 @@ mod types {
         }
     }
 
+    impl TryFrom<&str> for NodeType {
+        type Error = anyhow::Error;
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            match value {
+                "bpmn:startEvent" => Ok(NodeType::StartEvent),
+                "bpmn:serviceTask" => Ok(NodeType::ServiceTask),
+                "bpmn:endEvent" => Ok(NodeType::EndEvent),
+                "bpmn:exclusiveGateway" => Ok(NodeType::ExclusiveGateway),
+                _ => Err(anyhow::anyhow!("Invalid node type")),
+            }
+        }
+    }
+
     #[derive(Serialize, Object, Deserialize, Clone)]
     pub struct Task {
         pub standard: Option<StandardJob>,
         pub custom: Option<CustomJob>,
+    }
+
+    impl TryFrom<logic::workflow::types::Task> for Task {
+        type Error = anyhow::Error;
+        fn try_from(value: logic::workflow::types::Task) -> Result<Self, Self::Error> {
+            Ok(match value {
+                logic::workflow::types::Task::Standard(standard_job) => Self {
+                    standard: Some(StandardJob {
+                        eid: standard_job.eid,
+                    }),
+                    custom: None,
+                },
+                logic::workflow::types::Task::Custom(custom_job) => Self {
+                    standard: None,
+                    custom: Some(CustomJob {
+                        executor_id: custom_job.executor_id,
+                        timeout: custom_job.timeout,
+                        code: custom_job.code,
+                        upload_file: custom_job.upload_file,
+                    }),
+                },
+                logic::workflow::types::Task::None => Self {
+                    standard: None,
+                    custom: None,
+                },
+            })
+        }
     }
 
     impl TryInto<logic::workflow::types::Task> for Task {
@@ -107,6 +148,17 @@ mod types {
         }
     }
 
+    impl TryFrom<&str> for TaskType {
+        type Error = anyhow::Error;
+        fn try_from(value: &str) -> Result<Self, Self::Error> {
+            match value {
+                "standard" => Ok(TaskType::Standard),
+                "custom" => Ok(TaskType::Custom),
+                _ => Err(anyhow::anyhow!("Invalid task type")),
+            }
+        }
+    }
+
     #[derive(Serialize, Object, Deserialize, Clone, Debug)]
     pub struct CustomJob {
         pub executor_id: u64,
@@ -140,6 +192,20 @@ mod types {
                 task_type: self.task_type.to_string().as_str().try_into()?,
                 task: self.task.try_into()?,
                 data: self.data,
+            })
+        }
+    }
+
+    impl TryFrom<logic::workflow::types::NodeConfig> for NodeConfig {
+        type Error = anyhow::Error;
+        fn try_from(value: logic::workflow::types::NodeConfig) -> Result<Self, Self::Error> {
+            Ok(NodeConfig {
+                id: value.id,
+                name: value.name,
+                node_type: value.node_type.to_string().as_str().try_into()?,
+                task_type: value.task_type.to_string().as_str().try_into()?,
+                task: value.task.try_into()?,
+                data: value.data,
             })
         }
     }
@@ -218,6 +284,19 @@ mod types {
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
     }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct GetWorkflowVersionDetailResp {
+        pub id: u64,
+        pub workflow_name: String,
+        pub version_name: String,
+        pub version_info: String,
+        pub updated_time: String,
+        pub created_user: String,
+        pub version_status: String,
+        pub nodes: Option<Vec<NodeConfig>>,
+        pub edges: Option<Vec<EdgeConfig>>,
+    }
 }
 
 fn set_middleware(ep: impl Endpoint) -> impl Endpoint {
@@ -273,21 +352,13 @@ impl WorkflowApi {
             return_err!("pid or id is required");
         }
 
-        let nodes: Option<Vec<_>> = req
+        let nodes: Option<Vec<logic::workflow::types::NodeConfig>> = req
             .nodes
-            .map(|v| {
-                v.into_iter()
-                    .map(|v| TryInto::<logic::workflow::types::NodeConfig>::try_into(v))
-                    .collect()
-            })
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
             .transpose()?;
-        let edges: Option<Vec<_>> = req
+        let edges: Option<Vec<logic::workflow::types::EdgeConfig>> = req
             .edges
-            .map(|v| {
-                v.into_iter()
-                    .map(|v| TryInto::<logic::workflow::types::EdgeConfig>::try_into(v))
-                    .collect()
-            })
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
             .transpose()?;
         let ret = svc
             .workflow
@@ -410,5 +481,40 @@ impl WorkflowApi {
             .collect();
 
         return_ok!(types::QueryWorkflowVersionResp { total: ret.1, list })
+    }
+
+    #[oai(path = "/version/detail", method = "get", transform = "set_middleware")]
+    pub async fn get_workflow_version_detail(
+        &self,
+        state: Data<&AppState>,
+        _user_info: Data<&logic::types::UserInfo>,
+        /// workflow id
+        Query(version_id): Query<u64>,
+        #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
+    ) -> api_response!(types::GetWorkflowVersionDetailResp) {
+        let svc = state.service();
+        let ret = svc.workflow.get_workflow_version_detail(version_id).await?;
+        let nodes = ret
+            .nodes
+            .map(|v| serde_json::from_value::<Vec<logic::workflow::types::NodeConfig>>(v))
+            .transpose()
+            .context("failed convert node data")?;
+        let nodes: Option<Vec<NodeConfig>> = nodes
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
+            .transpose()?;
+
+        return_ok!(types::GetWorkflowVersionDetailResp {
+            id: ret.id,
+            version_name: ret.version_name,
+            version_info: ret.version_info,
+            workflow_name: ret.workflow_name,
+            updated_time: local_time!(ret.updated_time),
+            created_user: ret.created_user,
+            version_status: ret.version_status,
+            nodes: nodes,
+            edges: ret
+                .edges
+                .map(|v| serde_json::from_value(v).unwrap_or(vec![])),
+        })
     }
 }

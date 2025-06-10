@@ -122,3 +122,20 @@ pub struct WorkflowModel {
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }
+
+pub struct WorkflowVersionDetailModel {
+    pub id: u64,
+    pub workflow_name: String,
+    pub workflow_id: u64,
+    pub version_name: String,
+    pub nodes: Option<serde_json::Value>,
+    pub edges: Option<serde_json::Value>,
+    pub version_info: String,
+    pub team_id: u64,
+    pub version: String,
+    pub version_status: String,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
+}

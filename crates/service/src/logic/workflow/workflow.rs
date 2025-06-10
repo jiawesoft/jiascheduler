@@ -4,7 +4,7 @@ use crate::{
     entity::{prelude::*, team_member},
     state::AppContext,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use entity::{job, team, workflow};
 use sea_orm::ActiveValue::{NotSet, Set};
 use sea_orm::{
@@ -195,6 +195,14 @@ impl<'a> WorkflowLogic<'a> {
         edges: Option<Vec<EdgeConfig>>,
         team_id: Option<u64>,
     ) -> Result<u64> {
+        if let Some(pid) = pid {
+            Workflow::find()
+                .filter(workflow::Column::Id.eq(pid))
+                .one(&self.ctx.db)
+                .await?
+                .ok_or(anyhow!("invalid pid {pid}"))?;
+        }
+
         let mut active_model = workflow::ActiveModel {
             pid: pid.map_or(NotSet, |v| Set(v)),
             name: Set(name),
@@ -224,5 +232,49 @@ impl<'a> WorkflowLogic<'a> {
             let active_model = active_model.save(&self.ctx.db).await?;
             Ok(active_model.id.as_ref().to_owned())
         }
+    }
+
+    pub async fn get_workflow_version_detail(
+        &self,
+        version_id: u64,
+    ) -> Result<types::WorkflowVersionDetailModel> {
+        let version_record = Workflow::find()
+            .filter(workflow::Column::Id.eq(version_id))
+            .filter(workflow::Column::Pid.gt(0))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("not found workflow version"))?;
+
+        let workflow_record: types::WorkflowModel = Workflow::find()
+            .column_as(team::Column::Name, "team_name")
+            .filter(workflow::Column::Id.eq(version_record.pid))
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Workflow)
+                    .from(team::Column::Id)
+                    .to(workflow::Column::TeamId)
+                    .into(),
+            )
+            .into_model()
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("not found workflow {}", version_record.pid))?;
+
+        Ok(types::WorkflowVersionDetailModel {
+            id: version_record.id,
+            workflow_name: workflow_record.name,
+            workflow_id: workflow_record.id,
+            version_name: version_record.name,
+            nodes: version_record.nodes,
+            edges: version_record.edges,
+            version_info: version_record.info,
+            team_id: workflow_record.team_id,
+            version: version_record.version,
+            version_status: version_record.version_status,
+            created_user: version_record.created_user,
+            updated_user: version_record.updated_user,
+            created_time: version_record.created_time,
+            updated_time: version_record.updated_time,
+        })
     }
 }
