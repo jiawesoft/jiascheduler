@@ -232,6 +232,19 @@ mod types {
         }
     }
 
+    impl TryFrom<logic::workflow::types::EdgeConfig> for EdgeConfig {
+        type Error = anyhow::Error;
+        fn try_from(value: logic::workflow::types::EdgeConfig) -> Result<Self, Self::Error> {
+            Ok(EdgeConfig {
+                id: value.id,
+                name: value.name,
+                source_node_id: value.source_node_id,
+                target_node_id: value.target_node_id,
+                data: value.data,
+            })
+        }
+    }
+
     #[derive(Object, Deserialize, Serialize)]
     pub struct SaveWorkflowVersionReq {
         pub pid: Option<u64>,
@@ -286,9 +299,11 @@ mod types {
     }
 
     #[derive(Object, Serialize, Default)]
-    pub struct GetWorkflowVersionDetailResp {
+    pub struct GetWorkflowDetailResp {
         pub id: u64,
+        pub pid: u64,
         pub workflow_name: String,
+        pub workflow_info: String,
         pub version_name: String,
         pub version_info: String,
         pub updated_time: String,
@@ -483,38 +498,45 @@ impl WorkflowApi {
         return_ok!(types::QueryWorkflowVersionResp { total: ret.1, list })
     }
 
-    #[oai(path = "/version/detail", method = "get", transform = "set_middleware")]
-    pub async fn get_workflow_version_detail(
+    #[oai(path = "/detail", method = "get", transform = "set_middleware")]
+    pub async fn get_workflow_detail(
         &self,
         state: Data<&AppState>,
         _user_info: Data<&logic::types::UserInfo>,
         /// workflow id
-        Query(version_id): Query<u64>,
+        Query(id): Query<u64>,
         #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
-    ) -> api_response!(types::GetWorkflowVersionDetailResp) {
+    ) -> api_response!(types::GetWorkflowDetailResp) {
         let svc = state.service();
-        let ret = svc.workflow.get_workflow_version_detail(version_id).await?;
+        let ret = svc.workflow.get_workflow_detail(id).await?;
         let nodes = ret
             .nodes
             .map(|v| serde_json::from_value::<Vec<logic::workflow::types::NodeConfig>>(v))
             .transpose()
-            .context("failed convert node data")?;
-        let nodes: Option<Vec<NodeConfig>> = nodes
+            .context("failed convert node data")?
             .map(|v| v.into_iter().map(|v| v.try_into()).collect())
             .transpose()?;
 
-        return_ok!(types::GetWorkflowVersionDetailResp {
+        let edges = ret
+            .edges
+            .map(|v| serde_json::from_value::<Vec<logic::workflow::types::EdgeConfig>>(v))
+            .transpose()
+            .context("failed convert node data")?
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
+            .transpose()?;
+
+        return_ok!(types::GetWorkflowDetailResp {
             id: ret.id,
-            version_name: ret.version_name,
-            version_info: ret.version_info,
+            pid: ret.pid,
+            version_name: ret.version_name.unwrap_or_default(),
+            version_info: ret.version_info.unwrap_or_default(),
             workflow_name: ret.workflow_name,
+            workflow_info: ret.workflow_info,
             updated_time: local_time!(ret.updated_time),
             created_user: ret.created_user,
-            version_status: ret.version_status,
+            version_status: ret.version_status.unwrap_or_default(),
             nodes: nodes,
-            edges: ret
-                .edges
-                .map(|v| serde_json::from_value(v).unwrap_or(vec![])),
+            edges: edges,
         })
     }
 }

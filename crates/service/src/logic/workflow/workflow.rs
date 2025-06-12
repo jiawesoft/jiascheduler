@@ -234,20 +234,9 @@ impl<'a> WorkflowLogic<'a> {
         }
     }
 
-    pub async fn get_workflow_version_detail(
-        &self,
-        version_id: u64,
-    ) -> Result<types::WorkflowVersionDetailModel> {
-        let version_record = Workflow::find()
-            .filter(workflow::Column::Id.eq(version_id))
-            .filter(workflow::Column::Pid.gt(0))
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!("not found workflow version"))?;
-
+    pub async fn get_workflow_detail(&self, id: u64) -> Result<types::WorkflowVersionDetailModel> {
         let workflow_record: types::WorkflowModel = Workflow::find()
-            .column_as(team::Column::Name, "team_name")
-            .filter(workflow::Column::Id.eq(version_record.pid))
+            .filter(workflow::Column::Id.eq(id))
             .join_rev(
                 JoinType::LeftJoin,
                 Team::belongs_to(Workflow)
@@ -258,23 +247,59 @@ impl<'a> WorkflowLogic<'a> {
             .into_model()
             .one(&self.ctx.db)
             .await?
-            .ok_or(anyhow!("not found workflow {}", version_record.pid))?;
+            .ok_or(anyhow!("not found workflow {}", id))?;
+
+        if workflow_record.pid == 0 {
+            return Ok(types::WorkflowVersionDetailModel {
+                id: workflow_record.id,
+                pid: workflow_record.pid,
+                workflow_name: workflow_record.name,
+                workflow_info: workflow_record.info,
+                version_name: None,
+                nodes: workflow_record.nodes,
+                edges: workflow_record.edges,
+                version_info: None,
+                team_id: workflow_record.team_id,
+                version: None,
+                version_status: None,
+                created_user: workflow_record.created_user,
+                updated_user: workflow_record.updated_user,
+                created_time: workflow_record.created_time,
+                updated_time: workflow_record.updated_time,
+            });
+        }
+
+        let parent_record: types::WorkflowModel = Workflow::find()
+            .column_as(team::Column::Name, "team_name")
+            .filter(workflow::Column::Id.eq(workflow_record.pid))
+            .join_rev(
+                JoinType::LeftJoin,
+                Team::belongs_to(Workflow)
+                    .from(team::Column::Id)
+                    .to(workflow::Column::TeamId)
+                    .into(),
+            )
+            .into_model()
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("not found workflow {}", workflow_record.pid))?;
 
         Ok(types::WorkflowVersionDetailModel {
-            id: version_record.id,
-            workflow_name: workflow_record.name,
-            workflow_id: workflow_record.id,
-            version_name: version_record.name,
-            nodes: version_record.nodes,
-            edges: version_record.edges,
-            version_info: version_record.info,
-            team_id: workflow_record.team_id,
-            version: version_record.version,
-            version_status: version_record.version_status,
-            created_user: version_record.created_user,
-            updated_user: version_record.updated_user,
-            created_time: version_record.created_time,
-            updated_time: version_record.updated_time,
+            id: workflow_record.id,
+            pid: parent_record.id,
+            workflow_name: parent_record.name,
+            workflow_info: parent_record.info,
+            version_name: Some(workflow_record.name),
+            nodes: workflow_record.nodes,
+            edges: workflow_record.edges,
+            version_info: Some(workflow_record.info),
+            team_id: parent_record.team_id,
+            version: Some(workflow_record.version),
+            version_status: Some(workflow_record.version_status),
+            created_user: workflow_record.created_user,
+            updated_user: workflow_record.updated_user,
+            created_time: workflow_record.created_time,
+            updated_time: workflow_record.updated_time,
         })
     }
 }
