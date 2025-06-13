@@ -1,12 +1,27 @@
 CREATE TABLE `workflow` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
-    `pid` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'parent id',
     `name` varchar(100) NOT NULL DEFAULT '' COMMENT 'workflow name',
     `nodes` json DEFAULT NULL COMMENT 'workflow nodes',
     `edges` json DEFAULT NULL COMMENT 'workflow edges',
     `info` varchar(500) NOT NULL DEFAULT '' COMMENT 'describe message',
+    `team_id` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'team id',
+    `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT 'creator username',
+    `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT 'updater username',
+    `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'created time',
+    `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated time',
+    `is_deleted` BOOLEAN NOT NULL DEFAULT false COMMENT 'is deleted',
+    `deleted_at` timestamp NULL DEFAULT NULL COMMENT 'deleted time',
+    `deleted_by` varchar(50) NOT NULL DEFAULT '' COMMENT 'deleted by',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'workflow';
+
+CREATE TABLE `workflow_version` (
+    `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
+    `workflow_id` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'parent id',
     `version` VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'version',
-    `version_status` VARCHAR(20) NOT NULL DEFAULT 'draft' COMMENT 'version status: draft or released',
+    `version_info` varchar(500) NOT NULL DEFAULT '' COMMENT 'describe message',
+    `nodes` json DEFAULT NULL COMMENT 'workflow nodes',
+    `edges` json DEFAULT NULL COMMENT 'workflow edges',
     `team_id` bigint unsigned NOT NULL DEFAULT '0' COMMENT 'team id',
     `created_user` varchar(50) NOT NULL DEFAULT '' COMMENT 'creator username',
     `updated_user` varchar(50) NOT NULL DEFAULT '' COMMENT 'updater username',

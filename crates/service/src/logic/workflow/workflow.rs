@@ -5,7 +5,7 @@ use crate::{
     state::AppContext,
 };
 use anyhow::{Result, anyhow};
-use entity::{job, team, workflow};
+use entity::{team, workflow, workflow_version};
 use sea_orm::ActiveValue::{NotSet, Set};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
@@ -66,23 +66,21 @@ impl<'a> WorkflowLogic<'a> {
     pub async fn get_workflow_version_list(
         &self,
         _user_info: &UserInfo,
-        name: Option<String>,
-        version_status: Option<String>,
+        version: Option<String>,
         created_user: Option<String>,
-        id: u64,
+        workflow_id: u64,
         default_id: Option<u64>,
         page: u64,
         page_size: u64,
-    ) -> Result<(Vec<workflow::Model>, u64)> {
-        let select = Workflow::find()
-            .filter(workflow::Column::Pid.eq(id))
+    ) -> Result<(Vec<workflow_version::Model>, u64)> {
+        let select = WorkflowVersion::find()
+            .filter(workflow_version::Column::WorkflowId.eq(workflow_id))
             .apply_if(created_user, |q, v| {
-                q.filter(workflow::Column::CreatedUser.eq(v))
+                q.filter(workflow_version::Column::CreatedUser.eq(v))
             })
-            .apply_if(version_status, |q, v| {
-                q.filter(workflow::Column::VersionStatus.eq(v))
-            })
-            .apply_if(name, |q, v| q.filter(workflow::Column::Name.contains(v)));
+            .apply_if(version, |q, v| {
+                q.filter(workflow_version::Column::Version.contains(v))
+            });
 
         let total = select.clone().count(&self.ctx.db).await?;
         let ret = select
@@ -171,7 +169,6 @@ impl<'a> WorkflowLogic<'a> {
                 .set(active_model)
                 .filter(workflow::Column::Id.eq(id))
                 .filter(workflow::Column::IsDeleted.eq(false))
-                .filter(workflow::Column::Pid.eq(0))
                 .exec(&self.ctx.db)
                 .await?
                 .rows_affected;
@@ -182,61 +179,50 @@ impl<'a> WorkflowLogic<'a> {
         Ok(active_model.id.as_ref().to_owned())
     }
 
-    pub async fn save_workflow_version(
+    pub async fn release_version(
         &self,
-        pid: Option<u64>,
-        workflow_id: Option<u64>,
+        workflow_id: u64,
         user_info: &UserInfo,
-        name: String,
-        info: Option<String>,
         version: String,
-        version_status: String,
+        version_info: Option<String>,
         nodes: Option<Vec<NodeConfig>>,
         edges: Option<Vec<EdgeConfig>>,
         team_id: Option<u64>,
     ) -> Result<u64> {
-        if let Some(pid) = pid {
-            Workflow::find()
-                .filter(workflow::Column::Id.eq(pid))
-                .one(&self.ctx.db)
-                .await?
-                .ok_or(anyhow!("invalid pid {pid}"))?;
-        }
-
-        let mut active_model = workflow::ActiveModel {
-            pid: pid.map_or(NotSet, |v| Set(v)),
-            name: Set(name),
-            info: info.map_or(NotSet, |v| Set(v)),
+        workflow::ActiveModel {
+            id: Set(workflow_id),
             team_id: team_id.map_or(NotSet, |v| Set(v)),
-            version: Set(version),
-            version_status: Set(version_status),
-            nodes: Set(nodes.map(|v| serde_json::to_value(v)).transpose()?),
-            edges: Set(edges.map(|v| serde_json::to_value(v)).transpose()?),
+            nodes: Set(nodes.clone().map(|v| serde_json::to_value(v)).transpose()?),
+            edges: Set(edges.clone().map(|v| serde_json::to_value(v)).transpose()?),
             created_user: Set(user_info.username.clone()),
             updated_user: Set(user_info.username.clone()),
             ..Default::default()
-        };
-
-        if let Some(workflow_id) = workflow_id {
-            active_model.pid = NotSet;
-            let affected = Workflow::update_many()
-                .set(active_model)
-                .filter(workflow::Column::Id.eq(workflow_id))
-                .filter(workflow::Column::IsDeleted.eq(false))
-                .filter(workflow::Column::VersionStatus.ne("released"))
-                .exec(&self.ctx.db)
-                .await?
-                .rows_affected;
-            Ok(affected)
-        } else {
-            let active_model = active_model.save(&self.ctx.db).await?;
-            Ok(active_model.id.as_ref().to_owned())
         }
+        .save(&self.ctx.db)
+        .await?;
+
+        let ret = workflow_version::ActiveModel {
+            workflow_id: Set(workflow_id),
+            team_id: team_id.map_or(NotSet, |v| Set(v)),
+            version: Set(version),
+            version_info: version_info.map_or(NotSet, |v| Set(v)),
+            nodes: Set(nodes.map(|v| serde_json::to_value(v)).transpose()?),
+            edges: Set(edges.map(|v| serde_json::to_value(v)).transpose()?),
+            ..Default::default()
+        }
+        .save(&self.ctx.db)
+        .await?;
+
+        Ok(ret.id.as_ref().to_owned())
     }
 
-    pub async fn get_workflow_detail(&self, id: u64) -> Result<types::WorkflowVersionDetailModel> {
+    pub async fn get_workflow_detail(
+        &self,
+        workflow_id: u64,
+        version_id: Option<u64>,
+    ) -> Result<types::WorkflowVersionDetailModel> {
         let workflow_record: types::WorkflowModel = Workflow::find()
-            .filter(workflow::Column::Id.eq(id))
+            .filter(workflow::Column::Id.eq(workflow_id))
             .join_rev(
                 JoinType::LeftJoin,
                 Team::belongs_to(Workflow)
@@ -247,59 +233,36 @@ impl<'a> WorkflowLogic<'a> {
             .into_model()
             .one(&self.ctx.db)
             .await?
-            .ok_or(anyhow!("not found workflow {}", id))?;
+            .ok_or(anyhow!("not found workflow {}", workflow_id))?;
 
-        if workflow_record.pid == 0 {
-            return Ok(types::WorkflowVersionDetailModel {
-                id: workflow_record.id,
-                pid: workflow_record.pid,
-                workflow_name: workflow_record.name,
-                workflow_info: workflow_record.info,
-                version_name: None,
-                nodes: workflow_record.nodes,
-                edges: workflow_record.edges,
-                version_info: None,
-                team_id: workflow_record.team_id,
-                version: None,
-                version_status: None,
-                created_user: workflow_record.created_user,
-                updated_user: workflow_record.updated_user,
-                created_time: workflow_record.created_time,
-                updated_time: workflow_record.updated_time,
-            });
-        }
-
-        let parent_record: types::WorkflowModel = Workflow::find()
-            .column_as(team::Column::Name, "team_name")
-            .filter(workflow::Column::Id.eq(workflow_record.pid))
-            .join_rev(
-                JoinType::LeftJoin,
-                Team::belongs_to(Workflow)
-                    .from(team::Column::Id)
-                    .to(workflow::Column::TeamId)
-                    .into(),
-            )
-            .into_model()
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!("not found workflow {}", workflow_record.pid))?;
-
-        Ok(types::WorkflowVersionDetailModel {
-            id: workflow_record.id,
-            pid: parent_record.id,
-            workflow_name: parent_record.name,
-            workflow_info: parent_record.info,
-            version_name: Some(workflow_record.name),
+        let mut ret = types::WorkflowVersionDetailModel {
+            workflow_id: workflow_id,
+            workflow_name: workflow_record.name,
+            workflow_info: workflow_record.info,
             nodes: workflow_record.nodes,
             edges: workflow_record.edges,
-            version_info: Some(workflow_record.info),
-            team_id: parent_record.team_id,
-            version: Some(workflow_record.version),
-            version_status: Some(workflow_record.version_status),
+            team_id: workflow_record.team_id,
             created_user: workflow_record.created_user,
             updated_user: workflow_record.updated_user,
             created_time: workflow_record.created_time,
             updated_time: workflow_record.updated_time,
-        })
+            ..Default::default()
+        };
+
+        let Some(version_id) = version_id else {
+            return Ok(ret);
+        };
+
+        let version_record = WorkflowVersion::find()
+            .filter(workflow_version::Column::Id.eq(version_id))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("not found workflow version {}", version_id))?;
+
+        ret.version = Some(version_record.version);
+        ret.version_id = Some(version_record.id);
+        ret.version_info = Some(version_record.version_info);
+
+        Ok(ret)
     }
 }

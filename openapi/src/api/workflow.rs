@@ -1,21 +1,16 @@
 use anyhow::Context;
-use poem::{session::Session, web::Data, Endpoint, EndpointExt};
+use poem::{web::Data, Endpoint, EndpointExt};
 use poem_openapi::{
     param::{Header, Query},
     payload::Json,
     OpenApi,
 };
-use sea_orm::{ActiveValue::NotSet, Set};
 
-use crate::{
-    api::workflow::types::NodeConfig, api_response, local_time, logic, middleware, return_err,
-    return_ok, state::AppState,
-};
+use crate::{api_response, local_time, logic, middleware, return_err, return_ok, state::AppState};
 
 mod types {
     use poem_openapi::{Enum, Object};
     use serde::{Deserialize, Serialize};
-    use serde_json::Value;
     use service::logic;
     use std::fmt::Display;
 
@@ -247,15 +242,11 @@ mod types {
 
     #[derive(Object, Deserialize, Serialize)]
     pub struct SaveWorkflowVersionReq {
-        pub pid: Option<u64>,
-        pub name: String,
-        pub info: Option<String>,
+        pub workflow_id: u64,
+        pub version: String,
+        pub version_info: Option<String>,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
-        pub version: String,
-        #[oai(validator(custom = "crate::api::OneOfValidator::new(vec![\"draft\",\"release\"])"))]
-        pub status: String,
-        pub id: Option<u64>,
     }
 
     #[derive(Object, Deserialize, Serialize)]
@@ -289,26 +280,25 @@ mod types {
     #[derive(Object, Serialize, Default)]
     pub struct WorkflowVersionRecord {
         pub id: u64,
-        pub name: String,
-        pub info: String,
+        pub workflow_id: u64,
+        pub version: String,
+        pub version_info: String,
         pub updated_time: String,
         pub created_user: String,
-        pub version_status: String,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
     }
 
     #[derive(Object, Serialize, Default)]
     pub struct GetWorkflowDetailResp {
-        pub id: u64,
-        pub pid: u64,
+        pub workflow_id: u64,
+        pub version_id: Option<u64>,
         pub workflow_name: String,
         pub workflow_info: String,
-        pub version_name: String,
-        pub version_info: String,
+        pub version: Option<String>,
+        pub version_info: Option<String>,
         pub updated_time: String,
         pub created_user: String,
-        pub version_status: String,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
     }
@@ -346,8 +336,8 @@ impl WorkflowApi {
         return_ok!(types::SaveWorkflowResp { result: ret })
     }
 
-    #[oai(path = "/version/save", method = "post")]
-    pub async fn save_workflow_version(
+    #[oai(path = "/release", method = "post")]
+    pub async fn release_version(
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
@@ -357,14 +347,10 @@ impl WorkflowApi {
         let svc = state.service();
         if !svc
             .workflow
-            .can_write_workflow(&user_info, team_id, req.id)
+            .can_write_workflow(&user_info, team_id, Some(req.workflow_id))
             .await?
         {
             return_err!("no permission");
-        }
-
-        if req.id.is_none() && req.pid.is_none() {
-            return_err!("pid or id is required");
         }
 
         let nodes: Option<Vec<logic::workflow::types::NodeConfig>> = req
@@ -377,14 +363,11 @@ impl WorkflowApi {
             .transpose()?;
         let ret = svc
             .workflow
-            .save_workflow_version(
-                req.pid,
-                req.id,
+            .release_version(
+                req.workflow_id,
                 &user_info,
-                req.name,
-                req.info,
                 req.version,
-                req.status,
+                req.version_info,
                 nodes,
                 edges,
                 team_id,
@@ -461,8 +444,6 @@ impl WorkflowApi {
         Query(username): Query<Option<String>>,
         Query(workflow_id): Query<u64>,
         Query(default_id): Query<Option<u64>>,
-        #[oai(validator(custom = "super::OneOfValidator::new(vec![\"draft\",\"release\",])"))]
-        Query(version_status): Query<Option<String>>,
         #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
         #[oai(default)] Query(name): Query<Option<String>>,
     ) -> api_response!(types::QueryWorkflowVersionResp) {
@@ -473,7 +454,6 @@ impl WorkflowApi {
                 &user_info,
                 name,
                 username,
-                version_status,
                 workflow_id,
                 default_id,
                 page,
@@ -485,9 +465,9 @@ impl WorkflowApi {
             .into_iter()
             .map(|v| types::WorkflowVersionRecord {
                 id: v.id,
-                name: v.name,
-                info: v.info,
-                version_status: v.version_status,
+                workflow_id: v.workflow_id,
+                version: v.version,
+                version_info: v.version_info,
                 nodes: v.nodes.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
                 edges: v.edges.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
                 updated_time: local_time!(v.updated_time),
@@ -503,12 +483,15 @@ impl WorkflowApi {
         &self,
         state: Data<&AppState>,
         _user_info: Data<&logic::types::UserInfo>,
-        /// workflow id
-        Query(id): Query<u64>,
+        Query(workflow_id): Query<u64>,
+        Query(version_id): Query<Option<u64>>,
         #[oai(name = "X-Team-Id")] Header(_team_id): Header<Option<u64>>,
     ) -> api_response!(types::GetWorkflowDetailResp) {
         let svc = state.service();
-        let ret = svc.workflow.get_workflow_detail(id).await?;
+        let ret = svc
+            .workflow
+            .get_workflow_detail(workflow_id, version_id)
+            .await?;
         let nodes = ret
             .nodes
             .map(|v| serde_json::from_value::<Vec<logic::workflow::types::NodeConfig>>(v))
@@ -526,15 +509,14 @@ impl WorkflowApi {
             .transpose()?;
 
         return_ok!(types::GetWorkflowDetailResp {
-            id: ret.id,
-            pid: ret.pid,
-            version_name: ret.version_name.unwrap_or_default(),
-            version_info: ret.version_info.unwrap_or_default(),
+            workflow_id: ret.workflow_id,
+            version_id: ret.version_id,
+            version: ret.version,
+            version_info: ret.version_info,
             workflow_name: ret.workflow_name,
             workflow_info: ret.workflow_info,
             updated_time: local_time!(ret.updated_time),
             created_user: ret.created_user,
-            version_status: ret.version_status.unwrap_or_default(),
             nodes: nodes,
             edges: edges,
         })

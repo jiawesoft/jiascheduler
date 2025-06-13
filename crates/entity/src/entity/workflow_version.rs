@@ -4,14 +4,15 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
-#[sea_orm(table_name = "workflow")]
+#[sea_orm(table_name = "workflow_version")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
-    pub name: String,
+    pub workflow_id: u64,
+    pub version: String,
+    pub version_info: String,
     pub nodes: Option<Json>,
     pub edges: Option<Json>,
-    pub info: String,
     pub team_id: u64,
     pub created_user: String,
     pub updated_user: String,

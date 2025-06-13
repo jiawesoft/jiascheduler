@@ -26,3 +26,4 @@ pub mod workflow;
 pub mod workflow_process;
 pub mod workflow_process_edge;
 pub mod workflow_process_node;
+pub mod workflow_version;

@@ -1,6 +1,5 @@
 use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::fmt::Display;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -112,33 +111,29 @@ pub struct EdgeConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct WorkflowModel {
     pub id: u64,
-    pub pid: u64,
     pub name: String,
     pub info: String,
     pub team_id: u64,
     pub nodes: Option<serde_json::Value>,
     pub edges: Option<serde_json::Value>,
     pub team_name: Option<String>,
-    pub version: String,
-    pub version_status: String,
     pub created_user: String,
     pub updated_user: String,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }
 
+#[derive(Default)]
 pub struct WorkflowVersionDetailModel {
-    pub pid: u64,
-    pub id: u64,
+    pub workflow_id: u64,
+    pub version_id: Option<u64>,
     pub workflow_name: String,
     pub workflow_info: String,
-    pub version_name: Option<String>,
     pub nodes: Option<serde_json::Value>,
     pub edges: Option<serde_json::Value>,
-    pub version_info: Option<String>,
     pub team_id: u64,
     pub version: Option<String>,
-    pub version_status: Option<String>,
+    pub version_info: Option<String>,
     pub created_user: String,
     pub updated_user: String,
     pub created_time: DateTimeLocal,
