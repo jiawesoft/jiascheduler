@@ -153,7 +153,17 @@ impl<'a> WorkflowLogic<'a> {
         name: String,
         info: Option<String>,
         team_id: Option<u64>,
+        nodes: Option<Vec<NodeConfig>>,
+        edges: Option<Vec<EdgeConfig>>,
     ) -> Result<u64> {
+        let nodes = nodes
+            .map(|v| serde_json::to_value(v))
+            .transpose()?
+            .map_or(NotSet, |v| Set(Some(v)));
+        let edges = edges
+            .map(|v| serde_json::to_value(v))
+            .transpose()?
+            .map_or(NotSet, |v| Set(Some(v)));
         let active_model = workflow::ActiveModel {
             id: id.map_or(NotSet, |v| Set(v)),
             name: Set(name),
@@ -161,6 +171,8 @@ impl<'a> WorkflowLogic<'a> {
             team_id: team_id.map_or(NotSet, |v| Set(v)),
             created_user: Set(user_info.username.clone()),
             updated_user: Set(user_info.username.clone()),
+            nodes,
+            edges,
             ..Default::default()
         };
 

@@ -6,7 +6,11 @@ use poem_openapi::{
     OpenApi,
 };
 
-use crate::{api_response, local_time, logic, middleware, return_err, return_ok, state::AppState};
+use crate::{
+    api::workflow::types::{StandardJob, TaskType},
+    api_response, local_time, logic, middleware, return_err, return_ok,
+    state::AppState,
+};
 
 mod types {
     use poem_openapi::{Enum, Object};
@@ -27,6 +31,8 @@ mod types {
         pub id: Option<u64>,
         pub name: String,
         pub info: Option<String>,
+        pub nodes: Option<Vec<NodeConfig>>,
+        pub edges: Option<Vec<EdgeConfig>>,
     }
 
     #[derive(Object, Deserialize, Serialize)]
@@ -241,7 +247,7 @@ mod types {
     }
 
     #[derive(Object, Deserialize, Serialize)]
-    pub struct SaveWorkflowVersionReq {
+    pub struct ReleaseWorkflowVersionReq {
         pub workflow_id: u64,
         pub version: String,
         pub version_info: Option<String>,
@@ -328,9 +334,32 @@ impl WorkflowApi {
             return_err!("no permission");
         }
 
+        let nodes: Option<Vec<logic::workflow::types::NodeConfig>> = req
+            .nodes
+            .map(|v| {
+                v.into_iter()
+                    .map(|v| {
+                        match v.task.standard {
+                            Some(StandardJob { eid }) => todo!(),
+                            None => todo!(),
+                        }
+
+                        let v = v.try_into();
+                        v
+                    })
+                    .collect()
+            })
+            .transpose()?;
+        let edges: Option<Vec<logic::workflow::types::EdgeConfig>> = req
+            .edges
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
+            .transpose()?;
+
         let ret = svc
             .workflow
-            .save_workflow(req.id, &user_info, req.name, req.info, team_id)
+            .save_workflow(
+                req.id, &user_info, req.name, req.info, team_id, nodes, edges,
+            )
             .await?;
 
         return_ok!(types::SaveWorkflowResp { result: ret })
@@ -341,7 +370,7 @@ impl WorkflowApi {
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Json(req): Json<types::SaveWorkflowVersionReq>,
+        Json(req): Json<types::ReleaseWorkflowVersionReq>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
     ) -> api_response!(types::SaveWorkflowVersionResp) {
         let svc = state.service();

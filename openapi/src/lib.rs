@@ -187,7 +187,9 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     let conf = opts.merge_conf(&opts.config_file).context("merge config")?;
     let mut connect_opts =
         ConnectOptions::new(Url::parse(&conf.database_url).expect("database url"));
-    connect_opts.sqlx_logging(false); // Disable SQLx log
+    connect_opts
+        .sqlx_logging(false) // Disable SQLx log
+        .connect_timeout(Duration::from_secs(5)); // Set connect timeout
 
     let conn = Database::connect(connect_opts.clone())
         .await
