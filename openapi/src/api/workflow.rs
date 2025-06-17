@@ -132,7 +132,7 @@ mod types {
         }
     }
 
-    #[derive(Serialize, Enum, Deserialize, Clone)]
+    #[derive(Serialize, Enum, Deserialize, Clone, PartialEq)]
     pub enum TaskType {
         #[oai(rename = "standard")]
         Standard,
@@ -339,13 +339,14 @@ impl WorkflowApi {
             .map(|v| {
                 v.into_iter()
                     .map(|v| {
-                        match v.task.standard {
-                            Some(StandardJob { eid }) => todo!(),
-                            None => todo!(),
+                        if v.task.standard.as_ref().is_some_and(|v| v.eid == "")
+                            && v.task_type == TaskType::Standard
+                        {
+                            anyhow::bail!(
+                                "when the task type is a standard type, eid cannot be empty"
+                            )
                         }
-
-                        let v = v.try_into();
-                        v
+                        v.try_into()
                     })
                     .collect()
             })
