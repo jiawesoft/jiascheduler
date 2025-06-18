@@ -15,9 +15,7 @@ pub struct Model {
     pub edges: Option<Json>,
     pub team_id: u64,
     pub created_user: String,
-    pub updated_user: String,
     pub created_time: DateTimeLocal,
-    pub updated_time: DateTimeLocal,
     #[serde(default)]
     pub is_deleted: bool,
     pub deleted_at: Option<DateTimeLocal>,

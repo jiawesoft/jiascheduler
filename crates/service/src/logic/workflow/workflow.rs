@@ -1,5 +1,7 @@
+use core::matches;
+
 use crate::logic::types::UserInfo;
-use crate::logic::workflow::types;
+use crate::logic::workflow::types::{self, CustomJob, NodeType, StandardJob, Task, TaskType};
 use crate::{
     entity::{prelude::*, team_member},
     state::AppContext,
@@ -146,6 +148,70 @@ impl<'a> WorkflowLogic<'a> {
             == Some(true));
     }
 
+    pub fn check_nodes(
+        nodes: Option<Vec<NodeConfig>>,
+        edges: Option<Vec<EdgeConfig>>,
+    ) -> Result<(Option<Vec<NodeConfig>>, Option<Vec<EdgeConfig>>)> {
+        let mut has_start_node = false;
+        let mut has_end_node = false;
+
+        let Some(nodes) = nodes else {
+            return Ok((None, edges));
+        };
+
+        for node in &nodes {
+            if node.task_type == TaskType::Standard
+                && matches!(node.task, Task::Standard(StandardJob{ref eid}) if eid == "")
+            {
+                anyhow::bail!("no job is assigned to the workflow node {}", node.name)
+            }
+            if node.task_type == TaskType::Custom
+                && matches!(node.task, Task::Custom(CustomJob{ executor_id, ref code, ..}) if executor_id == 0 || code == "")
+            {
+                anyhow::bail!(
+                    "no custom task is assigned to the workflow node {}",
+                    node.name
+                )
+            }
+
+            if node.name == "" {
+                anyhow::bail!("node name cannot be empty")
+            }
+            if node.id == "" {
+                anyhow::bail!("node id cannot be empty")
+            }
+
+            if node.node_type == NodeType::StartEvent {
+                has_start_node = true
+            }
+
+            if node.node_type == NodeType::EndEvent {
+                has_end_node = true
+            }
+            let node_id = node.id.as_str();
+            let is_connected = edges.as_ref().is_some_and(|v| {
+                v.iter()
+                    .any(|v| v.source_node_id == node_id || v.target_node_id == node_id)
+            });
+
+            if !is_connected {
+                anyhow::bail!(
+                    "{} is an isolated node. Please ensure the workflow is a valid directed acyclic graph (DAG)",
+                    node.name
+                )
+            }
+        }
+
+        if !has_start_node {
+            anyhow::bail!("workflow should has a start node")
+        }
+        if !has_end_node {
+            anyhow::bail!("workflow should has a end node")
+        }
+
+        Ok((Some(nodes), edges))
+    }
+
     pub async fn save_workflow(
         &self,
         id: Option<u64>,
@@ -156,6 +222,7 @@ impl<'a> WorkflowLogic<'a> {
         nodes: Option<Vec<NodeConfig>>,
         edges: Option<Vec<EdgeConfig>>,
     ) -> Result<u64> {
+        let (nodes, edges) = Self::check_nodes(nodes, edges)?;
         let nodes = nodes
             .map(|v| serde_json::to_value(v))
             .transpose()?
@@ -164,6 +231,7 @@ impl<'a> WorkflowLogic<'a> {
             .map(|v| serde_json::to_value(v))
             .transpose()?
             .map_or(NotSet, |v| Set(Some(v)));
+
         let active_model = workflow::ActiveModel {
             id: id.map_or(NotSet, |v| Set(v)),
             name: Set(name),
@@ -201,6 +269,8 @@ impl<'a> WorkflowLogic<'a> {
         edges: Option<Vec<EdgeConfig>>,
         team_id: Option<u64>,
     ) -> Result<u64> {
+        let (nodes, edges) = Self::check_nodes(nodes, edges)?;
+
         workflow::ActiveModel {
             id: Set(workflow_id),
             team_id: team_id.map_or(NotSet, |v| Set(v)),
@@ -220,6 +290,7 @@ impl<'a> WorkflowLogic<'a> {
             version_info: version_info.map_or(NotSet, |v| Set(v)),
             nodes: Set(nodes.map(|v| serde_json::to_value(v)).transpose()?),
             edges: Set(edges.map(|v| serde_json::to_value(v)).transpose()?),
+            created_user: Set(user_info.username.clone()),
             ..Default::default()
         }
         .save(&self.ctx.db)

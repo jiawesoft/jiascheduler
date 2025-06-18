@@ -138,6 +138,8 @@ mod types {
         Standard,
         #[oai(rename = "custom")]
         Custom,
+        #[oai(rename = "none")]
+        None,
     }
 
     impl Display for TaskType {
@@ -145,6 +147,7 @@ mod types {
             match self {
                 TaskType::Standard => write!(f, "standard"),
                 TaskType::Custom => write!(f, "custom"),
+                TaskType::None => write!(f, "none"),
             }
         }
     }
@@ -155,6 +158,7 @@ mod types {
             match value {
                 "standard" => Ok(TaskType::Standard),
                 "custom" => Ok(TaskType::Custom),
+                "none" => Ok(TaskType::None),
                 _ => Err(anyhow::anyhow!("Invalid task type")),
             }
         }
@@ -289,7 +293,7 @@ mod types {
         pub workflow_id: u64,
         pub version: String,
         pub version_info: String,
-        pub updated_time: String,
+        pub created_time: String,
         pub created_user: String,
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
@@ -336,20 +340,7 @@ impl WorkflowApi {
 
         let nodes: Option<Vec<logic::workflow::types::NodeConfig>> = req
             .nodes
-            .map(|v| {
-                v.into_iter()
-                    .map(|v| {
-                        if v.task.standard.as_ref().is_some_and(|v| v.eid == "")
-                            && v.task_type == TaskType::Standard
-                        {
-                            anyhow::bail!(
-                                "when the task type is a standard type, eid cannot be empty"
-                            )
-                        }
-                        v.try_into()
-                    })
-                    .collect()
-            })
+            .map(|v| v.into_iter().map(|v| v.try_into()).collect())
             .transpose()?;
         let edges: Option<Vec<logic::workflow::types::EdgeConfig>> = req
             .edges
@@ -500,7 +491,7 @@ impl WorkflowApi {
                 version_info: v.version_info,
                 nodes: v.nodes.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
                 edges: v.edges.map(|v| serde_json::from_value(v).unwrap_or(vec![])),
-                updated_time: local_time!(v.updated_time),
+                created_time: local_time!(v.created_time),
                 created_user: v.created_user,
             })
             .collect();

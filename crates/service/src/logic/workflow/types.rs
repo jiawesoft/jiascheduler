@@ -2,7 +2,7 @@ use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum NodeType {
     #[serde(rename = "bpmn:startEvent")]
     StartEvent,
@@ -48,12 +48,14 @@ pub enum Task {
     None,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum TaskType {
     #[serde(rename = "standard")]
     Standard,
     #[serde(rename = "custom")]
     Custom,
+    #[serde(rename = "none")]
+    None,
 }
 
 impl Display for TaskType {
@@ -61,6 +63,7 @@ impl Display for TaskType {
         match self {
             TaskType::Standard => write!(f, "standard"),
             TaskType::Custom => write!(f, "custom"),
+            TaskType::None => write!(f, "none"),
         }
     }
 }
@@ -71,6 +74,7 @@ impl TryFrom<&str> for TaskType {
         match value {
             "standard" => Ok(TaskType::Standard),
             "custom" => Ok(TaskType::Custom),
+            "none" => Ok(TaskType::None),
             _ => Err(anyhow::anyhow!("Invalid task type")),
         }
     }
