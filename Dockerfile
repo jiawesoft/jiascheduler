@@ -50,6 +50,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
 
 
 # 复制后端可执行文件
+COPY --from=backend-builder /app/target/release/jiascheduler /app/
 COPY --from=backend-builder /app/target/release/jiascheduler-console /app/
 COPY --from=backend-builder /app/target/release/jiascheduler-comet /app/
 COPY --from=backend-builder /app/target/release/jiascheduler-agent /app/
