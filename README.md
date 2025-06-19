@@ -50,9 +50,9 @@ For single-instance deployment, you only need to execute the following:
 
 ```bash
 // Access localhost:9090 via a browser to complete the initial setup.
-// After the initial setup, the configuration file will be loaded, and there is no need to pass `--bind-addr` for subsequent restarts.
+// After the initial setup, the configuration file will be loaded, and there is no need to pass `--console-bind-addr` for subsequent restarts.
 // The default path for the generated configuration file is $HOME/.jiascheduler/console.toml.
-./jiascheduler --bind-addr 0.0.0.0:9090
+./jiascheduler --console-bind-addr 0.0.0.0:9090
 ```
 
 ### Docker Deployment

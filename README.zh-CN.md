@@ -52,9 +52,9 @@ jiascheduler 一共有四个执行程序，分别是
 
 ```bash
 // 通过浏览器访问 localhost:9090, 完成初始化安装
-// 初始化安装后会加载配置文件再次启动无需传入--bind-addr
+// 初始化安装后会加载配置文件再次启动无需传入--console-bind-addr
 // 生成的配置文件路径默认为$HOME/.jiascheduler/console.toml
-./jiascheduler --bind-addr 0.0.0.0:9090
+./jiascheduler --console-bind-addr 0.0.0.0:9090
 
 ```
 
