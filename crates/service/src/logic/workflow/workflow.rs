@@ -89,8 +89,9 @@ impl<'a> WorkflowLogic<'a> {
             .apply_if(default_id, |query, v| {
                 query.order_by_desc(Expr::expr(workflow::Column::Id.eq(v)))
             })
+            .order_by_desc(workflow_version::Column::Id)
             .paginate(&self.ctx.db, page_size)
-            .fetch_page(page)
+            .fetch_page(page - 1)
             .await?;
 
         Ok((ret, total))
