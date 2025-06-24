@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -142,6 +142,7 @@ pub struct TeamRecord {
 pub enum ResourceType {
     Job,
     Instance,
+    Workflow,
 }
 
 impl Display for ResourceType {
@@ -149,6 +150,7 @@ impl Display for ResourceType {
         match self {
             ResourceType::Job => write!(f, "job"),
             ResourceType::Instance => write!(f, "instance"),
+            ResourceType::Workflow => write!(f, "workflow"),
         }
     }
 }

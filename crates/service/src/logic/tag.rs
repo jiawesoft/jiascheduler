@@ -3,7 +3,8 @@ use crate::{
     entity::{instance, job, prelude::*, tag, tag_resource},
     state::AppContext,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
+use entity::workflow;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, QueryFilter, QuerySelect,
     QueryTrait, Set,
@@ -45,6 +46,15 @@ impl<'a> TagLogic<'a> {
                     anyhow::bail!("cannot found instance by id {}", resource_id);
                 }
             }
+            ResourceType::Workflow => {
+                let record = Workflow::find()
+                    .filter(workflow::Column::Id.eq(resource_id))
+                    .one(&self.ctx.db)
+                    .await?;
+                if record.is_none() {
+                    anyhow::bail!("cannot found workflow by id {}", resource_id);
+                }
+            }
         }
 
         let tag_record = Tag::find()
@@ -80,6 +90,13 @@ impl<'a> TagLogic<'a> {
                     .one(&self.ctx.db)
                     .await?
                     .ok_or(anyhow!("cannot found instance by id {resource_id}"))?;
+            }
+            ResourceType::Workflow => {
+                Workflow::find()
+                    .filter(workflow::Column::Id.eq(resource_id))
+                    .one(&self.ctx.db)
+                    .await?
+                    .ok_or(anyhow!("cannot found workflow by id {resource_id}"))?;
             }
         };
 
@@ -152,6 +169,13 @@ impl<'a> TagLogic<'a> {
                     .to(tag_resource::Column::ResourceId)
                     .into(),
             ),
+            ResourceType::Workflow => select.join_rev(
+                JoinType::LeftJoin,
+                Workflow::belongs_to(TagResource)
+                    .from(workflow::Column::Id)
+                    .to(tag_resource::Column::ResourceId)
+                    .into(),
+            ),
         };
 
         let tag_count: Vec<types::TagCount> = select
@@ -163,9 +187,10 @@ impl<'a> TagLogic<'a> {
         Ok(tag_count)
     }
 
-    pub async fn get_all_tag_bind_by_job_ids(
+    pub async fn get_all_tag_bind_by_resource_ids(
         &self,
-        job_ids: Vec<u64>,
+        resource_ids: Vec<u64>,
+        resource_type: ResourceType,
     ) -> Result<Vec<types::TagBind>> {
         let tags = TagResource::find()
             .column(tag::Column::TagName)
@@ -176,8 +201,8 @@ impl<'a> TagLogic<'a> {
                     .to(tag_resource::Column::TagId)
                     .into(),
             )
-            .filter(tag_resource::Column::ResourceType.eq(ResourceType::Job.to_string()))
-            .filter(tag_resource::Column::ResourceId.is_in(job_ids))
+            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
+            .filter(tag_resource::Column::ResourceId.is_in(resource_ids))
             .into_model()
             .all(&self.ctx.db)
             .await?;

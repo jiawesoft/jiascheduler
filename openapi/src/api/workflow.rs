@@ -271,10 +271,17 @@ mod types {
     }
 
     #[derive(Object, Serialize, Default)]
+    pub struct ResourceTag {
+        pub id: u64,
+        pub tag_name: String,
+    }
+
+    #[derive(Object, Serialize, Default)]
     pub struct WorkflowRecord {
         pub id: u64,
         pub name: String,
         pub info: String,
+        pub tags: Option<Vec<ResourceTag>>,
         pub team_name: Option<String>,
         pub team_id: u64,
         pub updated_time: String,
@@ -433,6 +440,15 @@ impl WorkflowApi {
                 page_size,
             )
             .await?;
+
+        let tag_records = svc
+            .tag
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.id).collect(),
+                logic::types::ResourceType::Workflow,
+            )
+            .await?;
+
         let list = ret
             .0
             .into_iter()
@@ -440,6 +456,21 @@ impl WorkflowApi {
                 id: v.id,
                 name: v.name,
                 info: v.info,
+                tags: Some(
+                    tag_records
+                        .iter()
+                        .filter_map(|tb| {
+                            if tb.resource_id == v.id {
+                                Some(types::ResourceTag {
+                                    id: tb.tag_id,
+                                    tag_name: tb.tag_name.clone(),
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
                 team_name: v.team_name,
                 team_id: v.team_id,
                 updated_time: local_time!(v.updated_time),

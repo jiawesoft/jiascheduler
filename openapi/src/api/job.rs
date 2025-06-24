@@ -809,7 +809,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::JobRecord> = ret
@@ -1051,7 +1054,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.job_id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::RunRecord> = ret
@@ -1166,7 +1172,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.job_id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::ScheduleRecord> = ret
@@ -1276,7 +1285,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.job_id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::ExecRecord> = ret
@@ -1682,7 +1694,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.job_id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::JobTimerRecord> = ret
@@ -1888,7 +1903,10 @@ impl JobApi {
 
         let tag_records = svc
             .tag
-            .get_all_tag_bind_by_job_ids(ret.0.iter().map(|v| v.job_id).collect())
+            .get_all_tag_bind_by_resource_ids(
+                ret.0.iter().map(|v| v.job_id).collect(),
+                logic::types::ResourceType::Job,
+            )
             .await?;
 
         let list: Vec<types::JobSupervisorRecord> = ret

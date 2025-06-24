@@ -31,6 +31,8 @@ pub mod types {
         Job,
         #[oai(rename = "instance")]
         Instance,
+        #[oai(rename = "workflow")]
+        Workflow,
     }
 
     #[derive(Object, Deserialize, Serialize)]
@@ -82,6 +84,7 @@ impl TagApi {
         let resource_type = match req.resource_type {
             types::ResourceType::Job => ResourceType::Job,
             types::ResourceType::Instance => ResourceType::Instance,
+            types::ResourceType::Workflow => ResourceType::Workflow,
         };
 
         let ret = svc
@@ -103,6 +106,7 @@ impl TagApi {
         let resource_type = match req.resource_type {
             types::ResourceType::Job => ResourceType::Job,
             types::ResourceType::Instance => ResourceType::Instance,
+            types::ResourceType::Workflow => ResourceType::Workflow,
         };
         let ret = svc
             .tag
@@ -123,6 +127,7 @@ impl TagApi {
         let resource_type = match resource_type {
             types::ResourceType::Job => ResourceType::Job,
             types::ResourceType::Instance => ResourceType::Instance,
+            types::ResourceType::Workflow => ResourceType::Workflow,
         };
 
         let search_username =
