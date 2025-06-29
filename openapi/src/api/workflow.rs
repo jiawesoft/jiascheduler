@@ -319,6 +319,18 @@ mod types {
         pub nodes: Option<Vec<NodeConfig>>,
         pub edges: Option<Vec<EdgeConfig>>,
     }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct StartProcessReq {
+        pub workflow_id: u64,
+        pub version_id: Option<u64>,
+        pub data: serde_json::Value,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct StartProcessResp {
+        pub process_id: u64,
+    }
 }
 
 fn set_middleware(ep: impl Endpoint) -> impl Endpoint {
@@ -572,5 +584,16 @@ impl WorkflowApi {
             nodes: nodes,
             edges: edges,
         })
+    }
+
+    #[oai(path = "/start-process", method = "post")]
+    pub async fn start_process(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        Json(req): Json<types::StartProcessReq>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+    ) -> api_response!(types::StartProcessResp) {
+        todo!()
     }
 }

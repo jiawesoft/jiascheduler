@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use automate::{
-    bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams},
+    bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams, WorkflowNodeParams},
     bus::{Bus, Msg},
 };
 
@@ -76,6 +76,11 @@ async fn agent_offline(state: AppState, msg: AgentOfflineParams) -> Result<()> {
         .await?)
 }
 
+async fn process_workflow(state: AppState, msg: WorkflowNodeParams) -> Result<()> {
+    info!("process workflow node");
+    todo!()
+}
+
 pub async fn instance_health_check(state: AppState) {
     let is_master = Arc::new(RwLock::new(false));
     let state_clone = state.clone();
@@ -138,6 +143,7 @@ pub async fn start(state: AppState) -> Result<()> {
                             }
                             Msg::AgentOnline(msg) => agent_online(state.clone(), msg).await?,
                             Msg::AgentOffline(msg) => agent_offline(state.clone(), msg).await?,
+                            Msg::WorkflowEvent(msg) => process_workflow(state.clone(), msg).await?,
                         };
                         Ok(())
                     })

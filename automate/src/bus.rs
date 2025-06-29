@@ -4,16 +4,17 @@ use anyhow::Result;
 use futures::Future;
 use local_ip_address::local_ip;
 use redis::{
-    from_redis_value,
+    AsyncCommands, Client, from_redis_value,
     streams::{StreamMaxlen, StreamReadOptions, StreamReadReply},
-    AsyncCommands, Client,
 };
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
 
 use tracing::{debug, error, info, warn};
 
-use crate::bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams, UpdateJobParams};
+use crate::bridge::msg::{
+    AgentOfflineParams, AgentOnlineParams, HeartbeatParams, UpdateJobParams, WorkflowNodeParams,
+};
 
 #[derive(Debug, Serialize, Deserialize, FromRedisValue, ToRedisArgs)]
 pub enum Msg {
@@ -21,6 +22,7 @@ pub enum Msg {
     Heartbeat(HeartbeatParams),
     AgentOnline(AgentOnlineParams),
     AgentOffline(AgentOfflineParams),
+    WorkflowEvent(WorkflowNodeParams),
 }
 
 #[derive(Clone)]
@@ -62,8 +64,8 @@ impl Bus {
     pub async fn recv(
         &self,
         mut cb: impl Sync
-            + Send
-            + FnMut(String, Msg) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>,
+        + Send
+        + FnMut(String, Msg) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>,
     ) -> Result<String> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
 
