@@ -1,16 +1,4 @@
-# 第一阶段：构建前端
-FROM node:18 AS frontend-builder
-WORKDIR /app/frontend
-
-# 克隆前端代码
-RUN apt update && apt install -y git && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth=1 https://github.com/jiawesoft/jiascheduler-ui.git .
-RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
-
-# 编译前端
-RUN pnpm build
-
-# 第二阶段：构建后端
+# 构建阶段：构建后端
 FROM rust:latest AS backend-builder
 WORKDIR /app
 
@@ -24,13 +12,13 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release --verbose || true
 
 # 复制前端编译产物到后端的 dist 目录
-COPY --from=frontend-builder /app/frontend/dist /app/dist
+COPY dist /app/dist
 
 # 复制后端代码并编译
 COPY ./ ./
 RUN cargo build --release --verbose
 
-# 第三阶段：构建最终运行环境
+# 第二阶段：构建最终运行环境
 FROM ubuntu:latest
 WORKDIR /app
 

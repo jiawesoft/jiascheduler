@@ -11,11 +11,42 @@ env:
   IMAGE_NAME: iwannay/jiascheduler
 
 jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Clone and build frontend
+        run: |
+          git clone --depth=1 https://github.com/jiawesoft/jiascheduler-ui.git frontend
+          cd frontend
+          npm install -g pnpm
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
   docker:
+    needs: build-frontend
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
 
       - name: Get tag name or default to latest
         id: get-tag
@@ -36,6 +67,9 @@ jobs:
           # 创建DOCKER_PAT变量，填入你的Docker令牌
           password: ${{ secrets.DOCKER_PAT }} # 使用 DOCKER_PAT 作为密码
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -44,6 +78,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.get-tag.outputs.tag_name }}
