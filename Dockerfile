@@ -3,20 +3,20 @@ FROM rust:latest AS backend-builder
 WORKDIR /app
 
 # 复制 Rust 依赖文件，以便利用缓存
-COPY Cargo.toml Cargo.lock ./
+# COPY Cargo.toml Cargo.lock ./
 
 # 创建 src 目录，防止 cargo build 失败
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+# RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # 预先构建依赖，缓存编译结果
-RUN cargo build --release --verbose || true
+# RUN cargo build --release --verbose || true
 
 # 复制前端编译产物到后端的 dist 目录
 COPY dist /app/dist
 
 # 复制后端代码并编译
 COPY ./ ./
-RUN cargo build --release --verbose
+RUN cargo build --release
 
 # 第二阶段：构建最终运行环境
 FROM ubuntu:latest
