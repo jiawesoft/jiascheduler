@@ -10,6 +10,7 @@ mod timer;
 use automate::scheduler::types::ScheduleType;
 use chrono::Local;
 
+use entity::job_schedule;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait,
@@ -254,14 +255,14 @@ impl<'a> JobLogic<'a> {
             == Some(true));
     }
 
-    pub async fn can_write_schedule(
+    pub async fn can_write_schedule_pid(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        schedule_id: Option<String>,
+        pid: Option<u64>,
     ) -> Result<bool> {
-        let Some(schedule_record) = JobScheduleHistory::find()
-            .filter(job_schedule_history::Column::ScheduleId.eq(schedule_id))
+        let Some(schedule_record) = JobSchedule::find()
+            .filter(job_schedule::Column::Id.eq(pid))
             .one(&self.ctx.db)
             .await?
         else {
@@ -270,6 +271,35 @@ impl<'a> JobLogic<'a> {
 
         self.can_write_job(user_info, team_id, Some(schedule_record.eid.into()))
             .await
+    }
+
+    pub async fn can_write<T>(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        target: Option<T>,
+    ) -> Result<bool> {
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(true);
+        }
+
+        let is_team_user = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map(|_| true)
+        } else {
+            None
+        };
+
+        let Some(schedule_id) = target else {
+            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        };
+
+        todo!()
     }
 
     pub async fn can_write_schedule_by_id(
