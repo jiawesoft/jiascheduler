@@ -43,7 +43,7 @@ jiascheduler 一共有四个执行程序，分别是
 
 1. jiascheduler-console: 控制台服务，用于提供 web 控制台服务
 2. jiascheduler-comet: 连接层服务，用于提供一个统一的接入层供 agent 连接
-3. jiascheduler-agent: 本地 agent 层序，用于执行作业
+3. jiascheduler-agent: 本地 agent 程序，用于执行作业
 4. jiascheduler: 以上三个服务的合并打包版本，用于单节点简易快速部署。
    需要注意的是，jiascheduler 打包服务也支持不同的 agent 接入。
    部署了 jiascheduler 合并版本, 你依旧可以再部署多个 comet 和 agent
