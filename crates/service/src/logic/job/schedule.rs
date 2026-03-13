@@ -1384,6 +1384,55 @@ impl<'a> JobLogic<'a> {
         Ok(ret)
     }
 
+    pub async fn delete_schedule(
+        &self,
+        user_info: &UserInfo,
+        eid: &str,
+        schedule_pid: u64,
+    ) -> Result<u64> {
+        JobSchedule::update_many()
+            .set(job_schedule::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_schedule::Column::Id.eq(schedule_pid))
+            .filter(job_schedule::Column::Eid.eq(eid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        let ret = JobScheduleHistory::update_many()
+            .set(job_schedule_history::ActiveModel {
+                is_deleted: Set(true),
+                deleted_at: Set(Some(Local::now())),
+                deleted_by: Set(user_info.username.clone()),
+                ..Default::default()
+            })
+            .filter(job_schedule_history::Column::Eid.eq(eid))
+            .filter(job_schedule_history::Column::SchedulePid.eq(schedule_pid))
+            .exec(&self.ctx.db)
+            .await?;
+
+        JobExecHistory::delete_many()
+            .filter(job_exec_history::Column::Eid.eq(eid))
+            .filter(
+                Condition::all().add(
+                    job_exec_history::Column::ScheduleId.in_subquery(
+                        JobScheduleHistory::find()
+                            .select_only()
+                            .column(job_schedule_history::Column::ScheduleId)
+                            .filter(job_schedule_history::Column::SchedulePid.eq(schedule_pid))
+                            .as_query()
+                            .clone(),
+                    ),
+                ),
+            )
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
+    }
+
     pub async fn delete_schedule_history(
         &self,
         user_info: &UserInfo,

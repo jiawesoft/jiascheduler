@@ -205,7 +205,7 @@ impl<'a> JobLogic<'a> {
             == Some(true));
     }
 
-    pub async fn can_write_schedule_pid(
+    pub async fn can_write_schedule_by_pid(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,

@@ -758,6 +758,17 @@ pub mod types {
     }
 
     #[derive(Object, Serialize, Default)]
+    pub struct DeleteScheduleReq {
+        pub eid: String,
+        pub schedule_pid: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
+    pub struct DeleteScheduleResp {
+        pub result: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
     pub struct DeleteScheduleHistoryReq {
         pub eid: String,
         pub schedule_id: String,
@@ -1748,6 +1759,36 @@ impl JobApi {
             .await?;
 
         return_ok!(types::DeleteRunStatusResp { result })
+    }
+
+    #[oai(
+        path = "/delete-schedule",
+        method = "post",
+        transform = "set_middleware"
+    )]
+    pub async fn delete_schedule(
+        &self,
+        state: Data<&AppState>,
+        user_info: Data<&logic::types::UserInfo>,
+        #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
+        Json(req): Json<types::DeleteScheduleReq>,
+        _session: &Session,
+    ) -> api_response!(types::DeleteScheduleResp) {
+        let svc = state.service();
+        if !svc
+            .job
+            .can_write_schedule_by_pid(&user_info, team_id.clone(), Some(req.schedule_pid.clone()))
+            .await?
+        {
+            return_err!("no permission to delete this schedule");
+        }
+
+        let result = svc
+            .job
+            .delete_schedule(&user_info, &req.eid, req.schedule_pid)
+            .await?;
+
+        return_ok!(types::DeleteScheduleResp { result })
     }
 
     #[oai(
