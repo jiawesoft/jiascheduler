@@ -301,6 +301,7 @@ pub struct ScheduleJobTeamModel {
     pub action: String,
     pub snapshot_data: Option<serde_json::Value>,
     pub actual_args: Option<serde_json::Value>,
+    pub timer_expr: Option<serde_json::Value>,
     pub created_user: String,
     pub updated_user: String,
     pub created_time: DateTimeLocal,
