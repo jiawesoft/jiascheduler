@@ -959,7 +959,7 @@ impl JobApi {
             .job
             .query_job(
                 search_username,
-                job_type.filter(|v| v != ""),
+                job_type.clone().filter(|v| v != ""),
                 name.filter(|v| v != ""),
                 updated_time_range,
                 default_id,
@@ -975,7 +975,10 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.id).collect(),
-                logic::types::ResourceType::Job,
+                match job_type.as_ref() {
+                    Some(v) if v == "bundle" => logic::types::ResourceType::BundleJob,
+                    _ => logic::types::ResourceType::Job,
+                },
             )
             .await?;
 
@@ -1269,7 +1272,7 @@ impl JobApi {
                 team_id,
                 schedule_name.filter(|v| v != ""),
                 Some(schedule_type),
-                Some(job_type),
+                Some(job_type.clone()),
                 updated_time_range,
                 tag_ids,
                 page - 1,
@@ -1281,7 +1284,11 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.job_id).collect(),
-                logic::types::ResourceType::Job,
+                if job_type == "bundle" {
+                    logic::types::ResourceType::BundleJob
+                } else {
+                    logic::types::ResourceType::Job
+                },
             )
             .await?;
 
@@ -1389,7 +1396,7 @@ impl JobApi {
             .query_schedule_history(
                 schedule_type,
                 search_username,
-                job_type,
+                job_type.clone(),
                 name,
                 team_id,
                 updated_time_range,
@@ -1403,7 +1410,11 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.job_id).collect(),
-                logic::types::ResourceType::Job,
+                if job_type == "bundle" {
+                    logic::types::ResourceType::BundleJob
+                } else {
+                    logic::types::ResourceType::Job
+                },
             )
             .await?;
 
@@ -1540,7 +1551,7 @@ impl JobApi {
             .query_schedule(
                 schedule_type,
                 search_username,
-                job_type,
+                job_type.clone(),
                 name,
                 team_id,
                 updated_time_range,
@@ -1554,7 +1565,11 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.job_id).collect(),
-                logic::types::ResourceType::Job,
+                if job_type == "bundle" {
+                    logic::types::ResourceType::BundleJob
+                } else {
+                    logic::types::ResourceType::Job
+                },
             )
             .await?;
 
@@ -1650,7 +1665,7 @@ impl JobApi {
         let ret = svc
             .job
             .query_exec_history(
-                job_type,
+                job_type.clone(),
                 NonZeroU64::new(schedule_pid.unwrap_or_default()),
                 schedule_id.filter(|v| v != ""),
                 schedule_type,
@@ -1672,7 +1687,11 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.job_id).collect(),
-                logic::types::ResourceType::Job,
+                if job_type == "bundle" {
+                    logic::types::ResourceType::BundleJob
+                } else {
+                    logic::types::ResourceType::Job
+                },
             )
             .await?;
 
@@ -2102,7 +2121,7 @@ impl JobApi {
                 team_id,
                 search_username,
                 name.filter(|v| v != ""),
-                job_type.filter(|v| v != ""),
+                job_type.clone().filter(|v| v != ""),
                 updated_time_range,
                 tag_ids,
                 page - 1,
@@ -2114,7 +2133,10 @@ impl JobApi {
             .tag
             .get_all_tag_bind_by_resource_ids(
                 ret.0.iter().map(|v| v.job_id).collect(),
-                logic::types::ResourceType::Job,
+                match job_type.as_ref() {
+                    Some(v) if v == "bundle" => logic::types::ResourceType::BundleJob,
+                    _ => logic::types::ResourceType::Job,
+                },
             )
             .await?;
 
