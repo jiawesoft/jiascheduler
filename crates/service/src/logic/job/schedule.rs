@@ -424,10 +424,17 @@ impl<'a> JobLogic<'a> {
         actual_args: Option<serde_json::Value>,
         created_user: String,
     ) -> Result<u64> {
+        let job_record = Job::find()
+            .filter(job::Column::Eid.eq(eid.clone()))
+            .filter(job::Column::IsDeleted.eq(false))
+            .one(&self.ctx.db)
+            .await?
+            .ok_or(anyhow!("cannot found job {}", eid))?;
+
         self.schedule_job(
             secret,
             instance_ids,
-            eid,
+            &job_record,
             is_sync,
             schedule_name,
             schedule_type,
@@ -445,7 +452,7 @@ impl<'a> JobLogic<'a> {
         &self,
         secret: String,
         instance_ids: Vec<String>,
-        eid: String,
+        job_record: &job::Model,
         is_sync: bool,
         schedule_name: String,
         schedule_type: ScheduleType,
@@ -465,13 +472,6 @@ impl<'a> JobLogic<'a> {
         if endpoints.len() == 0 {
             anyhow::bail!("cannot found valid instance");
         }
-
-        let job_record = Job::find()
-            .filter(job::Column::Eid.eq(eid.clone()))
-            .filter(job::Column::IsDeleted.eq(false))
-            .one(&self.ctx.db)
-            .await?
-            .ok_or(anyhow!("cannot found job {}", eid))?;
 
         let executor_record = Executor::find()
             .filter(executor::Column::Id.eq(job_record.executor_id))
@@ -677,11 +677,37 @@ impl<'a> JobLogic<'a> {
             .for_each(|v| v.data = None);
 
         let schedule_pid = if let Some(v) = schedule_pid {
+            match action {
+                JobAction::StartTimer
+                | JobAction::StopTimer
+                | JobAction::StartSupervising
+                | JobAction::StopSupervising => {
+                    JobSchedule::update_many()
+                        .set(job_schedule::ActiveModel {
+                            action: Set(action.to_string()),
+                            ..Default::default()
+                        })
+                        .exec(&self.ctx.db)
+                        .await?;
+                }
+
+                JobAction::RestartSupervising => {
+                    JobSchedule::update_many()
+                        .set(job_schedule::ActiveModel {
+                            action: Set(JobAction::StartSupervising.to_string()),
+                            ..Default::default()
+                        })
+                        .exec(&self.ctx.db)
+                        .await?;
+                }
+
+                _ => (),
+            };
             v.get()
         } else {
             JobSchedule::insert(entity::job_schedule::ActiveModel {
                 name: Set(schedule_name.clone()),
-                eid: Set(eid.clone()),
+                eid: Set(job_record.eid.clone()),
                 job_type: Set(job_record.job_type.to_string()),
                 snapshot_data: Set(Some(serde_json::to_value(&job_record)?)),
                 actual_args: Set(Some(serde_json::to_value(&job_actual_args)?)),
@@ -703,7 +729,7 @@ impl<'a> JobLogic<'a> {
             schedule_pid: Set(schedule_pid),
             schedule_id: Set(schedule_id.clone()),
             name: Set(schedule_name),
-            eid: Set(eid.clone()),
+            eid: Set(job_record.eid.clone()),
             job_type: Set(job_type),
             schedule_type: Set(schedule_type.to_string()),
             dispatch_result: Set(Some(serde_json::to_value(&dispatch_result)?)),

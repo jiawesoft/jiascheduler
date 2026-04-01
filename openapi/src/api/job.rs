@@ -1123,6 +1123,19 @@ impl JobApi {
                     req.schedule_pid
                 ))?;
 
+        let job_record: job::Model = serde_json::from_value(
+            schedule_record
+                .snapshot_data
+                .ok_or(anyhow::format_err!("cannot get snapshot_data"))?,
+        )
+        .map_err(|e| anyhow::format_err!("{e}"))?;
+
+        let timer_expr: Option<logic::types::CustomTimerExpr> = schedule_record
+            .timer_expr
+            .clone()
+            .map(|v| serde_json::from_value(v).map_err(|e| anyhow::format_err!("{e}")))
+            .transpose()?;
+
         let schedule_type = schedule_record.schedule_type.as_str().try_into()?;
 
         if !svc
@@ -1145,12 +1158,12 @@ impl JobApi {
             .schedule_job(
                 secret,
                 instances,
-                schedule_record.eid,
+                &job_record,
                 false,
                 schedule_record.name,
                 schedule_type,
                 action,
-                None,
+                timer_expr,
                 NonZeroI32::new(schedule_record.restart_interval)
                     .map(|v| Duration::from_secs(v.get() as u64)),
                 schedule_record.actual_args,
