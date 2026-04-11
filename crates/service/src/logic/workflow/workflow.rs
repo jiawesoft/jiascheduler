@@ -1627,7 +1627,7 @@ impl<'a> WorkflowLogic<'a> {
             .await?;
 
         TagResource::delete_many()
-            .filter(tag_resource::Column::ResourceType.eq("workflow"))
+            .filter(tag_resource::Column::ResourceType.eq(ResourceType::Workflow.to_string()))
             .filter(tag_resource::Column::ResourceId.eq(workflow_id))
             .exec(&self.ctx.db)
             .await?;

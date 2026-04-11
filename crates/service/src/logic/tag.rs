@@ -116,6 +116,20 @@ impl<'a> TagLogic<'a> {
         Ok(ret.rows_affected)
     }
 
+    pub async fn delete_tag(
+        &self,
+        _user_info: &types::UserInfo,
+        resource_type: ResourceType,
+        resource_id: Vec<u64>,
+    ) -> Result<u64> {
+        let ret = TagResource::delete_many()
+            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
+            .filter(tag_resource::Column::ResourceId.is_in(resource_id))
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
+    }
+
     pub async fn count_resource(
         &self,
         _user_info: &types::UserInfo,
