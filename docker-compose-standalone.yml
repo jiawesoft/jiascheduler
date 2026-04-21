@@ -8,7 +8,6 @@ services:
     container_name: jiascheduler-mysql
     volumes:
       - jiascheduler_mysql_data:/var/lib/mysql
-      # - $WORKCONF/mysql/conf/my.cnf:/etc/my.conf
       - jiascheduler_mysql_logs:/var/log/mysql
     environment:
       - TZ=Asia/Shanghai # 设置时区
@@ -23,7 +22,6 @@ services:
     container_name: jiascheduler-redis
     volumes:
       - jiascheduler_redis_data:/data
-      # - $WORKCONF/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
       - jiascheduler_redis_logs:/logs
     ports:
       - "6379:6379"
@@ -43,44 +41,6 @@ services:
     volumes:
       - ./console.toml:/root/.jiascheduler/console.toml
     # command: ["./jiascheduler-console", "--bind-addr", "0.0.0.0:9090"]
-
-  jiascheduler-comet:
-    restart: always
-    image: iwannay/jiascheduler
-    depends_on:
-      - jiascheduler-redis
-    container_name: jiascheduler-comet
-    ports:
-      - "3000:3000"
-    command:
-      [
-        "./jiascheduler-comet",
-        "--bind",
-        "0.0.0.0:3000",
-        "-r",
-        "redis://default:3DGiuazc7wkAppV3@redis:6379",
-        "--secret",
-        "rYzBYE+cXbtdMg==",
-      ]
-
-  jiascheduler-agent:
-    restart: always
-    image: iwannay/jiascheduler
-    depends_on:
-      - jiascheduler-comet
-    container_name: jiascheduler-agent
-    command:
-      [
-        "./jiascheduler-agent",
-        "--comet-addr",
-        "ws://jiascheduler-comet:3000",
-        "--assign-username",
-        "guest",
-        "--assign-password",
-        "guest",
-        "--namespace",
-        "home",
-      ]
 
 volumes:
   jiascheduler_mysql_data:
