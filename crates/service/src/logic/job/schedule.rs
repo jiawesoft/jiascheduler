@@ -689,6 +689,7 @@ impl<'a> JobLogic<'a> {
                             action: Set(action.to_string()),
                             ..Default::default()
                         })
+                        .filter(job_schedule::Column::Id.eq(v.get()))
                         .exec(&self.ctx.db)
                         .await?;
                 }
@@ -699,6 +700,7 @@ impl<'a> JobLogic<'a> {
                             action: Set(JobAction::StartSupervising.to_string()),
                             ..Default::default()
                         })
+                        .filter(job_schedule::Column::Id.eq(v.get()))
                         .exec(&self.ctx.db)
                         .await?;
                 }
