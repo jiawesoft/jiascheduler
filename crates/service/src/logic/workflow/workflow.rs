@@ -1353,10 +1353,12 @@ impl<'a> WorkflowLogic<'a> {
         let node_id = params.base_job.eid;
         let bind_ip = params.bind_ip;
 
-        let output = params.stdout.unwrap_or_default();
-        let output = params
-            .stderr
-            .map_or(output.clone(), |v| format!("{v}\n{output}"));
+        let mut output = params.stdout.unwrap_or_default();
+        if let Some(e) = params.stderr
+            && e != ""
+        {
+            output = format!("{e}\n{output}");
+        }
 
         let Some(run_status) = params.run_status else {
             anyhow::bail!(

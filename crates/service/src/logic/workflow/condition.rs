@@ -332,7 +332,7 @@ impl Condition {
                 }
             };
             let val = env
-                .eval(d.as_str(), dbg!(&ctx))?
+                .eval(d.as_str(), &ctx)?
                 .as_bool()
                 .ok_or(anyhow!("invalid express compare result"))?;
             info!("{}:{}, expr:{}", rule.name, val, d.as_str(),);

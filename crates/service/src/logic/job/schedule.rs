@@ -363,7 +363,9 @@ impl<'a> JobLogic<'a> {
             ScheduleType::Daemon => {
                 if !matches!(
                     action,
-                    JobAction::StartSupervising | JobAction::RestartSupervising
+                    JobAction::StartSupervising
+                        | JobAction::RestartSupervising
+                        | JobAction::StopSupervising
                 ) {
                     anyhow::bail!("cannot {action} job with once schedule type")
                 }
