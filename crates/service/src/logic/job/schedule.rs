@@ -680,20 +680,6 @@ impl<'a> JobLogic<'a> {
 
         let schedule_pid = if let Some(v) = schedule_pid {
             match action {
-                JobAction::StartTimer
-                | JobAction::StopTimer
-                | JobAction::StartSupervising
-                | JobAction::StopSupervising => {
-                    JobSchedule::update_many()
-                        .set(job_schedule::ActiveModel {
-                            action: Set(action.to_string()),
-                            ..Default::default()
-                        })
-                        .filter(job_schedule::Column::Id.eq(v.get()))
-                        .exec(&self.ctx.db)
-                        .await?;
-                }
-
                 JobAction::RestartSupervising => {
                     JobSchedule::update_many()
                         .set(job_schedule::ActiveModel {
@@ -704,8 +690,16 @@ impl<'a> JobLogic<'a> {
                         .exec(&self.ctx.db)
                         .await?;
                 }
-
-                _ => (),
+                _ => {
+                    JobSchedule::update_many()
+                        .set(job_schedule::ActiveModel {
+                            action: Set(action.to_string()),
+                            ..Default::default()
+                        })
+                        .filter(job_schedule::Column::Id.eq(v.get()))
+                        .exec(&self.ctx.db)
+                        .await?;
+                }
             };
             v.get()
         } else {

@@ -1878,8 +1878,7 @@ impl JobApi {
             .job
             .can_write_job(&user_info, team_id.clone(), None)
             .await?
-            || team_id == Some(0)
-            || team_id == None
+            || team_id.is_none_or(|v| v == 0)
         {
             Some(user_info.username.clone())
         } else {
