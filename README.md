@@ -57,38 +57,21 @@ For single-instance deployment, you only need to execute the following:
 
 ### Docker Deployment
 
-Create a `.env` file in the same directory as `docker-compose.yml` with the following content:
+```
+jiascheduler-console reference configuration [console.toml](console.toml)
 
-```shell
-WORKCONF=/data/jiascheduler
-WORKDATA=/data/jiascheduler
+Multi-instance deployment
+```
+docker compose -f docker-compose.yml up -d
 ```
 
-The `console.toml` file has a default path of /root/.jiascheduler/console.toml in the container. If this configuration file does not exist, accessing the console page will redirect you to the initialization setup page.
-
-If the `console.toml` file exists, accessing the console page will directly take you to the login page. Below is a reference configuration. Save the following content as `console.toml` and place it in the `$WORKCONF/.jiascheduler` directory.
-
-```yml
-debug = false
-bind_addr = "0.0.0.0:9090"
-api_url = ""
-redis_url = "redis://default:3DGiuazc7wkAppV3@redis"
-comet_secret = "rYzBYE+cXbtdMg=="
-database_url = "mysql://root:kytHmeBR4Vg@mysql:3306/jiascheduler"
-
-[encrypt]
-private_key = "QGr0LLnFFt7mBFrfol2gy"
-
-[admin]
-username = "admin"
-password = "qTQhiMiLCb"
+Single-node deployment
+```
+docker compose -f docker-compose-standalone.yml up -d
 ```
 
-After executing docker compose up -d, access 0.0.0.0:9090 to enter the console interface.
-
-Below is a reference Docker configuration:
-
-[docker-compose.yml](docker-compose.yml)
+Access the console UI at 0.0.0.0:9090
+```
 
 ## Screenshot
 

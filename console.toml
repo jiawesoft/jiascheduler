@@ -1,0 +1,13 @@
+debug = false
+bind_addr = "0.0.0.0:9090"
+api_url = ""
+redis_url = "redis://default:3DGiuazc7wkAppV3@jiascheduler-redis"
+comet_secret = "rYzBYE+cXbtdMg=="
+database_url = "mysql://root:kytHmeBR4Vg@jiascheduler-mysql:3306/jiascheduler"
+
+[encrypt]
+private_key = "QGr0LLnFFt7mBFrfol2gy"
+
+[admin]
+username = "admin"
+password = "qTQhiMiLCb"
