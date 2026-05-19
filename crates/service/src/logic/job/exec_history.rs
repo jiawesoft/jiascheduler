@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use crate::entity::{
     instance, job, job_exec_history, job_schedule_history, prelude::*, tag_resource, team,
 };
-use crate::logic::types::ResourceType;
+
 use anyhow::Result;
 use automate::scheduler::types::ScheduleType;
 use sea_orm::{

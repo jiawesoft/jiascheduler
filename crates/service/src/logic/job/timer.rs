@@ -9,7 +9,7 @@ use sea_query::Query;
 use super::{JobLogic, types::JobTimerRelatedJobModel};
 use crate::{
     entity::{executor, job, job_timer, prelude::*, tag_resource, team},
-    logic::types::{ResourceType, UserInfo},
+    logic::types::UserInfo,
 };
 
 impl<'a> JobLogic<'a> {

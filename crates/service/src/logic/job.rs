@@ -27,7 +27,7 @@ use crate::{
 };
 use sea_orm::JoinType;
 
-use super::types::{ResourceType, UserInfo};
+use super::types::UserInfo;
 
 pub mod types;
 

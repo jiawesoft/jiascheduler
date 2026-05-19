@@ -34,10 +34,7 @@ use crate::{
     logic::{
         executor::ExecutorLogic,
         job::types::DispatchResult,
-        types::{
-            CompletedCallbackOpts, CompletedCallbackTriggerType, CustomTimerExpr, ResourceType,
-            UserInfo,
-        },
+        types::{CompletedCallbackOpts, CompletedCallbackTriggerType, CustomTimerExpr, UserInfo},
     },
 };
 
