@@ -3,7 +3,8 @@ use crate::{
     entity::{instance, job, prelude::*, tag, tag_resource},
     state::AppContext,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use entity::workflow;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, QueryFilter, QuerySelect,
     QueryTrait, Set,
@@ -30,6 +31,17 @@ impl<'a> TagLogic<'a> {
             ResourceType::Job => {
                 let record = Job::find()
                     .filter(job::Column::Id.eq(resource_id))
+                    .filter(job::Column::JobType.eq("default"))
+                    .one(&self.ctx.db)
+                    .await?;
+                if record.is_none() {
+                    anyhow::bail!("cannot found job by id {}", resource_id);
+                }
+            }
+            ResourceType::BundleJob => {
+                let record = Job::find()
+                    .filter(job::Column::Id.eq(resource_id))
+                    .filter(job::Column::JobType.eq("bundle"))
                     .one(&self.ctx.db)
                     .await?;
                 if record.is_none() {
@@ -43,6 +55,15 @@ impl<'a> TagLogic<'a> {
                     .await?;
                 if record.is_none() {
                     anyhow::bail!("cannot found instance by id {}", resource_id);
+                }
+            }
+            ResourceType::Workflow => {
+                let record = Workflow::find()
+                    .filter(workflow::Column::Id.eq(resource_id))
+                    .one(&self.ctx.db)
+                    .await?;
+                if record.is_none() {
+                    anyhow::bail!("cannot found workflow by id {}", resource_id);
                 }
             }
         }
@@ -64,23 +85,6 @@ impl<'a> TagLogic<'a> {
             inserted.id.as_ref().to_owned()
         } else {
             tag_record.unwrap().id
-        };
-
-        match resource_type {
-            ResourceType::Job => {
-                Job::find()
-                    .filter(job::Column::Id.eq(resource_id))
-                    .one(&self.ctx.db)
-                    .await?
-                    .ok_or(anyhow!("cannot found job by id {resource_id}"))?;
-            }
-            ResourceType::Instance => {
-                Instance::find()
-                    .filter(instance::Column::Id.eq(resource_id))
-                    .one(&self.ctx.db)
-                    .await?
-                    .ok_or(anyhow!("cannot found instance by id {resource_id}"))?;
-            }
         };
 
         tag_resource::ActiveModel {
@@ -112,6 +116,20 @@ impl<'a> TagLogic<'a> {
         Ok(ret.rows_affected)
     }
 
+    pub async fn delete_tag(
+        &self,
+        _user_info: &types::UserInfo,
+        resource_type: ResourceType,
+        resource_id: Vec<u64>,
+    ) -> Result<u64> {
+        let ret = TagResource::delete_many()
+            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
+            .filter(tag_resource::Column::ResourceId.is_in(resource_id))
+            .exec(&self.ctx.db)
+            .await?;
+        Ok(ret.rows_affected)
+    }
+
     pub async fn count_resource(
         &self,
         _user_info: &types::UserInfo,
@@ -134,7 +152,7 @@ impl<'a> TagLogic<'a> {
             .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()));
 
         let select = match resource_type {
-            ResourceType::Job => select
+            ResourceType::Job | ResourceType::BundleJob => select
                 .join_rev(
                     JoinType::LeftJoin,
                     Job::belongs_to(TagResource)
@@ -143,8 +161,16 @@ impl<'a> TagLogic<'a> {
                         .into(),
                 )
                 .filter(job::Column::IsDeleted.eq(false))
+                .filter(
+                    job::Column::JobType.eq(if resource_type == ResourceType::Job {
+                        "default"
+                    } else {
+                        "bundle"
+                    }),
+                )
                 .apply_if(team_id, |q, v| q.filter(job::Column::TeamId.eq(v)))
                 .apply_if(username, |q, v| q.filter(job::Column::CreatedUser.eq(v))),
+
             ResourceType::Instance => select.join_rev(
                 JoinType::LeftJoin,
                 Instance::belongs_to(TagResource)
@@ -152,6 +178,19 @@ impl<'a> TagLogic<'a> {
                     .to(tag_resource::Column::ResourceId)
                     .into(),
             ),
+            ResourceType::Workflow => select
+                .join_rev(
+                    JoinType::LeftJoin,
+                    Workflow::belongs_to(TagResource)
+                        .from(workflow::Column::Id)
+                        .to(tag_resource::Column::ResourceId)
+                        .into(),
+                )
+                .filter(workflow::Column::IsDeleted.eq(false))
+                .apply_if(team_id, |q, v| q.filter(workflow::Column::TeamId.eq(v)))
+                .apply_if(username, |q, v| {
+                    q.filter(workflow::Column::CreatedUser.eq(v))
+                }),
         };
 
         let tag_count: Vec<types::TagCount> = select
@@ -163,9 +202,10 @@ impl<'a> TagLogic<'a> {
         Ok(tag_count)
     }
 
-    pub async fn get_all_tag_bind_by_job_ids(
+    pub async fn get_all_tag_bind_by_resource_ids(
         &self,
-        job_ids: Vec<u64>,
+        resource_ids: Vec<u64>,
+        resource_type: ResourceType,
     ) -> Result<Vec<types::TagBind>> {
         let tags = TagResource::find()
             .column(tag::Column::TagName)
@@ -176,8 +216,8 @@ impl<'a> TagLogic<'a> {
                     .to(tag_resource::Column::TagId)
                     .into(),
             )
-            .filter(tag_resource::Column::ResourceType.eq(ResourceType::Job.to_string()))
-            .filter(tag_resource::Column::ResourceId.is_in(job_ids))
+            .filter(tag_resource::Column::ResourceType.eq(resource_type.to_string()))
+            .filter(tag_resource::Column::ResourceId.is_in(resource_ids))
             .into_model()
             .all(&self.ctx.db)
             .await?;

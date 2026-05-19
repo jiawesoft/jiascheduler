@@ -4,14 +4,13 @@ use anyhow::Result;
 use futures::Future;
 use local_ip_address::local_ip;
 use redis::{
-    from_redis_value,
+    AsyncCommands, Client, from_redis_value,
     streams::{StreamMaxlen, StreamReadOptions, StreamReadReply},
-    AsyncCommands, Client,
 };
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
 
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::bridge::msg::{AgentOfflineParams, AgentOnlineParams, HeartbeatParams, UpdateJobParams};
 
@@ -62,8 +61,8 @@ impl Bus {
     pub async fn recv(
         &self,
         mut cb: impl Sync
-            + Send
-            + FnMut(String, Msg) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>,
+        + Send
+        + FnMut(String, Msg) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>,
     ) -> Result<String> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
 
@@ -72,7 +71,10 @@ impl Bus {
             .await
             .map_or_else(
                 |e| {
-                    warn!("failed create stream group - {}", e);
+                    if e.code() != Some("BUSYGROUP") {
+                        warn!("failed create stream group - {}", e);
+                    }
+
                     "".to_string()
                 },
                 |v| v,
@@ -90,12 +92,11 @@ impl Bus {
                 .xread_options(&[Self::JOB_TOPIC], &[">"], &opts)
                 .await?;
 
-            match conn
+            if let Err(e) = conn
                 .xtrim::<_, u64>(Self::JOB_TOPIC, StreamMaxlen::Equals(5000))
                 .await
             {
-                Ok(n) => debug!("trim stream {} {n} entries", Self::JOB_TOPIC),
-                Err(e) => error!("failed to trim stream - {e}"),
+                error!("failed to trim stream - {e}");
             };
 
             for stream_key in ret.keys {

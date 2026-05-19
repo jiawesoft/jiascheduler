@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum JobAction {
+    Todo,
     Exec,
     Kill,
     StartTimer,
@@ -19,6 +20,7 @@ impl TryFrom<&str> for JobAction {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let action = match value {
+            "todo" => JobAction::Todo,
             "exec" => JobAction::Exec,
             "kill" => JobAction::Kill,
             "start_timer" => JobAction::StartTimer,
@@ -26,6 +28,7 @@ impl TryFrom<&str> for JobAction {
             "start_supervising" => JobAction::StartSupervising,
             "stop_supervising" => JobAction::StopSupervising,
             "restart_supervising" => JobAction::RestartSupervising,
+
             _ => return Err(anyhow!("invalid job action {value}")),
         };
 
@@ -36,6 +39,7 @@ impl TryFrom<&str> for JobAction {
 impl fmt::Display for JobAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            JobAction::Todo => write!(f, "todo"),
             JobAction::Exec => write!(f, "exec"),
             JobAction::Kill => write!(f, "kill"),
             JobAction::StartTimer => write!(f, "start_timer"),
@@ -122,6 +126,8 @@ pub struct BaseJob {
     pub work_user: Option<String>,
     pub max_retry: Option<u8>,
     pub max_parallel: Option<u32>,
+    #[serde(default)]
+    pub is_workflow: bool,
 }
 
 impl BaseJob {
@@ -140,6 +146,7 @@ impl BaseJob {
             work_user: self.work_user.clone(),
             max_retry: self.max_retry,
             max_parallel: self.max_parallel,
+            is_workflow: self.is_workflow,
         }
     }
 }

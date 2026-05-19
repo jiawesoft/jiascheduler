@@ -29,6 +29,19 @@ impl<'a> ExecutorLogic<'a> {
         Self { ctx }
     }
 
+    pub fn get_cmd_args(executor_record: &executor::Model) -> (String, Vec<String>) {
+        let binding = executor_record.command.clone();
+        let command_slice: Vec<&str> = binding.split(" ").collect();
+
+        let cmd_name = command_slice
+            .get(0)
+            .map_or("".to_string(), |&v| v.to_owned());
+        let cmd_args = command_slice
+            .get(1..)
+            .map_or(vec![], |v| v.into_iter().map(|&v| v.to_owned()).collect());
+        (cmd_name, cmd_args)
+    }
+
     pub async fn get_by_id(&self, id: u32) -> Result<Option<executor::Model>> {
         let one = Executor::find_by_id(id).one(&self.ctx.db).await?;
         Ok(one)

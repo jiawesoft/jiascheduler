@@ -4,18 +4,21 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
-#[sea_orm(table_name = "job_organizer_process")]
+#[sea_orm(table_name = "workflow_process_node_task")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
-    pub name: String,
-    pub organizer_id: u64,
-    pub organizer_version: String,
     pub process_id: String,
-    pub status: String,
-    pub current_node: String,
+    pub node_id: String,
+    pub run_id: String,
+    pub task_status: String,
+    pub bind_ip: String,
+    pub exit_code: i64,
+    pub exit_status: String,
+    pub output: String,
+    pub restart_num: i64,
+    pub dispatch_result: Option<Json>,
     pub created_user: String,
-    pub updated_user: String,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }

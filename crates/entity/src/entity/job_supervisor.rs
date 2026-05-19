@@ -12,6 +12,7 @@ pub struct Model {
     pub name: String,
     pub eid: String,
     pub restart_interval: u64,
+    pub job_args: Option<Json>,
     pub info: String,
     pub created_user: String,
     pub updated_user: String,

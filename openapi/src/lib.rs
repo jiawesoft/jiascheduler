@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
     migration::MigrationApi, role::RoleApi, tag::TagApi, team::TeamApi, terminal, user::UserApi,
+    workflow::WorkflowApi,
 };
 use casbin::{CoreApi, DefaultModel, Enforcer};
 
@@ -186,7 +187,9 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     let conf = opts.merge_conf(&opts.config_file).context("merge config")?;
     let mut connect_opts =
         ConnectOptions::new(Url::parse(&conf.database_url).expect("database url"));
-    connect_opts.sqlx_logging(false); // Disable SQLx log
+    connect_opts
+        .sqlx_logging(false) // Disable SQLx log
+        .connect_timeout(Duration::from_secs(5)); // Set connect timeout
 
     let conn = Database::connect(connect_opts.clone())
         .await
@@ -239,6 +242,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             MigrationApi,
             ManageApi,
             TagApi,
+            WorkflowApi,
         ),
         "jiascheduler web api",
         "1.0",

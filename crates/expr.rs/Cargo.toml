@@ -1,0 +1,40 @@
+[package]
+name = "expr-lang"
+version = "0.3.2"
+edition = "2021"
+authors = ["@jdx"]
+license = "MIT"
+documentation = "https://docs.rs/expr-lang"
+homepage = "https://github.com/jdx/expr.rs"
+repository = "https://github.com/jdx/expr.rs"
+description = "Implementation of expr language in Rust"
+include = [
+    "/src/**/*.pest",
+    "/src/**/*.rs",
+]
+
+[features]
+serde = ["dep:serde", "indexmap/serde"]
+
+[lib]
+name = "expr"
+
+[dependencies]
+indexmap = "2"
+regex = "1"
+thiserror = "2"
+pest_derive = "2"
+pest = "2"
+log = "0.4"
+serde = { version = "1.0", optional = true, features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
+once_cell = "1"
+
+[dev-dependencies]
+test-log = "0.2"
+proptest = "1"
+serde = "1"
+serde_json = "1"
+
+[package.metadata.release]
+pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]

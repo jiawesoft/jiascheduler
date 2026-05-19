@@ -1,0 +1,61 @@
+full    = _{ SOI ~ program ~ EOI }
+program =  { stmt* ~ expr }
+stmt    =  { "let" ~ ident ~ "=" ~ expr ~ ";" }
+expr    =  { prefix? ~ term ~ postfix* ~ (infix ~ prefix? ~ term ~ postfix*)* }
+
+prefix  = _{ negation_op | sign_op }
+infix   = _{ exponent_op | multiplication_op | addition_op | comparison_op | equal_op | and_op | or_op | string_op }
+postfix = _{ ternary | range_start_op | range_end_op | opt_membership_op | opt_index_op | membership_op | index_op | default_op | pipe }
+
+func              =  { ident ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ (","? ~ predicate)? ~ ")" }
+pipe              =  { "|" ~ func }
+predicate         =  { "." ~ ident | ("{"? ~ (program | expr) ~ "}"?) }
+term              = _{ func | range | value | ident | array | map | "(" ~ expr ~ ")" }
+ternary           =  { "?" ~ expr ~ ":" ~ expr }
+membership_op     =  { "." ~ ident }
+opt_membership_op =  { "?." ~ ident }
+opt_index_op      =  { "?." ~ "[" ~ expr ~ "]" }
+default_op        =  { "??" ~ expr }
+index_op          =  { "[" ~ expr ~ "]" }
+range_start_op    =  { "[" ~ expr ~ ":" ~ expr? ~ "]" }
+range_end_op      =  { "[" ~ ":" ~ expr? ~ "]" }
+negation_op       =  { "!" | "not" }
+sign_op           =  { "+" | "-" }
+exponent_op       =  { "**" | "^" }
+multiplication_op =  { "*" | "/" | "%" }
+addition_op       =  { "+" | "-" }
+comparison_op     =  { "<=" | ">=" | "<" | ">" }
+equal_op          =  { "==" | "!=" }
+and_op            =  { "&&" | "and" }
+or_op             =  { "||" | "or" }
+string_op         =  { "in" | "contains" | "startsWith" | "endsWith" | "matches" }
+
+value            =  { string | string_multiline | decimal | int | bool | nil }
+array            =  { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+map              =  { "{" ~ (ident ~ ":" ~ expr ~ ("," ~ ident ~ ":" ~ expr)*)? ~ "}" }
+range            =  { value ~ ".." ~ value }
+string           = ${ ("\"" ~ inner_double ~ "\"" | "'" ~ inner_single ~ "'") }
+string_multiline = ${ "`" ~ inner_multiline ~ "`" }
+inner_single     = @{ char_single* }
+inner_double     = @{ char_double* }
+inner_multiline  = @{ (!"`" ~ ANY)* }
+int              = @{ ASCII_DIGIT+ ~ (ASCII_DIGIT | "_")* }
+bool             =  { "true" | "false" }
+nil              =  { "nil" }
+decimal          = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+
+ident         = @{ "#" | (("$" | ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*) }
+char_single   =  {
+    !("'" | "\\") ~ ANY
+  | "\\" ~ ("'" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+char_double   =  {
+    !("\"" | "\\") ~ ANY
+  | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+LINE_COMMENT  = _{ "//" ~ (!"\n" ~ ANY)* }
+BLOCK_COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT       = _{ LINE_COMMENT | BLOCK_COMMENT }
+WHITESPACE    = _{ " " | "\t" | "\r" | "\n" }

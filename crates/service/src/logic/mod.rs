@@ -10,6 +10,7 @@ pub mod tag;
 pub mod team;
 pub mod types;
 pub mod user;
+pub mod workflow;
 
 pub fn omit_empty_active_value<T>(val: T) -> ActiveValue<T>
 where

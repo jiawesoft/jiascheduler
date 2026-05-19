@@ -160,7 +160,7 @@ impl RoleApi {
         _user_info: Data<&logic::types::UserInfo>,
         _session: &Session,
         state: Data<&AppState>,
-        Json(req): Json<types::SetUserReq>,
+        Json(req): Json<types::DeleteRoleReq>,
     ) -> Result<ApiStdResponse<types::UpdateResult>> {
         let affected = state.service().role.delete_role(req.role_id).await?;
         return_ok!(types::UpdateResult { affected })

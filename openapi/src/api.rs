@@ -9,6 +9,7 @@ pub mod tag;
 pub mod team;
 pub mod terminal;
 pub mod user;
+pub mod workflow;
 
 mod utils;
 
@@ -43,6 +44,7 @@ pub enum Tag {
     Admin,
     Migration,
     Tag,
+    Workflow,
 }
 
 pub struct OneOfValidator(Vec<String>);

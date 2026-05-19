@@ -101,7 +101,7 @@ pub struct DispatchJobParams {
     pub instance_id: Option<String>,
     #[serde(default)]
     pub run_id: String,
-    pub fields: Option<HashMap<String, serde_json::Value>>,
+    pub fields: Option<serde_json::Value>,
     pub timer_expr: Option<String>,
     pub restart_interval: Option<Duration>,
     pub is_sync: bool,
@@ -140,6 +140,7 @@ pub struct UpdateJobParams {
     pub schedule_id: String,
     pub schedule_type: Option<ScheduleType>,
     pub base_job: BaseJob,
+    pub fields: Option<serde_json::Value>,
     pub instance_id: String,
     pub bind_ip: String,
     pub bind_namespace: String,

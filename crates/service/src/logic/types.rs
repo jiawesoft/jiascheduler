@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -138,10 +138,12 @@ pub struct TeamRecord {
     pub updated_time: DateTimeLocal,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub enum ResourceType {
     Job,
     Instance,
+    Workflow,
+    BundleJob,
 }
 
 impl Display for ResourceType {
@@ -149,6 +151,8 @@ impl Display for ResourceType {
         match self {
             ResourceType::Job => write!(f, "job"),
             ResourceType::Instance => write!(f, "instance"),
+            ResourceType::Workflow => write!(f, "workflow"),
+            ResourceType::BundleJob => write!(f, "bundle_job"),
         }
     }
 }
@@ -183,4 +187,10 @@ pub enum CompletedCallbackTriggerType {
     All,
     #[serde(rename = "error")]
     Error,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+pub struct CustomTimerExpr {
+    pub timezone: String,
+    pub expr: String,
 }

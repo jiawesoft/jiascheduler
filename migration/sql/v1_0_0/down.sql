@@ -40,3 +40,9 @@ DROP TABLE IF EXISTS `job_organizer_task_result`;
 DROP TABLE IF EXISTS `job_running_status`;
 
 DROP TABLE IF EXISTS `job_schedule_history`;
+
+DROP TABLE IF EXISTS `team`;
+
+DROP TABLE IF EXISTS `team_member`;
+
+DROP TABLE IF EXISTS `job_supervisor`;

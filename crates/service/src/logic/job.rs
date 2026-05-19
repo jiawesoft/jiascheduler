@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{Ok, Result, anyhow};
 
 mod bundle_script;
 mod dashboard;
@@ -9,6 +9,8 @@ mod timer;
 
 use automate::scheduler::types::ScheduleType;
 use chrono::Local;
+
+use entity::job_schedule;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait,
@@ -28,6 +30,16 @@ use sea_orm::JoinType;
 use super::types::{ResourceType, UserInfo};
 
 pub mod types;
+
+enum EnforerResult<T> {
+    Val(bool),
+    NextCheckVal(
+        // is a team member
+        bool,
+        // next check value
+        T,
+    ),
+}
 
 pub struct JobLogic<'a> {
     ctx: &'a AppContext,
@@ -51,24 +63,9 @@ impl<'a> JobLogic<'a> {
         team_id: Option<u64>,
         eid: Option<String>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(eid) = eid else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, eid) = match self.enfore(user_info, team_id, eid).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(job_record) = JobBundleScript::find()
@@ -83,7 +80,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -103,24 +100,9 @@ impl<'a> JobLogic<'a> {
         team_id: Option<u64>,
         id: Option<u64>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(id) = id else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, id) = match self.enfore(user_info, team_id, id).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(bundle_script_record) = JobBundleScript::find()
@@ -135,7 +117,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(bundle_script_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -155,24 +137,9 @@ impl<'a> JobLogic<'a> {
         team_id: Option<u64>,
         eid: Option<String>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(eid) = eid else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, eid) = match self.enfore(user_info, team_id, eid).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(job_record) = Job::find()
@@ -187,7 +154,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -207,24 +174,9 @@ impl<'a> JobLogic<'a> {
         team_id: Option<u64>,
         job_id: Option<u64>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(job_id) = job_id else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, job_id) = match self.enfore(user_info, team_id, job_id).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(job_record) = Job::find()
@@ -239,7 +191,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -253,30 +205,64 @@ impl<'a> JobLogic<'a> {
             == Some(true));
     }
 
+    pub async fn can_write_schedule_by_pid(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        pid: Option<u64>,
+    ) -> Result<bool> {
+        let Some(schedule_record) = JobSchedule::find()
+            .filter(job_schedule::Column::Id.eq(pid))
+            .one(&self.ctx.db)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        self.can_write_job(user_info, team_id, Some(schedule_record.eid.into()))
+            .await
+    }
+
+    async fn enfore<T>(
+        &self,
+        user_info: &UserInfo,
+        team_id: Option<u64>,
+        target: Option<T>,
+    ) -> Result<EnforerResult<T>> {
+        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
+        if is_allowed {
+            return Ok(EnforerResult::Val(true));
+        }
+
+        let is_in_team = if team_id.is_some() {
+            TeamMember::find()
+                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
+                .filter(team_member::Column::UserId.eq(&user_info.user_id))
+                .one(&self.ctx.db)
+                .await?
+                .map_or(false, |_| true)
+        } else {
+            false
+        };
+
+        let Some(ntv) = target else {
+            return Ok(EnforerResult::Val(
+                is_in_team || team_id.map_or(false, |v| v > 0),
+            ));
+        };
+
+        return Ok(EnforerResult::NextCheckVal(is_in_team, ntv));
+    }
+
     pub async fn can_write_schedule_by_id(
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
         schedule_id: Option<String>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(schedule_id) = schedule_id else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, schedule_id) = match self.enfore(user_info, team_id, schedule_id).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(schedule_record) = JobScheduleHistory::find()
@@ -299,7 +285,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -319,24 +305,9 @@ impl<'a> JobLogic<'a> {
         team_id: Option<u64>,
         timer_id: Option<u64>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(timer_id) = timer_id else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
+        let (is_in_team, timer_id) = match self.enfore(user_info, team_id, timer_id).await? {
+            EnforerResult::Val(v) => return Ok(v),
+            EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
         };
 
         let Some(timer_record) = JobTimer::find()
@@ -359,7 +330,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -377,27 +348,13 @@ impl<'a> JobLogic<'a> {
         &self,
         user_info: &UserInfo,
         team_id: Option<u64>,
-        supvervisor_id: Option<u64>,
+        supervisor_id: Option<u64>,
     ) -> Result<bool> {
-        let is_allowed = self.ctx.can_manage_job(&user_info.user_id).await?;
-        if is_allowed {
-            return Ok(true);
-        }
-
-        let is_team_user = if team_id.is_some() {
-            TeamMember::find()
-                .apply_if(team_id, |q, v| q.filter(team_member::Column::TeamId.eq(v)))
-                .filter(team_member::Column::UserId.eq(&user_info.user_id))
-                .one(&self.ctx.db)
-                .await?
-                .map(|_| true)
-        } else {
-            None
-        };
-
-        let Some(supervisor_id) = supvervisor_id else {
-            return Ok(is_team_user.is_some() || team_id == Some(0) || team_id.is_none());
-        };
+        let (is_in_team, supervisor_id) =
+            match self.enfore(user_info, team_id, supervisor_id).await? {
+                EnforerResult::Val(v) => return Ok(v),
+                EnforerResult::NextCheckVal(is_in_team, v) => (is_in_team, v),
+            };
 
         let Some(supervisor_record) = JobSupervisor::find()
             .filter(job_supervisor::Column::Id.eq(supervisor_id))
@@ -419,7 +376,7 @@ impl<'a> JobLogic<'a> {
             return Ok(true);
         }
 
-        if is_team_user.is_some() {
+        if is_in_team {
             return Ok(Some(job_record.team_id) == team_id);
         }
         return Ok(TeamMember::find()
@@ -538,11 +495,7 @@ impl<'a> JobLogic<'a> {
                         job::Column::Id.in_subquery(
                             Query::select()
                                 .column(tag_resource::Column::ResourceId)
-                                .and_where(
-                                    tag_resource::Column::ResourceType
-                                        .eq(ResourceType::Job.to_string())
-                                        .and(tag_resource::Column::TagId.is_in(v)),
-                                )
+                                .and_where(tag_resource::Column::TagId.is_in(v))
                                 .from(TagResource)
                                 .to_owned(),
                         ),
@@ -726,11 +679,7 @@ impl<'a> JobLogic<'a> {
                         job::Column::Id.in_subquery(
                             Query::select()
                                 .column(tag_resource::Column::ResourceId)
-                                .and_where(
-                                    tag_resource::Column::ResourceType
-                                        .eq(ResourceType::Job.to_string())
-                                        .and(tag_resource::Column::TagId.is_in(v)),
-                                )
+                                .and_where(tag_resource::Column::TagId.is_in(v))
                                 .from(TagResource)
                                 .to_owned(),
                         ),
@@ -800,7 +749,7 @@ impl<'a> JobLogic<'a> {
         Ok(model)
     }
 
-    pub async fn get_default_validate_team_id_by_job(
+    pub async fn get_validate_team_id_by_job_or_default(
         &self,
         user_info: &UserInfo,
         eid: Option<&str>,
@@ -821,10 +770,6 @@ impl<'a> JobLogic<'a> {
         };
         let ok = self.can_write_job(user_info, team_id, None).await?;
 
-        if ok {
-            Ok(team_id)
-        } else {
-            Ok(None)
-        }
+        if ok { Ok(team_id) } else { Ok(None) }
     }
 }

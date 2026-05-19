@@ -49,6 +49,26 @@ pub mod types {
     pub struct GrantedUserResp {}
 
     #[derive(Object, Serialize, Default)]
+    pub struct UserServerReq {
+        pub ips: Option<Vec<String>>,
+        pub instance_ids: Option<Vec<String>>,
+        pub instance_group_id: Option<u64>,
+        pub tag_id: Option<Vec<u64>>,
+        pub status: Option<u8>,
+
+        #[oai(
+            default = "crate::api::default_page_size",
+            validator(maximum(value = "10000"))
+        )]
+        pub page_size: u64,
+        #[oai(
+            default = "crate::api::default_page",
+            validator(maximum(value = "10000"))
+        )]
+        pub page: u64,
+    }
+
+    #[derive(Object, Serialize, Default)]
     pub struct QueryUserServerResp {
         pub total: u64,
         pub list: Vec<UserServerRecord>,
@@ -254,36 +274,20 @@ impl InstanceApi {
         return_ok!(types::GrantedUserResp {})
     }
 
-    #[oai(path = "/user-server-list", method = "get")]
+    #[oai(path = "/user-server-list", method = "post")]
     pub async fn user_server(
         &self,
         state: Data<&AppState>,
         _session: &Session,
         user_info: Data<&logic::types::UserInfo>,
-
-        Query(ip): Query<Option<String>>,
-        Query(instance_id): Query<Option<String>>,
-        Query(instance_group_id): Query<Option<u64>>,
-        Query(tag_id): Query<Option<Vec<u64>>>,
-        Query(status): Query<Option<u8>>,
-
-        #[oai(
-            default = "crate::api::default_page_size",
-            validator(maximum(value = "10000"))
-        )]
-        Query(page_size): Query<u64>,
-        #[oai(
-            default = "crate::api::default_page",
-            validator(maximum(value = "10000"))
-        )]
-        Query(page): Query<u64>,
+        Json(req): Json<types::UserServerReq>,
     ) -> Result<ApiStdResponse<types::QueryUserServerResp>> {
         let svc = state.service();
         let user_id = user_info.user_id.clone();
 
         let can_manage_instance = state.can_manage_instance(&user_id).await?;
 
-        let (list, total) = match tag_id {
+        let (list, total) = match req.tag_id {
             Some(tag_id) if tag_id.len() > 0 => {
                 let query_result = svc
                     .instance
@@ -295,12 +299,13 @@ impl InstanceApi {
                                 None
                             }
                         }),
-                        instance_group_id.filter(|&v| v != 0),
-                        status,
-                        ip.filter(|v| v != ""),
+                        req.instance_group_id.filter(|&v| v != 0),
+                        req.status,
+                        req.ips.clone(),
+                        req.instance_ids.clone(),
                         Some(tag_id),
-                        page - 1,
-                        page_size,
+                        req.page - 1,
+                        req.page_size,
                     )
                     .await?;
 
@@ -310,12 +315,12 @@ impl InstanceApi {
                 let query_result = svc
                     .instance
                     .query_admin_server(
-                        instance_id.filter(|v| v != ""),
-                        instance_group_id.filter(|&v| v != 0),
-                        status,
-                        ip.filter(|v| v != ""),
-                        page - 1,
-                        page_size,
+                        req.instance_ids.clone(),
+                        req.instance_group_id.filter(|&v| v != 0),
+                        req.status,
+                        req.ips.clone(),
+                        req.page - 1,
+                        req.page_size,
                     )
                     .await?;
                 (query_result.0, query_result.1)
@@ -325,12 +330,12 @@ impl InstanceApi {
                     .instance
                     .query_user_server(
                         user_id,
-                        instance_id.filter(|v| v != ""),
-                        instance_group_id.filter(|&v| v != 0),
-                        status,
-                        ip.filter(|v| v != ""),
-                        page - 1,
-                        page_size,
+                        req.instance_ids.clone(),
+                        req.instance_group_id.filter(|&v| v != 0),
+                        req.status,
+                        req.ips.clone(),
+                        req.page - 1,
+                        req.page_size,
                     )
                     .await?;
 

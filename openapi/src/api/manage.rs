@@ -220,7 +220,8 @@ impl ManageApi {
                         }),
                         instance_group_id.filter(|&v| v != 0),
                         status,
-                        ip.filter(|v| v != ""),
+                        ip.filter(|v| v != "").map_or(None, |v| Some(vec![v])),
+                        None,
                         Some(tag_id),
                         page - 1,
                         page_size,
@@ -233,10 +234,12 @@ impl ManageApi {
                 let query_result = svc
                     .instance
                     .query_admin_server(
-                        instance_id.filter(|v| v != ""),
+                        instance_id
+                            .filter(|v| v != "")
+                            .map_or(None, |v| Some(vec![v])),
                         instance_group_id.filter(|&v| v != 0),
                         status,
-                        ip.filter(|v| v != ""),
+                        ip.filter(|v| v != "").map_or(None, |v| Some(vec![v])),
                         page - 1,
                         page_size,
                     )
@@ -248,10 +251,12 @@ impl ManageApi {
                     .instance
                     .query_user_server(
                         user_id,
-                        instance_id.filter(|v| v != ""),
+                        instance_id
+                            .filter(|v| v != "")
+                            .map_or(None, |v| Some(vec![v])),
                         instance_group_id.filter(|&v| v != 0),
                         status,
-                        ip.filter(|v| v != ""),
+                        ip.filter(|v| v != "").map_or(None, |v| Some(vec![v])),
                         page - 1,
                         page_size,
                     )

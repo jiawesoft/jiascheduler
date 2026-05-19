@@ -13,6 +13,7 @@ pub struct Model {
     pub eid: String,
     pub timer_expr: Option<Json>,
     pub job_type: String,
+    pub job_args: Option<Json>,
     pub info: String,
     pub created_user: String,
     pub updated_user: String,

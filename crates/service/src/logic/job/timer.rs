@@ -6,7 +6,7 @@ use sea_orm::{
 };
 use sea_query::Query;
 
-use super::{types::JobTimerRelatedJobModel, JobLogic};
+use super::{JobLogic, types::JobTimerRelatedJobModel};
 use crate::{
     entity::{executor, job, job_timer, prelude::*, tag_resource, team},
     logic::types::{ResourceType, UserInfo},
@@ -86,11 +86,7 @@ impl<'a> JobLogic<'a> {
                         job::Column::Id.in_subquery(
                             Query::select()
                                 .column(tag_resource::Column::ResourceId)
-                                .and_where(
-                                    tag_resource::Column::ResourceType
-                                        .eq(ResourceType::Job.to_string())
-                                        .and(tag_resource::Column::TagId.is_in(v)),
-                                )
+                                .and_where(tag_resource::Column::TagId.is_in(v))
                                 .from(TagResource)
                                 .to_owned(),
                         ),

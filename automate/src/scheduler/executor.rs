@@ -224,6 +224,7 @@ async fn test_command_exec() {
             upload_file: None,
             read_code_from_stdin: false,
             timeout: 2,
+            is_workflow: false,
             work_dir: None,
             work_user: None,
             max_retry: None,

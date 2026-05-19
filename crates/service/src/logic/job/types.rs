@@ -1,5 +1,5 @@
 use automate::DispatchJobParams;
-use sea_orm::{prelude::DateTimeLocal, FromQueryResult};
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -41,6 +41,7 @@ pub struct ExecHistoryRelatedScheduleModel {
     pub job_id: u64,
     pub job_name: String,
     pub schedule_id: String,
+    pub schedule_pid: u64,
     pub ip: String,
     pub namespace: String,
     pub job_type: String,
@@ -116,6 +117,7 @@ pub struct JobTimerRelatedJobModel {
     pub name: String,
     pub job_name: String,
     pub job_type: String,
+    pub job_args: Option<serde_json::Value>,
     pub executor_id: u64,
     pub executor_name: String,
     pub executor_platform: String,
@@ -239,6 +241,7 @@ pub struct JobSupervisorRelatedJobModel {
     pub name: String,
     pub job_id: u64,
     pub job_name: String,
+    pub job_args: Option<serde_json::Value>,
     pub restart_interval: u64,
     pub executor_id: u64,
     pub executor_name: String,
@@ -262,7 +265,7 @@ pub struct TeamMemberModel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
-pub struct ScheduleJobTeamModel {
+pub struct ScheduleHistoryJobTeamModel {
     pub id: u64,
     pub job_id: u64,
     pub schedule_id: String,
@@ -276,8 +279,38 @@ pub struct ScheduleJobTeamModel {
     pub action: String,
     pub dispatch_data: Option<serde_json::Value>,
     pub snapshot_data: Option<serde_json::Value>,
+    pub actual_args: Option<serde_json::Value>,
     pub created_user: String,
     pub updated_user: String,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
+pub struct ScheduleJobTeamModel {
+    pub id: u64,
+    pub job_id: u64,
+    pub name: String,
+    pub job_type: String,
+    pub eid: String,
+    pub team_id: Option<u64>,
+    pub team_name: Option<String>,
+    pub instance_ids: Option<serde_json::Value>,
+    pub dispatch_result: Option<serde_json::Value>,
+    pub schedule_type: String,
+    pub action: String,
+    pub snapshot_data: Option<serde_json::Value>,
+    pub actual_args: Option<serde_json::Value>,
+    pub timer_expr: Option<serde_json::Value>,
+    pub created_user: String,
+    pub updated_user: String,
+    pub created_time: DateTimeLocal,
+    pub updated_time: DateTimeLocal,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct JobFormalArg {
+    pub name: String,
+    pub val: String,
+    pub info: String,
 }

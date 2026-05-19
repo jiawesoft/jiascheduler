@@ -1,0 +1,21 @@
+[tools]
+"cargo:cargo-release" = "latest"
+"cargo:pest_fmt" = "latest"
+git-cliff = "latest"
+watchexec = "latest"
+
+[tasks.lint]
+run = [
+  "cargo clippy",
+  "pestfmt src/expr.pest",
+]
+
+[tasks.test]
+alias = "t"
+depends = ["lint"]
+run = "cargo test"
+
+[tasks.release]
+run = [
+  "cargo release -x",
+]

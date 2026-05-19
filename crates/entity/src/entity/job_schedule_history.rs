@@ -9,6 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
     pub schedule_id: String,
+    pub schedule_pid: u64,
     pub name: String,
     pub job_type: String,
     pub eid: String,
@@ -19,6 +20,7 @@ pub struct Model {
     pub snapshot_data: Option<Json>,
     pub created_user: String,
     pub updated_user: String,
+    pub actual_args: Option<Json>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
     #[serde(default)]

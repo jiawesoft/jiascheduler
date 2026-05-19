@@ -4,22 +4,20 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
-#[sea_orm(table_name = "job_organizer_task_result")]
+#[sea_orm(table_name = "workflow_process_edge")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u64,
     pub process_id: String,
-    pub node_id: String,
-    pub bind_ip: String,
-    pub exit_code: i8,
-    pub exit_status: String,
-    #[sea_orm(column_type = "Text")]
-    pub output: String,
-    pub status: String,
-    pub restart_num: i32,
-    pub dispatch_result: Option<Json>,
+    pub run_id: String,
+    pub edge_id: String,
+    pub edge_type: String,
+    pub eval_val: String,
+    pub props: Option<Json>,
+    pub source_node_id: String,
+    pub target_node_id: String,
+    pub created_user: String,
     pub created_time: DateTimeLocal,
-    pub updated_time: DateTimeLocal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -6,7 +6,7 @@ use crate::logic::team::TeamLogic;
 use crate::logic::types::Permission;
 use crate::logic::{
     executor::ExecutorLogic, instance::InstanceLogic, job::JobLogic, migration::MigrationLogic,
-    role::RoleLogic, user::UserLogic,
+    role::RoleLogic, user::UserLogic, workflow::WorkflowLogic,
 };
 
 use anyhow::{Ok, Result};
@@ -33,6 +33,7 @@ pub struct Service<'a> {
     pub ssh: SshLogic<'a>,
     pub team: TeamLogic<'a>,
     pub tag: TagLogic<'a>,
+    pub workflow: WorkflowLogic<'a>,
 }
 
 #[derive(Clone)]
@@ -169,7 +170,7 @@ impl AppContext {
         }
     }
 
-    pub fn service(&self) -> Service {
+    pub fn service(&'_ self) -> Service<'_> {
         Service {
             user: UserLogic::new(self),
             job: JobLogic::new(self),
@@ -180,6 +181,7 @@ impl AppContext {
             ssh: SshLogic::new(self),
             team: TeamLogic::new(self),
             tag: TagLogic::new(self),
+            workflow: WorkflowLogic::new(self),
         }
     }
 
