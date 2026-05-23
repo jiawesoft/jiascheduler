@@ -6,6 +6,8 @@ services:
     image: mysql:latest
     restart: always
     container_name: jiascheduler-mysql
+    networks:
+      - jiascheduler-network
     volumes:
       - jiascheduler_mysql_data:/var/lib/mysql
       # - $WORKCONF/mysql/conf/my.cnf:/etc/my.conf
@@ -21,6 +23,8 @@ services:
     image: redis:latest
     restart: always
     container_name: jiascheduler-redis
+    networks:
+      - jiascheduler-network
     volumes:
       - jiascheduler_redis_data:/data
       # - $WORKCONF/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
@@ -38,6 +42,8 @@ services:
       - jiascheduler-mysql
       - jiascheduler-redis
     container_name: jiascheduler-console
+    networks:
+      - jiascheduler-network
     ports:
       - "9090:9090"
     volumes:
@@ -50,6 +56,8 @@ services:
     depends_on:
       - jiascheduler-redis
     container_name: jiascheduler-comet
+    networks:
+      - jiascheduler-network
     ports:
       - "3000:3000"
     command:
@@ -58,7 +66,7 @@ services:
         "--bind",
         "0.0.0.0:3000",
         "-r",
-        "redis://default:3DGiuazc7wkAppV3@redis:6379",
+        "redis://default:3DGiuazc7wkAppV3@jiascheduler-redis:6379",
         "--secret",
         "rYzBYE+cXbtdMg==",
       ]
@@ -69,6 +77,8 @@ services:
     depends_on:
       - jiascheduler-comet
     container_name: jiascheduler-agent
+    networks:
+      - jiascheduler-network
     command:
       [
         "./jiascheduler-agent",
@@ -91,3 +101,7 @@ volumes:
     name: jiascheduler_redis_data
   jiascheduler_redis_logs:
     name: jiascheduler_redis_logs
+
+networks:
+  jiascheduler-network:
+    driver: bridge

@@ -6,6 +6,8 @@ services:
     image: mysql:latest
     restart: always
     container_name: jiascheduler-mysql
+    networks:
+      - jiascheduler-network
     volumes:
       - jiascheduler_mysql_data:/var/lib/mysql
       - jiascheduler_mysql_logs:/var/log/mysql
@@ -20,6 +22,8 @@ services:
     image: redis:latest
     restart: always
     container_name: jiascheduler-redis
+    networks:
+      - jiascheduler-network
     volumes:
       - jiascheduler_redis_data:/data
       - jiascheduler_redis_logs:/logs
@@ -36,6 +40,8 @@ services:
       - jiascheduler-mysql
       - jiascheduler-redis
     container_name: jiascheduler-console
+    networks:
+      - jiascheduler-network
     ports:
       - "9090:9090"
     volumes:
@@ -51,3 +57,7 @@ volumes:
     name: jiascheduler_redis_data
   jiascheduler_redis_logs:
     name: jiascheduler_redis_logs
+
+networks:
+  jiascheduler-network:
+    driver: bridge
