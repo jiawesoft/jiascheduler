@@ -1250,6 +1250,7 @@ impl WorkflowApi {
         Query(search_username): Query<Option<String>>,
         Query(default_id): Query<Option<u64>>,
         Query(process_name): Query<Option<String>>,
+        Query(created_time_range): Query<Option<Vec<String>>>,
         Query(tag_ids): Query<Option<Vec<u64>>>,
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
     ) -> api_response!(types::QueryWorkflowProcessResp) {
@@ -1269,6 +1270,12 @@ impl WorkflowApi {
                 team_id,
                 tag_ids,
                 process_name,
+                created_time_range.map(|v| {
+                    (
+                        v.get(0).map_or("".to_string(), |v| v.to_owned()),
+                        v.get(1).map_or("".to_string(), |v| v.to_owned()),
+                    )
+                }),
                 page,
                 page_size,
             )

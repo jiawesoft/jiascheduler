@@ -120,7 +120,8 @@ impl<'a> WorkflowLogic<'a> {
         default_id: Option<u64>,
         team_id: Option<u64>,
         tag_ids: Option<Vec<u64>>,
-        name: Option<String>,
+        process_name: Option<String>,
+        created_time_range: Option<(String, String)>,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<types::WorkflowProcessModel>, u64)> {
@@ -132,7 +133,7 @@ impl<'a> WorkflowLogic<'a> {
             .column_as(workflow_version::Column::Version, "version")
             .column_as(workflow_timer::Column::Name, "timer_name")
             .apply_if(team_id, |q, v| q.filter(workflow::Column::TeamId.eq(v)))
-            .apply_if(name, |q, v| {
+            .apply_if(process_name, |q, v| {
                 q.filter(workflow_process::Column::ProcessName.contains(v))
             })
             .apply_if(created_user, |q, v| {
@@ -140,6 +141,13 @@ impl<'a> WorkflowLogic<'a> {
             })
             .apply_if(default_id, |q, v| {
                 q.filter(workflow_process::Column::Id.eq(v))
+            })
+            .apply_if(created_time_range, |query, v| {
+                query.filter(
+                    workflow_process::Column::CreatedTime
+                        .gt(v.0)
+                        .and(workflow_process::Column::CreatedTime.lt(v.1)),
+                )
             })
             .join_rev(
                 JoinType::LeftJoin,
