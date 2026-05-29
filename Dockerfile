@@ -36,9 +36,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && \
     dpkg-reconfigure --frontend noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-# 复制 uv 工具到运行阶段
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
 # 复制后端可执行文件
 COPY --from=backend-builder /app/target/release/jiascheduler /app/
 COPY --from=backend-builder /app/target/release/jiascheduler-console /app/
