@@ -46,7 +46,7 @@ services:
       - "9090:9090"
     volumes:
       - ./console.toml:/root/.jiascheduler/console.toml
-    # command: ["./jiascheduler-console", "--bind-addr", "0.0.0.0:9090"]
+    command: ["./jiascheduler", "--console-bind-addr", "0.0.0.0:9090"]
 
 volumes:
   jiascheduler_mysql_data:
