@@ -829,7 +829,7 @@ impl
                 loop {
                     select! {
                         _ = &mut sleep_time => {
-                            info!("supervising: sleep, waiting restart");
+                            debug!("supervising: sleep, waiting restart");
                             break;
                         },
                         Some(v) = rx.recv() => {

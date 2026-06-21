@@ -718,6 +718,7 @@ pub struct SaveJobSupervisorResp {
 pub struct DeleteExecHistoryReq {
     pub eid: Option<String>,
     pub schedule_id: Option<String>,
+    pub schedule_pid: Option<u64>,
     pub schedule_type: Option<String>,
     pub ids: Option<Vec<u64>>,
     pub instance_id: Option<String>,

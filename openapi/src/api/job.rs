@@ -1127,6 +1127,7 @@ impl JobApi {
             .delete_exec_history(
                 req.ids,
                 req.schedule_id,
+                req.schedule_pid.filter(|&v| v != 0),
                 schedule_type,
                 req.instance_id,
                 req.eid,
