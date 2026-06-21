@@ -1256,7 +1256,7 @@ impl<'a> JobLogic<'a> {
             .dispatch_data
             .ok_or(anyhow!("cannot get dispatch data"))?;
 
-        let mut dispatch_data = serde_json::from_value::<DispatchData>(dispatch_data)?;
+        let mut dispatch_data: DispatchData = dispatch_data.try_into()?;
 
         // if dispatch_data.params.base_job.upload_file.is_some() {
         //     let job_record = Job::find()
