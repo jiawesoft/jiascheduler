@@ -14,7 +14,7 @@ use crate::{
     return_err, return_ok, AppState,
 };
 
-use service::IdGenerator;
+use service::{logic::types::CustomTimerExpr, IdGenerator};
 
 use super::types;
 use crate::api::types::CompletedCallbackOpts;
@@ -48,6 +48,7 @@ impl JobApi {
         if ok {
             return Err(NoPermission().into());
         }
+
         let svc = state.service();
 
         if !svc
@@ -709,7 +710,7 @@ impl JobApi {
         #[oai(name = "X-Team-Id")] Header(team_id): Header<Option<u64>>,
         user_info: Data<&logic::types::UserInfo>,
         Json(req): Json<types::SaveScheduleReq>,
-    ) -> api_response!(types::SaveJobResp) {
+    ) -> api_response!(types::SaveScheduleResp) {
         let svc = state.service();
 
         let schedule_record = svc.job.get_schedule(req.id).await?.ok_or(anyhow::anyhow!(
@@ -732,6 +733,13 @@ impl JobApi {
             );
         }
 
+        let sched: Option<CustomTimerExpr> = req.timer_expr.map_or(None, |expr| Some(expr.into()));
+
+        let next_exec_times = match sched {
+            Some(ref v) => Some(utils::check_timer_expr(&v.timezone, &v.expr)?),
+            None => None,
+        };
+
         let ret = svc
             .job
             .save_schedule(
@@ -742,13 +750,16 @@ impl JobApi {
                     .collect(),
                 req.eid,
                 req.name,
-                req.timer_expr.map_or(None, |expr| Some(expr.into())),
+                sched,
                 req.args,
                 user_info.username.clone(),
             )
             .await?;
 
-        return_ok!(types::SaveJobResp { result: ret })
+        return_ok!(types::SaveScheduleResp {
+            result: ret,
+            next_exec_times
+        })
     }
 
     #[oai(path = "/schedule-list", method = "get", transform = "set_middleware")]
@@ -1441,6 +1452,10 @@ impl JobApi {
             return Err(NoPermission().into());
         }
 
+        let sched: logic::types::CustomTimerExpr = req.timer_expr.clone().into();
+
+        let next_exec_times = utils::check_timer_expr(&sched.timezone, &sched.expr)?;
+
         let job_args: Vec<logic::job::types::JobFormalArg> =
             req.job_args.into_iter().map(|v| v.into()).collect();
 
@@ -1471,7 +1486,8 @@ impl JobApi {
             .await?;
 
         return_ok!(types::SaveJobTimerResp {
-            result: ret.id.as_ref().to_owned()
+            result: ret.id.as_ref().to_owned(),
+            next_exec_times
         });
     }
 

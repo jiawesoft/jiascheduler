@@ -10,7 +10,6 @@ use sea_orm::{ActiveValue::NotSet, ActiveValue::Set};
 use service::logic::workflow::{
     timer::WorkflowTimerTask,
     types::{EdgeConfig, NodeConfig},
-    WorkflowLogic,
 };
 
 use super::types;
@@ -682,7 +681,7 @@ impl WorkflowApi {
         }
 
         let next_exec_times =
-            WorkflowLogic::check_timer_expr(&req.timer_expr.timezone, &req.timer_expr.expr)?;
+            utils::check_timer_expr(&req.timer_expr.timezone, &req.timer_expr.expr)?;
 
         let process_args: Option<logic::workflow::types::WorkflowProcessArgs> =
             req.process_args.map(|v| v.into());

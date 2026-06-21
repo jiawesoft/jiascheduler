@@ -686,7 +686,7 @@ impl
             })
         };
 
-        info!("start timer {:?}", timer_expr);
+        info!("start timer {} {:?}", &euid, timer_expr);
 
         let job = match timer_expr.timezone.as_str() {
             "utc" => Job::new_async_tz(&timer_expr.expr, Utc, move |uuid, l: JobScheduler| {
@@ -705,10 +705,11 @@ impl
             )
         })?;
 
-        let next_time = react.add_job_schedule(euid, job).await?;
+        let next_time = react.add_job_schedule(euid.clone(), job).await?;
 
         info!(
-            "next_time:{:?}, current_time:{:?}",
+            "euid: {}, next_time:{:?}, current_time:{:?}",
+            &euid,
             next_time.unwrap().to_string(),
             Utc::now().to_string()
         );

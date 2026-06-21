@@ -183,13 +183,13 @@ impl<'a> JobLogic<'a> {
             update_values.push((job_running_status::Column::EndTime, params.end_time.into()));
         });
 
-        params.prev_time.clone().inspect(|v| {
-            update_values.push((job_running_status::Column::PrevTime, (*v).into()));
-            update_values.push((
-                job_running_status::Column::NextTime,
-                params.next_time.into(),
-            ));
-        });
+        // params.prev_time.clone().inspect(|v| {
+        //     update_values.push((job_running_status::Column::PrevTime, (*v).into()));
+        //     update_values.push((
+        //         job_running_status::Column::NextTime,
+        //         params.next_time.into(),
+        //     ));
+        // });
 
         params.schedule_status.clone().inspect(|v| {
             if *v == ScheduleStatus::Unscheduled {
@@ -221,13 +221,13 @@ impl<'a> JobLogic<'a> {
                 schedule_status.to_string().into(),
             ))
         }
-        // if let Some(prev_time) = params.prev_time {
-        //     update_values.push((job_running_status::Column::PrevTime, prev_time.into()))
-        // }
+        if let Some(prev_time) = params.prev_time {
+            update_values.push((job_running_status::Column::PrevTime, prev_time.into()))
+        }
 
-        // if let Some(next_time) = params.next_time {
-        //     update_values.push((job_running_status::Column::NextTime, next_time.into()))
-        // }
+        if let Some(next_time) = params.next_time {
+            update_values.push((job_running_status::Column::NextTime, next_time.into()))
+        }
 
         let schedule_type = params
             .schedule_type
@@ -374,7 +374,7 @@ impl<'a> JobLogic<'a> {
 
     pub fn get_job_code(code: String, actual_args: Option<serde_json::Value>) -> Result<String> {
         let reg = Handlebars::new();
-        let val = reg.render_template(&code, dbg!(&actual_args))?;
+        let val = reg.render_template(&code, &actual_args)?;
         Ok(val)
     }
 

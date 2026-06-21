@@ -292,6 +292,7 @@ pub struct SaveScheduleReq {
 #[derive(Object, Serialize, Default)]
 pub struct SaveScheduleResp {
     pub result: u64,
+    pub next_exec_times: Option<Vec<String>>,
 }
 
 #[derive(Object, Serialize, Default)]
@@ -537,7 +538,7 @@ impl Into<logic::types::CustomTimerExpr> for CustomTimerExpr {
     }
 }
 
-#[derive(Object, Serialize, Deserialize, Default)]
+#[derive(Object, Serialize, Clone, Deserialize, Default)]
 pub struct TimerExpr {
     #[oai(default = "default_time_zone")]
     pub timezone: String,
@@ -622,6 +623,7 @@ impl Into<logic::types::CustomTimerExpr> for TimerExpr {
 #[derive(Object, Serialize, Default)]
 pub struct SaveJobTimerResp {
     pub result: u64,
+    pub next_exec_times: Vec<String>,
 }
 
 #[derive(Object, Serialize, Default)]
