@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use anyhow::Error;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc::Sender;
@@ -94,6 +94,12 @@ pub struct Msg {
     pub data: MsgKind,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+pub struct TimerExpr {
+    pub timezone: String,
+    pub expr: String,
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub struct DispatchJobParams {
     pub base_job: BaseJob,
@@ -102,7 +108,7 @@ pub struct DispatchJobParams {
     #[serde(default)]
     pub run_id: String,
     pub fields: Option<serde_json::Value>,
-    pub timer_expr: Option<String>,
+    pub timer_expr: Option<TimerExpr>,
     pub restart_interval: Option<Duration>,
     pub is_sync: bool,
     pub created_user: String,
@@ -153,10 +159,10 @@ pub struct UpdateJobParams {
     pub created_user: String,
     pub bundle_output: Option<Vec<BundleOutputParams>>,
     pub run_id: String,
-    pub start_time: Option<DateTime<Local>>,
-    pub end_time: Option<DateTime<Local>>,
-    pub prev_time: Option<DateTime<Local>>,
-    pub next_time: Option<DateTime<Local>>,
+    pub start_time: Option<DateTime<Utc>>,
+    pub end_time: Option<DateTime<Utc>>,
+    pub prev_time: Option<DateTime<Utc>>,
+    pub next_time: Option<DateTime<Utc>>,
     pub is_timeout: bool,
 }
 

@@ -126,7 +126,7 @@ proc-macro2 = "1.0.76"
 thiserror = "2.0.11"
 tokio-nsq = "0.14.0"
 cron = "0.15.0"
-tokio-cron-scheduler = { version = "0.15.0", features = ["english"] }
+tokio-cron-scheduler = { version = "0.15.1", features = ["english"] }
 nanoid = "0.4.0"
 uuid = "*"
 futures = "*"

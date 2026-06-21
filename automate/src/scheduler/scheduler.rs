@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Utc};
 use futures::{SinkExt, StreamExt};
 use nanoid::nanoid;
 
@@ -115,7 +115,7 @@ impl React {
         self.bridge.send_msg(&self.client_key, data).await
     }
 
-    async fn add_job_schedule(&mut self, eid: String, job: Job) -> Result<Option<DateTime<Local>>> {
+    async fn add_job_schedule(&mut self, eid: String, job: Job) -> Result<Option<DateTime<Utc>>> {
         self.remove_job_schedule(eid.as_str()).await?;
 
         let mut locked_map = self.schedule_uuid_mapping.lock().await;
@@ -125,8 +125,7 @@ impl React {
 
         let uuid = self.sched.add(job).await?;
 
-        let next_time = self.sched.next_tick_for_job(uuid).await?.map(|v| v.into());
-
+        let next_time = self.sched.next_tick_for_job(uuid).await?;
         locked_map.insert(eid, uuid);
         Ok(next_time)
     }
@@ -543,11 +542,11 @@ impl
         react: React,
         schedule_type: Option<ScheduleType>,
         kill_signal_rx: Receiver<()>,
-        prev_time: Option<DateTime<Local>>,
-        next_time: Option<DateTime<Local>>,
+        prev_time: Option<DateTime<Utc>>,
+        next_time: Option<DateTime<Utc>>,
         job_params: &DispatchJobParams,
     ) -> Result<BundleOutput> {
-        let start_time = Local::now();
+        let start_time = Utc::now();
         let schedule_id = job_params.schedule_id.clone();
         let base_job = job_params.base_job.clone();
         let instance_id = job_params.instance_id.to_owned().unwrap();
@@ -594,7 +593,7 @@ impl
                         schedule_type: schedule_type.clone(),
                         stdout: Some(e.to_string()),
                         stderr: Some(e.to_string()),
-                        end_time: Some(Local::now()),
+                        end_time: Some(Utc::now()),
                         created_user: job_params.created_user.clone(),
                         bundle_output,
                         run_id: job_params.run_id.clone(),
@@ -620,7 +619,7 @@ impl
                 schedule_type: schedule_type.clone(),
                 stdout: output.get_stdout(),
                 stderr: output.get_stderr(),
-                end_time: Some(Local::now()),
+                end_time: Some(Utc::now()),
                 created_user: job_params.created_user.clone(),
                 bundle_output: BundleOutputParams::parse(&output),
                 run_id: job_params.run_id.clone(),
@@ -641,62 +640,78 @@ impl
         let schedule_id = dispatch_params.schedule_id.clone();
         let instance_id = dispatch_params.instance_id.to_owned().unwrap();
 
-        let job: Job = Job::new_cron_job_async_tz(
-            timer_expr.as_str(),
-            Local,
-            move |job_id, mut job_scheduler| {
-                let base_job = base_job.clone();
-                let (kill_signal_tx, kill_signal_rx) = channel::<()>(1);
-                let mut react_clone = react_clone.clone();
-                let mut dispatch_params = dispatch_params.clone();
-                dispatch_params.run_id = run_id!();
+        let handler = move |job_id, mut job_scheduler: JobScheduler| {
+            let base_job = base_job.clone();
+            let (kill_signal_tx, kill_signal_rx) = channel::<()>(1);
+            let mut react_clone = react_clone.clone();
+            let mut dispatch_params = dispatch_params.clone();
+            dispatch_params.run_id = run_id!();
 
-                Box::pin(async move {
-                    sleep(Duration::from_millis(10)).await;
+            Box::pin(async move {
+                sleep(Duration::from_millis(10)).await;
 
-                    if let Err(e) = react_clone.can_execute(&dispatch_params).await {
-                        error!("ignore execute job - {e}");
-                        return;
-                    }
+                if let Err(e) = react_clone.can_execute(&dispatch_params).await {
+                    error!("ignore execute job - {e}");
+                    return;
+                }
 
-                    let next_time = job_scheduler
-                        .next_tick_for_job(job_id)
-                        .await
-                        .unwrap()
-                        .map(|v| v.into());
+                let next_time = job_scheduler.next_tick_for_job(job_id).await.unwrap();
 
-                    let prev_time = Some(Local::now().into());
+                let prev_time = Some(Utc::now());
 
-                    let e = Executor::builder()
-                        .job(base_job.clone())
-                        .output_dir(react_clone.output_dir.clone())
-                        .disable_write_log(true)
-                        .build();
+                let e = Executor::builder()
+                    .job(base_job.clone())
+                    .output_dir(react_clone.output_dir.clone())
+                    .disable_write_log(true)
+                    .build();
 
-                    react_clone
-                        .set_execute_context(&dispatch_params, kill_signal_tx)
-                        .await;
+                react_clone
+                    .set_execute_context(&dispatch_params, kill_signal_tx)
+                    .await;
 
-                    if let Err(e) = Self::exec_job(
-                        e,
-                        react_clone.clone(),
-                        Some(ScheduleType::Timer),
-                        kill_signal_rx,
-                        prev_time,
-                        next_time,
-                        &dispatch_params,
-                    )
-                    .await
-                    {
-                        error!("failed exec {} - detail: {e}", base_job.eid);
-                    }
-                    react_clone.end_execute(&dispatch_params).await;
-                })
-            },
-        )
-        .map_err(|v| anyhow!("failed parse timer expr {} - {}", timer_expr, v))?;
+                if let Err(e) = Self::exec_job(
+                    e,
+                    react_clone.clone(),
+                    Some(ScheduleType::Timer),
+                    kill_signal_rx,
+                    prev_time,
+                    next_time,
+                    &dispatch_params,
+                )
+                .await
+                {
+                    error!("failed exec {} - detail: {e}", base_job.eid);
+                }
+                react_clone.end_execute(&dispatch_params).await;
+            })
+        };
+
+        info!("start timer {:?}", timer_expr);
+
+        let job = match timer_expr.timezone.as_str() {
+            "utc" => Job::new_async_tz(&timer_expr.expr, Utc, move |uuid, l: JobScheduler| {
+                handler(uuid, l)
+            }),
+            _ => Job::new_async_tz(&timer_expr.expr, Local, move |uuid, l: JobScheduler| {
+                handler(uuid, l)
+            }),
+        }
+        .map_err(|v| {
+            anyhow!(
+                "failed parse timer expr {}:{} - {}",
+                &timer_expr.timezone,
+                &timer_expr.expr,
+                v
+            )
+        })?;
 
         let next_time = react.add_job_schedule(euid, job).await?;
+
+        info!(
+            "next_time:{:?}, current_time:{:?}",
+            next_time.unwrap().to_string(),
+            Utc::now().to_string()
+        );
 
         let _ = react
             .send_update_job_msg(UpdateJobParams {

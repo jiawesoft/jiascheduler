@@ -8,6 +8,7 @@ pub mod role;
 pub mod tag;
 pub mod team;
 pub mod terminal;
+pub mod types;
 pub mod user;
 pub mod workflow;
 
