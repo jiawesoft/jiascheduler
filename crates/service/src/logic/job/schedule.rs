@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use automate::{
     JobAction,
-    bridge::msg::{BundleOutputParams, UpdateJobParams},
+    bridge::msg::{BundleOutputParams, TimerExpr, UpdateJobParams},
     scheduler::types::{BundleScript, RunStatus, ScheduleStatus, ScheduleType, UploadFile},
 };
 
@@ -183,13 +183,13 @@ impl<'a> JobLogic<'a> {
             update_values.push((job_running_status::Column::EndTime, params.end_time.into()));
         });
 
-        params.prev_time.clone().inspect(|v| {
-            update_values.push((job_running_status::Column::PrevTime, (*v).into()));
-            update_values.push((
-                job_running_status::Column::NextTime,
-                params.next_time.into(),
-            ));
-        });
+        // params.prev_time.clone().inspect(|v| {
+        //     update_values.push((job_running_status::Column::PrevTime, (*v).into()));
+        //     update_values.push((
+        //         job_running_status::Column::NextTime,
+        //         params.next_time.into(),
+        //     ));
+        // });
 
         params.schedule_status.clone().inspect(|v| {
             if *v == ScheduleStatus::Unscheduled {
@@ -221,13 +221,13 @@ impl<'a> JobLogic<'a> {
                 schedule_status.to_string().into(),
             ))
         }
-        // if let Some(prev_time) = params.prev_time {
-        //     update_values.push((job_running_status::Column::PrevTime, prev_time.into()))
-        // }
+        if let Some(prev_time) = params.prev_time {
+            update_values.push((job_running_status::Column::PrevTime, prev_time.into()))
+        }
 
-        // if let Some(next_time) = params.next_time {
-        //     update_values.push((job_running_status::Column::NextTime, next_time.into()))
-        // }
+        if let Some(next_time) = params.next_time {
+            update_values.push((job_running_status::Column::NextTime, next_time.into()))
+        }
 
         let schedule_type = params
             .schedule_type
@@ -255,9 +255,9 @@ impl<'a> JobLogic<'a> {
             schedule_id: Set(params.schedule_id.clone()),
             schedule_status,
             run_status,
-            start_time: Set(params.start_time),
+            start_time: Set(params.start_time.map(|v| v.with_timezone(&Local))),
             job_type: Set(job_type.to_string()),
-            prev_time: Set(params.prev_time),
+            prev_time: Set(params.prev_time.map(|v| v.with_timezone(&Local))),
             updated_user: Set(params.created_user.clone()),
             ..Default::default()
         })
@@ -318,8 +318,8 @@ impl<'a> JobLogic<'a> {
                     output: Set(output),
                     run_id: Set(params.run_id),
                     eid: Set(params.base_job.eid),
-                    start_time: Set(params.start_time),
-                    end_time: Set(params.end_time),
+                    start_time: Set(params.start_time.map(|v| v.with_timezone(&Local))),
+                    end_time: Set(params.end_time.map(|v| v.with_timezone(&Local))),
                     bundle_script_result,
                     created_user: Set(params.created_user),
                     job_type,
@@ -374,7 +374,7 @@ impl<'a> JobLogic<'a> {
 
     pub fn get_job_code(code: String, actual_args: Option<serde_json::Value>) -> Result<String> {
         let reg = Handlebars::new();
-        let val = reg.render_template(&code, dbg!(&actual_args))?;
+        let val = reg.render_template(&code, &actual_args)?;
         Ok(val)
     }
 
@@ -547,7 +547,10 @@ impl<'a> JobLogic<'a> {
             restart_interval,
             created_user: created_user.clone(),
             schedule_id: schedule_id.clone(),
-            timer_expr: timer_expr.clone().map(|v| v.expr),
+            timer_expr: timer_expr.clone().map(|v| TimerExpr {
+                timezone: v.timezone.clone(),
+                expr: v.expr.clone(),
+            }),
             is_sync,
             action: action.clone(),
         };

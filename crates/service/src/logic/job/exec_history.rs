@@ -144,6 +144,7 @@ impl<'a> JobLogic<'a> {
         &self,
         ids: Option<Vec<u64>>,
         schedule_id: Option<String>,
+        schedule_pid: Option<u64>,
         schedule_type: Option<ScheduleType>,
         instance_id: Option<String>,
         eid: Option<String>,
@@ -160,6 +161,17 @@ impl<'a> JobLogic<'a> {
                             .column(job_schedule_history::Column::ScheduleId)
                             .from(job_schedule_history::Entity)
                             .and_where(job_schedule_history::Column::ScheduleType.eq(v.to_string()))
+                            .to_owned(),
+                    ),
+                )
+            })
+            .apply_if(schedule_pid, |q, v| {
+                q.filter(
+                    job_exec_history::Column::ScheduleId.in_subquery(
+                        Query::select()
+                            .column(job_schedule_history::Column::ScheduleId)
+                            .from(job_schedule_history::Entity)
+                            .and_where(job_schedule_history::Column::SchedulePid.eq(v))
                             .to_owned(),
                     ),
                 )

@@ -1,7 +1,7 @@
 use automate::DispatchJobParams;
 use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromQueryResult)]
 pub struct RunStatusRelatedScheduleJobModel {
@@ -149,7 +149,17 @@ impl TryFrom<Value> for DispatchData {
     type Error = anyhow::Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let data = serde_json::from_value(value)?;
+        let mut val = value;
+
+        let timer_expr = &val["params"]["timer_expr"];
+        if timer_expr.is_string() {
+            val["params"]["timer_expr"] = json!({
+                "timezone":"local",
+                "expr":timer_expr,
+            });
+        }
+
+        let data = serde_json::from_value(val)?;
         Ok(data)
     }
 }

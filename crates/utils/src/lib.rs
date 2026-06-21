@@ -1,6 +1,8 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin, str::FromStr, sync::Arc};
 
 use anyhow::{Result, anyhow};
+use chrono::{Local, Utc};
+use croner::{Cron, parser::CronParser};
 use tokio::sync::RwLock;
 pub mod macros;
 
@@ -78,4 +80,71 @@ async fn test_async_queue_do() {
     .await;
 
     println!("result:{:?}, len: {}", ret, ret.len(),)
+}
+
+pub fn check_timer_expr(timezone: &str, expr: &str) -> Result<Vec<String>> {
+    let parsed_expr = match CronParser::builder()
+        .seconds(croner::parser::Seconds::Required)
+        .dom_and_dow(true)
+        .build()
+        .parse(&expr)
+    {
+        Ok(_) => expr.to_string(),
+        Err(e1) => match english_to_cron::str_cron_syntax(expr) {
+            Ok(english_to_cron) => {
+                if english_to_cron != expr {
+                    if english_to_cron == "0 * * * * ? *" {
+                        anyhow::bail!("failed parse {} to cron expr, {}", expr, e1.to_string())
+                    } else {
+                        // english-to-cron adds the year field which we can't put off (currently)
+                        let cron = english_to_cron
+                            .split(' ')
+                            .take(6)
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        cron
+                    }
+                } else {
+                    expr.to_string()
+                }
+            }
+            Err(e2) => {
+                anyhow::bail!(
+                    "failed parse cron expr, 1.{}, 2.{}",
+                    e1.to_string(),
+                    e2.to_string()
+                )
+            }
+        },
+    };
+
+    let parsed_cron = match Cron::from_str(&parsed_expr) {
+        Err(e) => anyhow::bail!("failed build cron, {}", e.to_string()),
+        Ok(v) => v,
+    };
+
+    let mut now = Local::now();
+    let mut next_exec_times: Vec<String> = vec![];
+
+    for _ in 0..10 {
+        let next_time = match parsed_cron.find_next_occurrence(&now, false) {
+            Err(e) => anyhow::bail!("failed find next execution time, {}", e.to_string()),
+            Ok(v) => {
+                now = v.clone();
+                match timezone {
+                    "local" => v
+                        .with_timezone(&Local)
+                        .format("%Y/%m/%d %H:%M:%S")
+                        .to_string(),
+                    "utc" | _ => v
+                        .with_timezone(&Utc)
+                        .format("%Y/%m/%d %H:%M:%S")
+                        .to_string(),
+                }
+            }
+        };
+        next_exec_times.push(next_time);
+    }
+
+    Ok(next_exec_times)
 }
