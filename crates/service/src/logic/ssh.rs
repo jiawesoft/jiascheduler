@@ -4,15 +4,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use async_trait::async_trait;
 use automate::bridge::msg::{
     SftpDownloadParams, SftpReadDirParams, SftpRemoveParams, SftpUploadParams,
 };
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use poem::web::websocket::{Message, WebSocketStream};
+use russh::keys::*;
 use russh::*;
-use russh_keys::*;
 use russh_sftp::client::SftpSession;
 use serde_json::Value;
 
@@ -46,13 +45,12 @@ pub struct Msg {
 
 struct Client {}
 
-#[async_trait]
 impl client::Handler for Client {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &key::PublicKey,
+        _server_public_key: &ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
         Ok(true)
     }
@@ -90,7 +88,7 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 
@@ -120,7 +118,7 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 

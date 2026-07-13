@@ -16,7 +16,6 @@ futures.workspace = true
 sql-builder.workspace = true
 poem.workspace = true
 russh.workspace = true
-russh-keys.workspace = true
 async-trait.workspace = true
 russh-sftp.workspace = true
 nanoid.workspace = true

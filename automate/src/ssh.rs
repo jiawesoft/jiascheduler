@@ -4,13 +4,13 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::Result;
 
-use async_trait::async_trait;
+
 use chrono::{DateTime, Utc};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use poem::web::websocket::{Message, WebSocketStream};
+use russh::keys::*;
 use russh::*;
-use russh_keys::*;
 use russh_sftp::client::SftpSession;
 
 use serde::{Deserialize, Serialize};
@@ -26,13 +26,11 @@ use crate::local_time;
 
 struct Client {}
 
-#[async_trait]
 impl client::Handler for Client {
     type Error = russh::Error;
-
     async fn check_server_key(
         &mut self,
-        _server_public_key: &key::PublicKey,
+        _server_public_key: &ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
         Ok(true)
     }
@@ -70,12 +68,49 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 
         Ok(Self { session })
     }
+
+    // pub async fn connect_pubkey<A: ToSocketAddrs, U: Into<String>, P: Into<String>>(
+    //     ConnectParams {
+    //         user,
+    //         password,
+    //         addrs,
+    //     }: ConnectParams<A, U, P>,
+    // ) -> Result<Self> {
+    //     let config = client::Config {
+    //         inactivity_timeout: Some(Duration::from_secs(90)),
+    //         keepalive_interval: Some(Duration::from_secs(10)),
+    //         ..Default::default()
+    //     };
+    //     let key_pair = decode_secret_key("", None)?;
+
+    //     let config = Arc::new(config);
+    //     let sh = Client {};
+
+    //     let mut session =
+    //         timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
+
+    //     let auth_res = session.authenticate_password(user, password).await?;
+
+    //     session.authenticate_publickey(
+    //         user,
+    //         PrivateKeyWithHashAlg::new(
+    //             Arc::new(key_pair),
+    //             session.best_supported_rsa_hash().await?.flatten(),
+    //         ),
+    //     );
+
+    //     if !auth_res {
+    //         anyhow::bail!("Authentication failed");
+    //     }
+
+    //     Ok(Self { session })
+    // }
 
     pub async fn connect_stream<T: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         user: String,
@@ -99,7 +134,7 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 

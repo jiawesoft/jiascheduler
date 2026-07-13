@@ -25,7 +25,6 @@ futures.workspace = true
 serde_repr.workspace = true
 russh.workspace = true
 russh-sftp.workspace = true
-russh-keys.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
 config.workspace = true
