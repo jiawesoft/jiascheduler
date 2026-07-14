@@ -4,7 +4,6 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::Result;
 
-
 use chrono::{DateTime, Utc};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
@@ -40,19 +39,37 @@ pub struct Session {
     session: client::Handle<Client>,
 }
 
-pub struct ConnectParams<A: ToSocketAddrs, U: Into<String>, P: Into<String>> {
-    pub user: U,
-    pub password: P,
+pub struct ConnectParams<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub password: T,
     pub addrs: A,
 }
 
+pub struct PasswordParams<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub password: T,
+    pub addrs: A,
+}
+
+pub enum AuthParams {
+    Password(String),
+    PubKeyPath(String),
+    PubKeyContent(String),
+}
+
+pub struct ConnectParams2<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub addrs: A,
+    pub auth: AuthParams,
+}
+
 impl Session {
-    pub async fn connect<A: ToSocketAddrs, U: Into<String>, P: Into<String>>(
+    pub async fn connect<A: ToSocketAddrs, T: Into<String>>(
         ConnectParams {
             user,
             password,
             addrs,
-        }: ConnectParams<A, U, P>,
+        }: ConnectParams<A, T>,
     ) -> Result<Self> {
         let config = client::Config {
             inactivity_timeout: Some(Duration::from_secs(90)),
@@ -75,42 +92,51 @@ impl Session {
         Ok(Self { session })
     }
 
-    // pub async fn connect_pubkey<A: ToSocketAddrs, U: Into<String>, P: Into<String>>(
-    //     ConnectParams {
-    //         user,
-    //         password,
-    //         addrs,
-    //     }: ConnectParams<A, U, P>,
-    // ) -> Result<Self> {
-    //     let config = client::Config {
-    //         inactivity_timeout: Some(Duration::from_secs(90)),
-    //         keepalive_interval: Some(Duration::from_secs(10)),
-    //         ..Default::default()
-    //     };
-    //     let key_pair = decode_secret_key("", None)?;
+    pub async fn connect2<A: ToSocketAddrs, T: Into<String>>(
+        ConnectParams2 { user, auth, addrs }: ConnectParams2<A, T>,
+    ) -> Result<Self> {
+        let config = client::Config {
+            inactivity_timeout: Some(Duration::from_secs(90)),
+            keepalive_interval: Some(Duration::from_secs(10)),
+            ..Default::default()
+        };
 
-    //     let config = Arc::new(config);
-    //     let sh = Client {};
+        let config = Arc::new(config);
+        let sh = Client {};
 
-    //     let mut session =
-    //         timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
+        let mut session =
+            timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
 
-    //     let auth_res = session.authenticate_password(user, password).await?;
+        let mut h = async |user, key_pair| {
+            session
+                .authenticate_publickey(
+                    user,
+                    PrivateKeyWithHashAlg::new(
+                        Arc::new(key_pair),
+                        session.best_supported_rsa_hash().await?.flatten(),
+                    ),
+                )
+                .await
+        };
 
-    //     session.authenticate_publickey(
-    //         user,
-    //         PrivateKeyWithHashAlg::new(
-    //             Arc::new(key_pair),
-    //             session.best_supported_rsa_hash().await?.flatten(),
-    //         ),
-    //     );
+        let auth_res = match auth {
+            AuthParams::Password(password) => session.authenticate_password(user, password).await?,
+            AuthParams::PubKeyPath(path) => {
+                let key_pair = load_secret_key(path, None)?;
+                h(user, key_pair).await?
+            }
+            AuthParams::PubKeyContent(val) => {
+                let key_pair = decode_secret_key(&val, None)?;
+                h(user, key_pair).await?
+            }
+        };
 
-    //     if !auth_res {
-    //         anyhow::bail!("Authentication failed");
-    //     }
+        if !auth_res.success() {
+            anyhow::bail!("Authentication failed");
+        }
 
-    //     Ok(Self { session })
-    // }
+        Ok(Self { session })
+    }
 
     pub async fn connect_stream<T: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         user: String,
