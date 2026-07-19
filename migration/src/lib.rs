@@ -3,6 +3,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20250412_add_job_soft_deleted;
 mod m20250420_modify_job_index;
 mod m20250513_workflow;
+mod m20260719_ssh_key;
 mod v1_0_0_create_table;
 mod v1_1_0_001_create_table;
 mod v1_1_0_002_create_table;
@@ -18,6 +19,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250412_add_job_soft_deleted::Migration),
             Box::new(m20250420_modify_job_index::Migration),
             Box::new(m20250513_workflow::Migration),
+            Box::new(m20260719_ssh_key::Migration),
         ]
     }
 }

@@ -85,6 +85,7 @@ pub mod types {
         pub instance_id: String,
         pub ip: String,
         pub namespace: String,
+        pub auth_type: String,
         pub instance_group_id: u64,
         pub instance_group: String,
         pub status: i8,
@@ -354,6 +355,7 @@ impl InstanceApi {
                 instance_group_id: v.instance_group_id.unwrap_or_default(),
                 instance_group: v.instance_group_name.unwrap_or_default(),
                 status: v.status,
+                auth_type: v.auth_type,
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
             })

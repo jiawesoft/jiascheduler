@@ -4,8 +4,10 @@ use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
+use automate::ssh::AuthParams;
 use automate::Logic;
 use futures::{SinkExt, StreamExt};
+
 use poem::http::HeaderMap;
 use poem::session::Session as WebSession;
 use poem::web::websocket::WebSocket;
@@ -15,6 +17,7 @@ use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async;
 
 use tracing::{debug, error};
+use url::Url;
 
 pub mod types {
     use serde::{Deserialize, Serialize};
@@ -215,33 +218,52 @@ pub async fn proxy_webssh(
             }
         };
 
-        let Some(user) = instance_record.sys_user  else {
+        let Some(user) = instance_record.sys_user else {
             return_err_to_wsconn!(clientsink, "Notice: please set the system user first");
         };
 
-        let Some(port) =  instance_record.ssh_port else {
+        let Some(port) = instance_record.ssh_port else {
             return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
         };
 
-        let uri = format!(
-            "ws://{}/ssh/tunnel?cols={}&rows={}&user={}&password={}&ip={}&port={}&namespace={}&mac_addr={}",
-            pair.1.comet_addr,
-            cols,
-            rows,
-            user,
-            password,
-            instance_record.ip,
-            port,
-            instance_record.namespace,
-            instance_record.mac_addr,
-        );
+        let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
+
+        let auth_data = match instance_record.auth_type.as_ref() {
+            "password" => AuthParams::Password(password.to_string()),
+            "key_path" if instance_record.key_path.as_ref().is_some_and(|v| v != "") => {
+                AuthParams::KeyPath(instance_record.key_path.unwrap())
+            }
+            "key_content"
+                if instance_record
+                    .key_content
+                    .as_ref()
+                    .is_some_and(|v| v != "") =>
+            {
+                AuthParams::KeyContent(instance_record.key_content.unwrap())
+            }
+            _ => {
+                return_err_to_wsconn!(clientsink, "Notice: invalid auth type");
+            }
+        };
+        u.query_pairs_mut()
+            .append_pair("cols", &cols.to_string())
+            .append_pair("rows", &rows.to_string())
+            .append_pair("user", &user)
+            .append_pair("ip", &instance_record.ip)
+            .append_pair("port", &port.to_string())
+            .append_pair("namespace", &instance_record.namespace)
+            .append_pair("mac_addr", &instance_record.mac_addr)
+            .append_pair(
+                "auth_data",
+                serde_json::to_string(&auth_data).unwrap().as_ref(),
+            );
 
         let mut ws_request = http::Request::builder()
             .header(
                 http::header::AUTHORIZATION,
                 format!("Bearer {}", comet_secret),
             )
-            .uri(&uri);
+            .uri(u.as_str());
 
         for (key, value) in headers.iter() {
             ws_request = ws_request.header(key, value);

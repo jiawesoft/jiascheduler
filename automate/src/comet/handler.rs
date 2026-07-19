@@ -1,29 +1,28 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use futures::SinkExt;
 use futures_util::{
-    stream::{SplitSink, SplitStream},
     StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 
 use poem::{
-    handler,
+    FromRequest, IntoResponse, Request, RequestBody, Response, Result as PoemResult, handler,
     http::StatusCode,
     web::{
-        websocket::{Message, WebSocket, WebSocketStream},
         Data,
         Json,
         Path,
         Query, // RemoteAddr,
+        websocket::{Message, WebSocket, WebSocketStream},
     },
-    FromRequest, IntoResponse, Request, RequestBody, Response, Result as PoemResult,
 };
 
 use serde::{Deserialize, Serialize};
 use tokio::{
-    fs::{self, create_dir_all, File},
+    fs::{self, File, create_dir_all},
     io::AsyncWriteExt,
     sync::RwLock,
 };
@@ -32,8 +31,8 @@ use tracing::error;
 use crate::{
     bridge::client::WsClient,
     comet::{
-        types::{self, SshLoginParams},
         Comet,
+        types::{self, SshLoginParams},
     },
     return_response,
     scheduler::types::{SshConnectionOption, UploadFile},
@@ -41,9 +40,9 @@ use crate::{
 
 pub mod middleware {
     use poem::{
-        http::StatusCode,
-        web::headers::{self, authorization::Bearer, HeaderMapExt},
         Endpoint, Error, Middleware, Request, Result,
+        http::StatusCode,
+        web::headers::{self, HeaderMapExt, authorization::Bearer},
     };
 
     pub fn bearer_auth(secret: &str) -> BearerAuth {
@@ -241,7 +240,7 @@ pub async fn get_file(Path(filename): Path<String>) -> impl IntoResponse {
         Err(e) => {
             return resp
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string())
+                .body(e.to_string());
         }
     };
 
@@ -309,7 +308,6 @@ pub async fn proxy_ssh(
     comet: Data<&Comet>,
 ) -> impl IntoResponse {
     let mut comet = comet.clone();
-
     webssh.on_upgrade(move |socket| async move {
         let (mut clientsink, mut clientstream) = socket.split();
 
