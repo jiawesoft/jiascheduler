@@ -1,11 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    bridge::msg::{
-        DispatchJobParams, RuntimeActionParams, SftpDownloadParams, SftpReadDirParams,
-        SftpRemoveParams, SftpUploadParams,
-    },
-    ssh::AuthParams,
+use crate::bridge::msg::{
+    DispatchJobParams, RuntimeActionParams, SftpDownloadParams, SftpReadDirParams,
+    SftpRemoveParams, SftpUploadParams,
 };
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde_repr::*;

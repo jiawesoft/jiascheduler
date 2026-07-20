@@ -3,6 +3,15 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
+pub struct SysUser {
+    pub auth_type: String,
+    pub username: String,
+    pub key_path: Option<String>,
+    pub key_content: Option<String>,
+    pub password: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "instance")]
 pub struct Model {
@@ -15,6 +24,7 @@ pub struct Model {
     pub instance_group_id: u64,
     pub info: String,
     pub status: i8,
+    pub sys_users: Option<Json>,
     pub sys_user: String,
     pub auth_type: String,
     pub key_path: String,

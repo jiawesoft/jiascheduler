@@ -100,6 +100,15 @@ pub mod types {
     }
 
     #[derive(Object, Serialize, Deserialize)]
+    pub struct SysUser {
+        pub auth_type: String,
+        pub username: String,
+        pub key_path: Option<String>,
+        pub key_content: Option<String>,
+        pub password: Option<String>,
+    }
+
+    #[derive(Object, Serialize, Deserialize)]
     pub struct SaveInstanceReq {
         pub id: Option<u64>,
         pub ip: String,
@@ -107,6 +116,7 @@ pub mod types {
         pub instance_group_id: Option<u64>,
         pub info: Option<String>,
         pub status: i8,
+        pub sys_users: Vec<SysUser>,
         pub sys_user: Option<String>,
         pub password: Option<String>,
         pub ssh_port: Option<u16>,
