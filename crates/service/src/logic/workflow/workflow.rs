@@ -17,6 +17,7 @@ use anyhow::{Result, anyhow};
 use automate::bridge::msg::UpdateJobParams;
 use automate::scheduler::types::{RunStatus, UploadFile};
 use chrono::Local;
+use sea_orm::ExprTrait;
 
 use entity::{
     executor, instance, job, tag_resource, team, workflow, workflow_process, workflow_process_edge,
@@ -673,7 +674,7 @@ impl<'a> WorkflowLogic<'a> {
         }
 
         for arg in formal_args.clone() {
-            if arg.val_type.eq("dynamic") {
+            if arg.val_type == "dynamic" {
                 let records = WorkflowProcessNodeTask::find()
                     .filter(workflow_process_node_task::Column::ProcessId.eq(&node.process_id))
                     .filter(workflow_process_node_task::Column::NodeId.eq(arg.val))

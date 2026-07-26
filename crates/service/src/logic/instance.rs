@@ -8,6 +8,8 @@ use chrono::Utc;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
 use sea_orm::DbBackend;
+use sea_orm::ExprTrait;
+
 use sea_orm::FromQueryResult;
 use sea_orm::Order;
 use sea_orm::Statement;
@@ -15,7 +17,6 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Set,
 };
-
 use sea_query::MysqlQueryBuilder;
 use sea_query::UnionType;
 use sea_query::{ConditionType, Expr, IntoCondition, OnConflict};
@@ -323,7 +324,7 @@ impl<'a> InstanceLogic<'a> {
         user_id: Vec<String>,
         instance_ids: Option<Vec<String>>,
         instance_group_ids: Option<Vec<i64>>,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         let mut models = vec![];
 
         if let Some(instance_ids) = instance_ids {
@@ -515,14 +516,15 @@ impl<'a> InstanceLogic<'a> {
                 .await
                 .is_err()
             {
-                Instance::update(instance::ActiveModel {
-                    id: Set(ins.id),
-                    status: Set(0),
-                    ..Default::default()
-                })
-                .filter(instance::Column::Status.eq(true))
-                .exec(&self.ctx.db)
-                .await?;
+                Instance::update_many()
+                    .set(instance::ActiveModel {
+                        id: Set(ins.id),
+                        status: Set(0),
+                        ..Default::default()
+                    })
+                    .filter(instance::Column::Status.eq(true))
+                    .exec(&self.ctx.db)
+                    .await?;
             }
         }
 

@@ -1,16 +1,16 @@
-use anyhow::Result;
-use chrono::Local;
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
-};
-use sea_query::Query;
-
 use super::{JobLogic, types::JobTimerRelatedJobModel};
 use crate::{
     entity::{executor, job, job_timer, prelude::*, tag_resource, team},
     logic::types::UserInfo,
 };
+use anyhow::Result;
+use chrono::Local;
+use sea_orm::ExprTrait;
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+};
+use sea_query::Query;
 
 impl<'a> JobLogic<'a> {
     pub async fn save_job_timer(

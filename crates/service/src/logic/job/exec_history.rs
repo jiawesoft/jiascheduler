@@ -3,9 +3,9 @@ use std::num::NonZeroU64;
 use crate::entity::{
     instance, job, job_exec_history, job_schedule_history, prelude::*, tag_resource, team,
 };
-
 use anyhow::Result;
 use automate::scheduler::types::ScheduleType;
+use sea_orm::ExprTrait;
 use sea_orm::{
     ColumnTrait, Condition, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait,
