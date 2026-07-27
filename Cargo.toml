@@ -165,7 +165,7 @@ rust-embed = "*"
 reqwest = { version = "*", features = ["json"] }
 evalexpr = "12.0.2"
 watchexec-supervisor = "*"
-sea-orm-adapter = "0.4.0"
+sea-orm-adapter = { path = "crates/sea-orm-adapter" }
 simple_crypt = "*"
 rustc-serialize = "0.3.25"
 async-trait = "0.1.81"
