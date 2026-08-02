@@ -36,6 +36,7 @@ use crate::{
     },
     return_response,
     scheduler::types::{SshConnectionOption, UploadFile},
+    ssh::AuthData,
 };
 
 pub mod middleware {
@@ -111,9 +112,10 @@ impl<'a> FromRequest<'a> for SecretHeader {
         let ssh_user = header
             .get("X-Ssh-User")
             .and_then(|value| value.to_str().ok());
-        let ssh_password = header
-            .get("X-Ssh-Password")
-            .and_then(|value| value.to_str().ok());
+        let ssh_auth_data = header
+            .get("X-Ssh-Auth")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| serde_json::from_str::<AuthData>(v).ok());
         let ssh_port = header.get("x-ssh-port").and_then(|value| {
             value
                 .to_str()
@@ -135,14 +137,13 @@ impl<'a> FromRequest<'a> for SecretHeader {
             },
         };
 
-        if let (Some(u), Some(p), Some(port)) = (ssh_user, ssh_password, ssh_port) {
+        if let (Some(u), Some(auth_data), Some(port)) = (ssh_user, ssh_auth_data, ssh_port) {
             assign.ssh_connection_params = Some(SshConnectionOption {
                 user: u.to_string(),
-                password: p.to_string(),
+                auth_data,
                 port,
             });
         }
-
         Ok(assign)
     }
 }

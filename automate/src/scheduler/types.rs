@@ -3,6 +3,8 @@ use std::{collections::HashMap, fmt, process::Output};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
+use crate::ssh::AuthData;
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum JobAction {
     Todo,
@@ -245,25 +247,41 @@ impl BundleOutput {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SshConnectionOption {
     pub user: String,
-    pub password: String,
     pub port: u16,
+    pub auth_data: AuthData,
 }
 
 impl SshConnectionOption {
     pub fn build(
         user: Option<String>,
         password: Option<String>,
+        keypath: Option<String>,
         port: Option<u16>,
     ) -> Option<SshConnectionOption> {
-        if let (Some(user), Some(password), Some(port)) = (user, password, port) {
-            Some(SshConnectionOption {
+        if let (Some(user), Some(port)) = (user, port) {
+            if password == None && keypath == None {
+                return None;
+            }
+
+            let auth_data = if let Some(v) = password {
+                AuthData::Password(v)
+            } else if let Some(v) = keypath {
+                AuthData::KeyPath(v)
+            } else {
+                AuthData::KeyPath("/root/.ssh/key".to_string())
+            };
+            // let auth_data = password
+            //     .and_then(|v| Some(AuthData::Password(v)))
+
+            //     .and_then(|v| Some(AuthData::KeyPath(v)));
+
+            return Some(SshConnectionOption {
                 user,
-                password,
                 port,
-            })
-        } else {
-            None
+                auth_data: auth_data,
+            });
         }
+        return None;
     }
 }
 

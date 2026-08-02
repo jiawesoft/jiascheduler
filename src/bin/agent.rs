@@ -32,6 +32,9 @@ struct AgentArgs {
     /// Set the login user's password of the instance for SSH remote connection
     #[arg(long)]
     ssh_password: Option<String>,
+    /// Set the login user's key path of the instance for SSH remote connection
+    #[arg(long)]
+    ssh_keypath: Option<String>,
     /// Set the port of this instance for SSH remote connection
     #[arg(long)]
     ssh_port: Option<u16>,
@@ -61,7 +64,12 @@ async fn main() -> Result<()> {
         args.comet_addr,
         args.comet_secret,
         args.output_dir,
-        SshConnectionOption::build(args.ssh_user, args.ssh_password, args.ssh_port),
+        SshConnectionOption::build(
+            args.ssh_user,
+            args.ssh_password,
+            args.ssh_keypath,
+            args.ssh_port,
+        ),
         AssignUserOption::build(args.assign_username, args.assign_password),
     );
 

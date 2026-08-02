@@ -4,25 +4,24 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use futures_util::{
-    stream::{SplitSink, SplitStream},
     Future, SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 
 use moka::future::Cache;
 use poem::web::websocket::{Message as PMessage, WebSocketStream as PWebSocketStream};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, Receiver, Sender},
     time::timeout,
 };
 use tokio_tungstenite::{
-    connect_async,
+    MaybeTlsStream, WebSocketStream, connect_async,
     tungstenite::{ClientRequestBuilder, Message},
-    MaybeTlsStream, WebSocketStream,
 };
 use tracing::{error, info};
 
@@ -32,9 +31,9 @@ use crate::{
 };
 
 use super::{
+    Bridge,
     msg::{AuthParams, Msg, MsgKind, MsgReqKind, MsgState, TransactionMsg},
     protocol::Protocol,
-    Bridge,
 };
 
 pub struct WsClient<W, R> {
@@ -361,9 +360,10 @@ impl
         }
 
         if let Some(ref ssh_opt) = self.ssh_connection_option {
+            let auth_data = serde_json::to_string(&ssh_opt.auth_data)?;
             req = req
                 .with_header("X-Ssh-User", ssh_opt.user.clone())
-                .with_header("X-Ssh-Password", ssh_opt.password.clone())
+                .with_header("X-Ssh-Auth", auth_data)
                 .with_header("X-Ssh-Port", ssh_opt.port.to_string());
         }
 

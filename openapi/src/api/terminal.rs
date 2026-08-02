@@ -4,7 +4,7 @@ use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
-use automate::ssh::AuthParams;
+use automate::ssh::AuthData;
 use automate::Logic;
 use futures::{SinkExt, StreamExt};
 
@@ -229,9 +229,9 @@ pub async fn proxy_webssh(
         let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
 
         let auth_data = match instance_record.auth_type.as_ref() {
-            "password" => AuthParams::Password(password.to_string()),
+            "password" => AuthData::Password(password.to_string()),
             "key_path" if instance_record.key_path.as_ref().is_some_and(|v| v != "") => {
-                AuthParams::KeyPath(instance_record.key_path.unwrap())
+                AuthData::KeyPath(instance_record.key_path.unwrap())
             }
             "key_content"
                 if instance_record
@@ -239,7 +239,7 @@ pub async fn proxy_webssh(
                     .as_ref()
                     .is_some_and(|v| v != "") =>
             {
-                AuthParams::KeyContent(instance_record.key_content.unwrap())
+                AuthData::KeyContent(instance_record.key_content.unwrap())
             }
             _ => {
                 return_err_to_wsconn!(clientsink, "Notice: invalid auth type");

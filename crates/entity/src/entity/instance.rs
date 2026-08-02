@@ -30,6 +30,7 @@ pub struct Model {
     pub key_path: String,
     pub key_content: String,
     pub password: String,
+    pub ssh_auth_data: Option<Json>,
     pub ssh_port: u16,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,

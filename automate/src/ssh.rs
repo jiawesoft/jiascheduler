@@ -51,8 +51,8 @@ pub struct PasswordParams<A: ToSocketAddrs, T: Into<String>> {
     pub addrs: A,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum AuthParams {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum AuthData {
     Password(String),
     KeyPath(String),
     KeyContent(String),
@@ -61,7 +61,7 @@ pub enum AuthParams {
 pub struct ConnectParams2<A: ToSocketAddrs, T: Into<String>> {
     pub user: T,
     pub addrs: A,
-    pub auth: AuthParams,
+    pub auth: AuthData,
 }
 
 impl Session {
@@ -121,12 +121,12 @@ impl Session {
         };
 
         let auth_res = match auth {
-            AuthParams::Password(password) => session.authenticate_password(user, password).await?,
-            AuthParams::KeyPath(path) => {
+            AuthData::Password(password) => session.authenticate_password(user, password).await?,
+            AuthData::KeyPath(path) => {
                 let key_pair = load_secret_key(path, None)?;
                 h(user, key_pair).await?
             }
-            AuthParams::KeyContent(val) => {
+            AuthData::KeyContent(val) => {
                 let key_pair = decode_secret_key(&val, None)?;
                 h(user, key_pair).await?
             }

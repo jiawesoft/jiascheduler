@@ -61,10 +61,10 @@ impl<'a> InstanceLogic<'a> {
         assign_user: Option<(String, String)>,
         ssh_connection_option: Option<SshConnectionOption>,
     ) -> Result<()> {
-        let (sys_user, password, ssh_port) = match ssh_connection_option {
+        let (sys_user, ssh_auth_data, ssh_port) = match ssh_connection_option {
             Some(opt) => (
                 Set(opt.user),
-                Set(self.ctx.encrypt(opt.password)?),
+                Set(Some(serde_json::to_value(&opt.auth_data)?)),
                 Set(opt.port),
             ),
             None => (NotSet, NotSet, NotSet),
@@ -109,7 +109,10 @@ impl<'a> InstanceLogic<'a> {
                 .value(instance::Column::UpdatedTime, Local::now())
                 .value(instance::Column::Status, status)
                 .value(instance::Column::SysUser, sys_user.clone().unwrap())
-                .value(instance::Column::Password, password.clone().unwrap())
+                .value(
+                    instance::Column::SshAuthData,
+                    ssh_auth_data.clone().unwrap(),
+                )
                 .value(instance::Column::SshPort, ssh_port.clone().unwrap())
                 .to_owned()
         } else {
@@ -133,7 +136,7 @@ impl<'a> InstanceLogic<'a> {
                 instance_id: Set(instance_id),
                 mac_addr: Set(mac_addr.clone()),
                 sys_user,
-                password,
+                ssh_auth_data,
                 ssh_port,
                 ..Default::default()
             })

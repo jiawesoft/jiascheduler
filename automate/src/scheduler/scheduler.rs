@@ -18,7 +18,7 @@ use crate::{
     get_comet_addr, get_local_ip, get_mac_address, run_id,
     scheduler::types::JobAction,
     set_comet_addr,
-    ssh::{self, AuthParams, ConnectParams2, Session},
+    ssh::{self, AuthData, ConnectParams2, Session},
 };
 use futures_util::stream::{SplitSink, SplitStream};
 
@@ -454,7 +454,7 @@ impl
             };
         };
 
-        let auth_data: AuthParams = serde_json::from_str(&login_params.auth_data)?;
+        let auth_data: AuthData = serde_json::from_str(&login_params.auth_data)?;
         tokio::spawn(async move {
             let sess = match Session::connect2(ConnectParams2 {
                 user: login_params.user,
