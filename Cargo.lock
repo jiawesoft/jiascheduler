@@ -1881,6 +1881,7 @@ version = "0.0.0"
 dependencies = [
  "sea-orm",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7080,6 +7081,7 @@ dependencies = [
  "chrono",
  "croner",
  "english-to-cron",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-cron-scheduler",

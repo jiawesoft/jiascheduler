@@ -4,7 +4,6 @@ use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
-use automate::ssh::AuthData;
 use automate::Logic;
 use futures::{SinkExt, StreamExt};
 
@@ -208,7 +207,7 @@ pub async fn proxy_webssh(
             );
         };
 
-        let password = match state_clone.decrypt(password_raw) {
+        let _password = match state_clone.decrypt(password_raw) {
             Ok(v) => v,
             Err(e) => {
                 return_err_to_wsconn!(
@@ -228,23 +227,6 @@ pub async fn proxy_webssh(
 
         let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
 
-        let auth_data = match instance_record.auth_type.as_ref() {
-            "password" => AuthData::Password(password.to_string()),
-            "key_path" if instance_record.key_path.as_ref().is_some_and(|v| v != "") => {
-                AuthData::KeyPath(instance_record.key_path.unwrap())
-            }
-            "key_content"
-                if instance_record
-                    .key_content
-                    .as_ref()
-                    .is_some_and(|v| v != "") =>
-            {
-                AuthData::KeyContent(instance_record.key_content.unwrap())
-            }
-            _ => {
-                return_err_to_wsconn!(clientsink, "Notice: invalid auth type");
-            }
-        };
         u.query_pairs_mut()
             .append_pair("cols", &cols.to_string())
             .append_pair("rows", &rows.to_string())
@@ -255,7 +237,9 @@ pub async fn proxy_webssh(
             .append_pair("mac_addr", &instance_record.mac_addr)
             .append_pair(
                 "auth_data",
-                serde_json::to_string(&auth_data).unwrap().as_ref(),
+                serde_json::to_string(&instance_record.ssh_auth_data)
+                    .unwrap()
+                    .as_ref(),
             );
 
         let mut ws_request = http::Request::builder()

@@ -5,6 +5,7 @@ use automate::scheduler::types::SshConnectionOption;
 use chrono::Local;
 
 use chrono::Utc;
+use entity::instance::SshAuthData;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
 use sea_orm::DbBackend;
@@ -21,6 +22,7 @@ use sea_query::MysqlQueryBuilder;
 use sea_query::UnionType;
 use sea_query::{ConditionType, Expr, IntoCondition, OnConflict};
 use tracing::warn;
+use utils::json_into;
 use utils::non_empty;
 
 use crate::IdGenerator;
@@ -64,7 +66,7 @@ impl<'a> InstanceLogic<'a> {
         let (sys_user, ssh_auth_data, ssh_port) = match ssh_connection_option {
             Some(opt) => (
                 Set(opt.user),
-                Set(Some(serde_json::to_value(&opt.auth_data)?)),
+                Set(Some(json_into::<_, SshAuthData>(&opt.auth_data)?)),
                 Set(opt.port),
             ),
             None => (NotSet, NotSet, NotSet),
@@ -104,26 +106,24 @@ impl<'a> InstanceLogic<'a> {
             }
         }
 
-        let mut updated = if sys_user.is_set() {
-            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
-                .value(instance::Column::UpdatedTime, Local::now())
-                .value(instance::Column::Status, status)
-                .value(instance::Column::SysUser, sys_user.clone().unwrap())
-                .value(
-                    instance::Column::SshAuthData,
-                    ssh_auth_data.clone().unwrap(),
-                )
-                .value(instance::Column::SshPort, ssh_port.clone().unwrap())
-                .to_owned()
-        } else {
-            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
-                .value(instance::Column::UpdatedTime, Local::now())
-                .value(instance::Column::Status, status)
-                .to_owned()
-        };
+        let mut update_cols =
+            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip]);
+
+        update_cols
+            .value(instance::Column::UpdatedTime, Local::now())
+            .value(instance::Column::Status, status);
+        if let Set(Some(ref v)) = ssh_auth_data {
+            update_cols.value(instance::Column::RegisterData, v.clone());
+        }
+        if let Set(ref v) = sys_user {
+            update_cols.value(instance::Column::SysUser, v);
+        }
+        if let Set(v) = ssh_port {
+            update_cols.value(instance::Column::SshPort, v);
+        }
 
         if let Some(ref namespace) = namespace {
-            updated.value(instance::Column::Namespace, namespace.clone());
+            update_cols.value(instance::Column::Namespace, namespace.clone());
         }
 
         let instance_id = IdGenerator::get_instance_uid();
@@ -136,11 +136,11 @@ impl<'a> InstanceLogic<'a> {
                 instance_id: Set(instance_id),
                 mac_addr: Set(mac_addr.clone()),
                 sys_user,
-                ssh_auth_data,
+                register_data: ssh_auth_data,
                 ssh_port,
                 ..Default::default()
             })
-            .on_conflict(updated)
+            .on_conflict(update_cols)
             .exec(&self.ctx.db)
             .await;
         } else {
@@ -385,7 +385,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Info)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
-            .column(instance::Column::AuthType)
             .column(instance::Column::CreatedTime)
             .column(instance::Column::UpdatedTime)
             .column_as(tag::Column::Id, "tag_id")
@@ -462,7 +461,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
-            .column(instance::Column::AuthType)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -651,7 +649,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
-            .column(instance::Column::AuthType)
             .column(instance::Column::InstanceId)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
@@ -906,9 +903,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
-            .column(instance::Column::AuthType)
-            .column(instance::Column::KeyPath)
-            .column(instance::Column::KeyContent)
             .column(instance::Column::Password)
             .column(instance::Column::SysUser)
             .column(instance::Column::SshPort)
@@ -955,9 +949,6 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Info)
             .column(instance::Column::SysUser)
             .column(instance::Column::SshPort)
-            .column(instance::Column::AuthType)
-            .column(instance::Column::KeyPath)
-            .column(instance::Column::KeyContent)
             .column(instance::Column::Password)
             .column(instance::Column::Status)
             .column(instance::Column::InstanceGroupId)

@@ -12,6 +12,14 @@ pub struct SysUser {
     pub password: Option<String>,
 }
 
+// The custom struct must derive `FromJsonQueryResult`, `Serialize` and `Deserialize`
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]
+pub enum SshAuthData {
+    Password(String),
+    KeyPath(String),
+    KeyContent(String),
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "instance")]
 pub struct Model {
@@ -26,11 +34,8 @@ pub struct Model {
     pub status: i8,
     pub sys_users: Option<Json>,
     pub sys_user: String,
-    pub auth_type: String,
-    pub key_path: String,
-    pub key_content: String,
     pub password: String,
-    pub ssh_auth_data: Option<Json>,
+    pub register_data: Option<SshAuthData>,
     pub ssh_port: u16,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,

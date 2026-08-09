@@ -112,10 +112,12 @@ impl<'a> FromRequest<'a> for SecretHeader {
         let ssh_user = header
             .get("X-Ssh-User")
             .and_then(|value| value.to_str().ok());
-        let ssh_auth_data = header
-            .get("X-Ssh-Auth")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| serde_json::from_str::<AuthData>(v).ok());
+        let ssh_auth_data = dbg!(
+            header
+                .get("X-Ssh-Auth")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| serde_json::from_str::<AuthData>(v).ok())
+        );
         let ssh_port = header.get("x-ssh-port").and_then(|value| {
             value
                 .to_str()
@@ -162,7 +164,7 @@ pub fn ws(
 
     ws.on_upgrade(|socket| async move {
         let (mut sink, mut stream) = socket.split();
-        let mac_addr = secret_header.mac_addr.clone();
+        let mac_addr = dbg!(&secret_header).mac_addr.clone();
         let mut client: WsClient<
             SplitSink<WebSocketStream, Message>,
             SplitStream<WebSocketStream>,

@@ -258,30 +258,25 @@ impl SshConnectionOption {
         keypath: Option<String>,
         port: Option<u16>,
     ) -> Option<SshConnectionOption> {
-        if let (Some(user), Some(port)) = (user, port) {
-            if password == None && keypath == None {
-                return None;
-            }
+        let auth_data = if let Some(v) = password {
+            AuthData::Password(v)
+        } else if let Some(v) = keypath {
+            AuthData::KeyPath(v)
+        } else {
+            AuthData::KeyPath("/root/.ssh/key".to_string())
+        };
 
-            let auth_data = if let Some(v) = password {
-                AuthData::Password(v)
-            } else if let Some(v) = keypath {
-                AuthData::KeyPath(v)
-            } else {
-                AuthData::KeyPath("/root/.ssh/key".to_string())
-            };
-            // let auth_data = password
-            //     .and_then(|v| Some(AuthData::Password(v)))
-
-            //     .and_then(|v| Some(AuthData::KeyPath(v)));
-
-            return Some(SshConnectionOption {
-                user,
-                port,
-                auth_data: auth_data,
-            });
-        }
-        return None;
+        return Some(SshConnectionOption {
+            user: user
+                .unwrap_or_else(|| {
+                    users::get_current_username()
+                        .map(|v| v.to_str().unwrap_or_default().to_string())
+                        .unwrap_or_default()
+                })
+                .to_string(),
+            port: 22,
+            auth_data: auth_data,
+        });
     }
 }
 

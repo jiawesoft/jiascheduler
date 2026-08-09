@@ -12,3 +12,4 @@ tokio-cron-scheduler.workspace = true
 english-to-cron.workspace = true
 croner.workspace = true
 chrono.workspace = true
+serde.workspace = true

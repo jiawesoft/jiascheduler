@@ -5,6 +5,7 @@ use chrono::{Local, Utc};
 use croner::{Cron, parser::CronParser};
 use tokio::sync::RwLock;
 pub mod macros;
+use serde::{Deserialize, Serialize};
 
 pub async fn async_batch_do<I, T, F>(data: Vec<I>, handler: F) -> Vec<Result<T>>
 where
@@ -147,4 +148,52 @@ pub fn check_timer_expr(timezone: &str, expr: &str) -> Result<Vec<String>> {
     }
 
     Ok(next_exec_times)
+}
+
+/// Convert a serializable value into another type via JSON serialization.
+///
+/// This function serializes the input `T` into a JSON value and then deserializes
+/// it into the target type `R`. This is useful for converting between compatible
+/// data structures that go through a JSON intermediary representation.
+///
+/// # Arguments
+/// * `input` - A reference to a value of type `T` that implements [`Serialize`].
+///
+/// # Returns
+/// * `Ok(R)` - The converted value of type `R` on success.
+/// * `Err` - An error if serialization or deserialization fails.
+///
+/// # Type Parameters
+/// * `T` - The source type, must implement [`Serialize`].
+/// * `R` - The target type, must implement `Deserialize` (for any lifetime).
+///
+/// # Example
+/// ```
+/// use serde::Serialize;
+/// use serde::Deserialize;
+///
+/// #[derive(Serialize)]
+/// struct Source {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// #[derive(Deserialize)]
+/// struct Target {
+///     name: String,
+///     age: u32,
+/// }
+///
+/// let src = Source { name: "Alice".to_string(), age: 30 };
+/// let tgt: Target = json_into(&src).unwrap();
+/// ```
+
+pub fn json_into<T, R>(input: &T) -> Result<R>
+where
+    T: Serialize,
+    R: for<'de> Deserialize<'de>,
+{
+    let v1 = serde_json::to_value(input)?;
+    let v2: R = serde_json::from_value(v1)?;
+    Ok(v2)
 }
