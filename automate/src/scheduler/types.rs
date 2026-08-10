@@ -256,14 +256,16 @@ impl SshConnectionOption {
         user: Option<String>,
         password: Option<String>,
         keypath: Option<String>,
-        port: Option<u16>,
+        _port: Option<u16>,
     ) -> Option<SshConnectionOption> {
         let auth_data = if let Some(v) = password {
             AuthData::Password(v)
         } else if let Some(v) = keypath {
             AuthData::KeyPath(v)
-        } else {
+        } else if cfg!(target_family = "unix") {
             AuthData::KeyPath("/root/.ssh/key".to_string())
+        } else {
+            AuthData::None
         };
 
         return Some(SshConnectionOption {
