@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, process::Output};
+use std::{collections::HashMap, fmt, process::Output, vec};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
@@ -256,27 +256,44 @@ impl SshConnectionOption {
         user: Option<String>,
         password: Option<String>,
         keypath: Option<String>,
-        _port: Option<u16>,
+        port: Option<u16>,
     ) -> Option<SshConnectionOption> {
+        let Some(user) = user.or_else(|| {
+            users::get_current_username().map(|v| v.to_str().unwrap_or_default().to_string())
+        }) else {
+            return None;
+        };
+
         let auth_data = if let Some(v) = password {
             AuthData::Password(v)
         } else if let Some(v) = keypath {
+            if !std::path::Path::new(&v).exists() {
+                panic!("keypath: {v} not exists");
+            }
             AuthData::KeyPath(v)
-        } else if cfg!(target_family = "unix") {
-            AuthData::KeyPath("/root/.ssh/key".to_string())
         } else {
-            AuthData::None
+            let mut keypaths = vec![];
+            let p = dirs::home_dir()
+                .and_then(|v| v.to_str().map(String::from))
+                .unwrap_or(format!("/home/{user}"));
+            keypaths.append(&mut vec![
+                format!("{p}/.ssh/id_rsa"),
+                format!("{p}/.ssh/id_ed25519"),
+            ]);
+            let Some(keypath) = keypaths
+                .iter()
+                .find(|p| std::path::Path::new(p).exists())
+                .cloned()
+            else {
+                return None;
+            };
+
+            AuthData::KeyPath(keypath.to_string())
         };
 
         return Some(SshConnectionOption {
-            user: user
-                .unwrap_or_else(|| {
-                    users::get_current_username()
-                        .map(|v| v.to_str().unwrap_or_default().to_string())
-                        .unwrap_or_default()
-                })
-                .to_string(),
-            port: 22,
+            user: user.to_string(),
+            port: port.unwrap_or(22),
             auth_data: auth_data,
         });
     }

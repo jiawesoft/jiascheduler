@@ -71,7 +71,7 @@ automate.workspace = true
 openapi.workspace = true
 watchexec-supervisor.workspace = true
 service.workspace = true
-itoa = "1.0.18"
+dirs.workspace = true
 
 
 
@@ -123,7 +123,7 @@ redis = { version = "0.27", features = [
 #     "runtime-tokio-rustls",
 # ] }
 #
-sea-orm = { version = "2.0.0", features = [
+sea-orm = { version = "2.0.1", features = [
     "macros",
     "with-json",
     "with-chrono",
@@ -182,3 +182,5 @@ expr-lang = { path = "crates/expr.rs", features = ["serde"] }
 croner = "3.0.0"
 english-to-cron = "0.1.6"
 users = "0.11.0"
+itoa = "1.0.18"
+dirs = "6.0.0"

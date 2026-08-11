@@ -56,7 +56,6 @@ pub enum AuthData {
     Password(String),
     KeyPath(String),
     KeyContent(String),
-    None,
 }
 
 pub struct ConnectParams2<A: ToSocketAddrs, T: Into<String>> {
@@ -130,9 +129,6 @@ impl Session {
             AuthData::KeyContent(val) => {
                 let key_pair = decode_secret_key(&val, None)?;
                 h(user, key_pair).await?
-            }
-            _ => {
-                anyhow::bail!("none auth data");
             }
         };
 
