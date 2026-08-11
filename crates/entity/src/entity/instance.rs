@@ -19,6 +19,10 @@ pub enum SshAuthData {
     KeyPath(String),
     KeyContent(String),
 }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]
+pub struct RegisterData {
+    pub auth_data: Option<SshAuthData>,
+}
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "instance")]
@@ -35,7 +39,7 @@ pub struct Model {
     pub sys_users: Option<Json>,
     pub sys_user: String,
     pub password: String,
-    pub register_data: Option<SshAuthData>,
+    pub register_data: Option<RegisterData>,
     pub ssh_port: u16,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,

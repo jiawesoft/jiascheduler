@@ -5,6 +5,7 @@ use automate::scheduler::types::SshConnectionOption;
 use chrono::Local;
 
 use chrono::Utc;
+use entity::instance::RegisterData;
 use entity::instance::SshAuthData;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
@@ -63,10 +64,12 @@ impl<'a> InstanceLogic<'a> {
         assign_user: Option<(String, String)>,
         ssh_connection_option: Option<SshConnectionOption>,
     ) -> Result<()> {
-        let (sys_user, ssh_auth_data, ssh_port) = match ssh_connection_option {
+        let (sys_user, register_data, ssh_port) = match ssh_connection_option {
             Some(opt) => (
                 Set(opt.user),
-                Set(Some(json_into::<_, SshAuthData>(&opt.auth_data)?)),
+                Set(Some(RegisterData {
+                    auth_data: Some(json_into::<_, SshAuthData>(&opt.auth_data)?),
+                })),
                 Set(opt.port),
             ),
             None => (NotSet, NotSet, NotSet),
@@ -112,7 +115,7 @@ impl<'a> InstanceLogic<'a> {
         update_cols
             .value(instance::Column::UpdatedTime, Local::now())
             .value(instance::Column::Status, status);
-        if let Set(Some(ref v)) = ssh_auth_data {
+        if let Set(Some(ref v)) = register_data {
             update_cols.value(instance::Column::RegisterData, v.clone());
         }
         if let Set(ref v) = sys_user {
@@ -136,7 +139,7 @@ impl<'a> InstanceLogic<'a> {
                 instance_id: Set(instance_id),
                 mac_addr: Set(mac_addr.clone()),
                 sys_user,
-                register_data: ssh_auth_data,
+                register_data,
                 ssh_port,
                 ..Default::default()
             })

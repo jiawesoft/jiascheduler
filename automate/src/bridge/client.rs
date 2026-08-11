@@ -359,10 +359,8 @@ impl
                 .with_header("X-Assign-Password", assign_user.password.clone());
         }
 
-        info!("1-------------------------");
         if let Some(ref ssh_opt) = self.ssh_connection_option {
             let auth_data = serde_json::to_string(&ssh_opt.auth_data)?;
-            info!("2-------------------------{}", auth_data);
             req = req
                 .with_header("X-Ssh-User", ssh_opt.user.clone())
                 .with_header("X-Ssh-Auth", auth_data)
