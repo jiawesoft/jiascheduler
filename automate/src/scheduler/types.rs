@@ -245,19 +245,19 @@ impl BundleOutput {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SshConnectionOption {
+pub struct SshConnectOption {
     pub user: String,
     pub port: u16,
     pub auth_data: AuthData,
 }
 
-impl SshConnectionOption {
+impl SshConnectOption {
     pub fn build(
         user: Option<String>,
         password: Option<String>,
         keypath: Option<String>,
         port: Option<u16>,
-    ) -> Option<SshConnectionOption> {
+    ) -> Option<SshConnectOption> {
         let Some(user) = user.or_else(|| {
             users::get_current_username().map(|v| v.to_str().unwrap_or_default().to_string())
         }) else {
@@ -291,7 +291,7 @@ impl SshConnectionOption {
             AuthData::KeyPath(keypath.to_string())
         };
 
-        return Some(SshConnectionOption {
+        return Some(SshConnectOption {
             user: user.to_string(),
             port: port.unwrap_or(22),
             auth_data: auth_data,

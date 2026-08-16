@@ -5,11 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct SysUser {
-    pub auth_type: String,
-    pub username: String,
-    pub key_path: Option<String>,
-    pub key_content: Option<String>,
-    pub password: Option<String>,
+    pub user: String,
+    pub auth_data: Option<SshAuthData>,
 }
 
 // The custom struct must derive `FromJsonQueryResult`, `Serialize` and `Deserialize`
@@ -21,6 +18,7 @@ pub enum SshAuthData {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, FromJsonQueryResult)]
 pub struct RegisterData {
+    pub ssh_user: Option<String>,
     pub auth_data: Option<SshAuthData>,
 }
 

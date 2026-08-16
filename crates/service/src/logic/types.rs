@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use entity::instance::SshAuthData;
+use entity::instance::RegisterData;
 use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,7 @@ pub struct UserServer {
     pub info: String,
     pub namespace: String,
     pub sys_user: Option<String>,
-    pub ssh_auth_data: Option<SshAuthData>,
+    pub register_data: Option<RegisterData>,
     pub ssh_port: Option<u16>,
     pub password: Option<String>,
     pub instance_group_id: Option<u64>,

@@ -3,22 +3,22 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use anyhow::{Context, Ok};
 use futures::SinkExt;
 
-use handler::{middleware::bearer_auth, SecretHeader};
+use handler::{SecretHeader, middleware::bearer_auth};
 use poem::{
-    get, listener::TcpListener, post, web::websocket::WebSocketStream, EndpointExt, Route, Server,
+    EndpointExt, Route, Server, get, listener::TcpListener, post, web::websocket::WebSocketStream,
 };
-use serde_json::{json, Value};
-use tokio::sync::{mpsc::Sender, oneshot::Sender as OneSender, Mutex};
+use serde_json::{Value, json};
+use tokio::sync::{Mutex, mpsc::Sender, oneshot::Sender as OneSender};
 use tracing::{debug, error, info};
 use types::SshLoginParams;
 
 use crate::{
     bridge::{
+        Bridge,
         msg::{
             AgentOfflineParams, AgentOnlineParams, HeartbeatParams, Msg, MsgReqKind, MsgState,
             UpdateJobParams,
         },
-        Bridge,
     },
     get_endpoint,
 };

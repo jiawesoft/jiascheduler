@@ -5,7 +5,7 @@ use automate::{
     comet::{self, CometOptions},
     scheduler::{
         Scheduler,
-        types::{AssignUserOption, SshConnectionOption},
+        types::{AssignUserOption, SshConnectOption},
     },
 };
 use clap::Parser;
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
             vec![format!("ws://{}", args.comet_bind_addr)],
             conf.comet_secret.to_string(),
             args.output_dir,
-            SshConnectionOption::build(
+            SshConnectOption::build(
                 args.ssh_user,
                 args.ssh_password,
                 args.ssh_keypath,

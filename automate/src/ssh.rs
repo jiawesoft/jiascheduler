@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use poem::web::websocket::{Message, WebSocketStream};
+
 use russh::keys::*;
 use russh::*;
 use russh_sftp::client::SftpSession;
@@ -104,6 +105,7 @@ impl Session {
 
         let config = Arc::new(config);
         let sh = Client {};
+        let user: String = user.into();
 
         let mut session =
             timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;

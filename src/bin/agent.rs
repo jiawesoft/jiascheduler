@@ -5,7 +5,7 @@ use tracing::error;
 
 use automate::scheduler::{
     Scheduler,
-    types::{AssignUserOption, SshConnectionOption},
+    types::{AssignUserOption, SshConnectOption},
 };
 
 #[derive(Parser, Debug)]
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
         args.comet_addr,
         args.comet_secret,
         args.output_dir,
-        SshConnectionOption::build(
+        SshConnectOption::build(
             args.ssh_user,
             args.ssh_password,
             args.ssh_keypath,

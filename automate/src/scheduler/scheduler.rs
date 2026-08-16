@@ -18,7 +18,7 @@ use crate::{
     get_comet_addr, get_local_ip, get_mac_address, run_id,
     scheduler::types::JobAction,
     set_comet_addr,
-    ssh::{self, AuthData, ConnectParams2, Session},
+    ssh::{self, ConnectParams2, Session},
 };
 use futures_util::stream::{SplitSink, SplitStream};
 
@@ -44,9 +44,7 @@ use uuid::Uuid;
 use super::{
     executor::Ctx,
     file::try_download_file,
-    types::{
-        self, AssignUserOption, BundleOutput, RuntimeAction, ScheduleType, SshConnectionOption,
-    },
+    types::{self, AssignUserOption, BundleOutput, RuntimeAction, ScheduleType, SshConnectOption},
 };
 
 use crate::{
@@ -344,7 +342,7 @@ pub struct Scheduler<T> {
     client: Option<T>,
     pub namespace: String,
     bridge: Bridge,
-    ssh_connection_option: Option<SshConnectionOption>,
+    ssh_connection_option: Option<SshConnectOption>,
     assign_user_option: Option<AssignUserOption>,
 }
 
@@ -361,7 +359,7 @@ impl
         comet_addr: Vec<String>,
         comet_secret: String,
         output_dir: String,
-        ssh_connection_option: Option<SshConnectionOption>,
+        ssh_connection_option: Option<SshConnectOption>,
         assign_user_option: Option<AssignUserOption>,
     ) -> Self {
         Scheduler {
@@ -406,7 +404,7 @@ impl
                 if let Err(e) =
                     Self::ssh_keepalive(addr.clone(), mac_addr.clone(), comet_secret.clone()).await
                 {
-                    error!("failed ssh keepalive {e}");
+                    error!("failed ssh keepalive, {e}");
                     sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -453,13 +451,13 @@ impl
                 _ => return Ok(()),
             };
         };
+        let connect_opts: SshConnectOption = serde_json::from_str(&login_params.connect_options)?;
 
-        let auth_data: AuthData = serde_json::from_str(&login_params.auth_data)?;
         tokio::spawn(async move {
             let sess = match Session::connect2(ConnectParams2 {
-                user: login_params.user,
-                auth: auth_data,
-                addrs: (local_ip, login_params.port),
+                user: connect_opts.user,
+                auth: connect_opts.auth_data,
+                addrs: (local_ip, connect_opts.port),
             })
             .await
             {

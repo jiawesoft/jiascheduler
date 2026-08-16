@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use automate::scheduler::types::SshConnectionOption;
+use automate::scheduler::types::SshConnectOption;
 use chrono::Local;
 
 use chrono::Utc;
@@ -22,6 +22,7 @@ use sea_orm::{
 use sea_query::MysqlQueryBuilder;
 use sea_query::UnionType;
 use sea_query::{ConditionType, Expr, IntoCondition, OnConflict};
+
 use tracing::warn;
 use utils::json_into;
 use utils::non_empty;
@@ -62,12 +63,13 @@ impl<'a> InstanceLogic<'a> {
         mac_addr: String,
         status: i8,
         assign_user: Option<(String, String)>,
-        ssh_connection_option: Option<SshConnectionOption>,
+        ssh_connection_option: Option<SshConnectOption>,
     ) -> Result<()> {
-        let (sys_user, register_data, ssh_port) = match ssh_connection_option {
+        let (_sys_user, register_data, ssh_port) = match ssh_connection_option {
             Some(opt) => (
-                Set(opt.user),
+                Set(opt.user.to_string()),
                 Set(Some(RegisterData {
+                    ssh_user: Some(opt.user.to_string()),
                     auth_data: Some(json_into::<_, SshAuthData>(&opt.auth_data)?),
                 })),
                 Set(opt.port),
@@ -118,9 +120,7 @@ impl<'a> InstanceLogic<'a> {
         if let Set(Some(ref v)) = register_data {
             update_cols.value(instance::Column::RegisterData, v.clone());
         }
-        if let Set(ref v) = sys_user {
-            update_cols.value(instance::Column::SysUser, v);
-        }
+
         if let Set(v) = ssh_port {
             update_cols.value(instance::Column::SshPort, v);
         }
@@ -138,7 +138,6 @@ impl<'a> InstanceLogic<'a> {
                 status: Set(status),
                 instance_id: Set(instance_id),
                 mac_addr: Set(mac_addr.clone()),
-                sys_user,
                 register_data,
                 ssh_port,
                 ..Default::default()
@@ -909,6 +908,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Password)
             .column(instance::Column::SysUser)
             .column(instance::Column::SshPort)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -954,6 +954,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::SshPort)
             .column(instance::Column::Password)
             .column(instance::Column::Status)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::CreatedTime)

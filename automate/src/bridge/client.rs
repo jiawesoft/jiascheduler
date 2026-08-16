@@ -27,7 +27,7 @@ use tracing::{error, info};
 
 use crate::{
     get_endpoint,
-    scheduler::types::{AssignUserOption, SshConnectionOption},
+    scheduler::types::{AssignUserOption, SshConnectOption},
 };
 
 use super::{
@@ -45,7 +45,7 @@ pub struct WsClient<W, R> {
     local_ip: Option<IpAddr>,
     namespace: Option<String>,
     is_initialized: Option<bool>,
-    ssh_connection_option: Option<SshConnectionOption>,
+    ssh_connection_option: Option<SshConnectOption>,
     assign_user_option: Option<AssignUserOption>,
     msg_box: Cache<u64, TransactionMsg>,
     bridge: Option<Bridge>,
@@ -101,7 +101,7 @@ impl<W, R> WsClient<W, R> {
         self
     }
 
-    pub fn set_ssh_connection(&mut self, ssh_option: SshConnectionOption) -> &mut Self {
+    pub fn set_ssh_connection(&mut self, ssh_option: SshConnectOption) -> &mut Self {
         self.ssh_connection_option = Some(ssh_option);
         self
     }
@@ -360,11 +360,7 @@ impl
         }
 
         if let Some(ref ssh_opt) = self.ssh_connection_option {
-            let auth_data = serde_json::to_string(&ssh_opt.auth_data)?;
-            req = req
-                .with_header("X-Ssh-User", ssh_opt.user.clone())
-                .with_header("X-Ssh-Auth", auth_data)
-                .with_header("X-Ssh-Port", ssh_opt.port.to_string());
+            req = req.with_header("X-Ssh-Options", serde_json::to_string(&ssh_opt)?);
         }
 
         let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))

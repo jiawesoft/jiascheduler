@@ -90,14 +90,12 @@ pub struct WebSshQuery {
     pub rows: u32,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SshLoginParams {
     pub cols: u32,
     pub rows: u32,
     pub namespace: String,
-    pub user: String,
-    pub port: u16,
     pub ip: String,
     pub mac_addr: String,
-    pub auth_data: String,
+    pub connect_options: String,
 }

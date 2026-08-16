@@ -4,6 +4,7 @@ use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
+use automate::scheduler::types::SshConnectOption;
 use automate::Logic;
 use futures::{SinkExt, StreamExt};
 
@@ -17,6 +18,7 @@ use tokio_tungstenite::connect_async;
 
 use tracing::{debug, error};
 use url::Url;
+use utils::json_into;
 
 pub mod types {
     use serde::{Deserialize, Serialize};
@@ -48,6 +50,17 @@ pub mod types {
     }
 }
 
+/// Webssh is deprecated.
+///
+/// This endpoint establishes a direct SSH connection to the target instance
+/// using credentials stored in the database.
+///
+/// **Deprecated**: This method connects to the instance's SSH port directly,
+/// which may fail when the instance is behind NAT or a firewall. Use
+/// [`proxy_webssh`] instead, which routes the SSH traffic through the Comet
+/// relay service (`/ssh/tunnel`) via the instance's registration pair.
+///
+/// The endpoint will be removed in a future release.
 #[handler]
 pub async fn webssh(
     Path(instance_id): Path<String>,
@@ -224,22 +237,30 @@ pub async fn proxy_webssh(
         let Some(port) = instance_record.ssh_port else {
             return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
         };
+        let Some(ref register_data) = instance_record.register_data else {
+            return_err_to_wsconn!(
+                clientsink,
+                "Notice: please set the ssh connection options first"
+            );
+        };
 
         let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
+
+        let connect_opts = SshConnectOption {
+            user,
+            port,
+            auth_data: json_into(&register_data.auth_data.clone().unwrap()).unwrap(),
+        };
 
         u.query_pairs_mut()
             .append_pair("cols", &cols.to_string())
             .append_pair("rows", &rows.to_string())
-            .append_pair("user", &user)
             .append_pair("ip", &instance_record.ip)
-            .append_pair("port", &port.to_string())
             .append_pair("namespace", &instance_record.namespace)
             .append_pair("mac_addr", &instance_record.mac_addr)
             .append_pair(
-                "auth_data",
-                serde_json::to_string(&instance_record.ssh_auth_data)
-                    .unwrap()
-                    .as_ref(),
+                "connect_options",
+                serde_json::to_string(&connect_opts).unwrap().as_ref(),
             );
 
         let mut ws_request = http::Request::builder()

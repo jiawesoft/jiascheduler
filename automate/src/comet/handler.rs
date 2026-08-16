@@ -35,8 +35,7 @@ use crate::{
         types::{self, SshLoginParams},
     },
     return_response,
-    scheduler::types::{SshConnectionOption, UploadFile},
-    ssh::AuthData,
+    scheduler::types::{SshConnectOption, UploadFile},
 };
 
 pub mod middleware {
@@ -89,7 +88,7 @@ pub mod middleware {
 pub struct SecretHeader {
     pub mac_addr: String,
     pub assign_user: Option<(String, String)>,
-    pub ssh_connection_params: Option<SshConnectionOption>,
+    pub ssh_connection_params: Option<SshConnectOption>,
 }
 
 // Implements a token extractor
@@ -109,44 +108,17 @@ impl<'a> FromRequest<'a> for SecretHeader {
             .get("X-Assign-Password")
             .and_then(|value| value.to_str().ok());
 
-        let ssh_user = header
-            .get("X-Ssh-User")
-            .and_then(|value| value.to_str().ok());
-        let ssh_auth_data = dbg!(
-            header
-                .get("X-Ssh-Auth")
+        Ok(SecretHeader {
+            assign_user: match (username, password) {
+                (Some(u), Some(p)) => Some((u.to_string(), p.to_string())),
+                _ => None,
+            },
+            mac_addr: mac_addr.to_string(),
+            ssh_connection_params: header
+                .get("X-Ssh-Options")
                 .and_then(|v| v.to_str().ok())
-                .and_then(|v| serde_json::from_str::<AuthData>(v).ok())
-        );
-        let ssh_port = header.get("x-ssh-port").and_then(|value| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| u16::from_str_radix(v, 10).ok())
-                .flatten()
-        });
-
-        let mut assign = match (username, password) {
-            (Some(u), Some(p)) => SecretHeader {
-                assign_user: Some((u.to_string(), p.to_string())),
-                ssh_connection_params: None,
-                mac_addr: mac_addr.to_string(),
-            },
-            _ => SecretHeader {
-                assign_user: None,
-                ssh_connection_params: None,
-                mac_addr: mac_addr.to_string(),
-            },
-        };
-
-        if let (Some(u), Some(auth_data), Some(port)) = (ssh_user, ssh_auth_data, ssh_port) {
-            assign.ssh_connection_params = Some(SshConnectionOption {
-                user: u.to_string(),
-                auth_data,
-                port,
-            });
-        }
-        Ok(assign)
+                .and_then(|v| serde_json::from_str::<SshConnectOption>(v).ok()),
+        })
     }
 }
 
@@ -164,7 +136,7 @@ pub fn ws(
 
     ws.on_upgrade(|socket| async move {
         let (mut sink, mut stream) = socket.split();
-        let mac_addr = dbg!(&secret_header).mac_addr.clone();
+        let mac_addr = secret_header.mac_addr.clone();
         let mut client: WsClient<
             SplitSink<WebSocketStream, Message>,
             SplitStream<WebSocketStream>,
