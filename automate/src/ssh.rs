@@ -223,7 +223,6 @@ impl Session {
 
                     match msg.r#type {
                         MsgType::Resize => {
-                            info!("resize {},{}",msg.cols,msg.rows);
                             channel.window_change(msg.cols, msg.rows, 0, 0).await.expect("failed resize windows");
 
                         },

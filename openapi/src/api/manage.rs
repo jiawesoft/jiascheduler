@@ -277,6 +277,13 @@ impl ManageApi {
                 instance_group_id: v.instance_group_id.unwrap_or_default(),
                 instance_group: v.instance_group_name.unwrap_or_default(),
                 status: v.status,
+                ssh_port: v.ssh_port,
+                ssh_user: v.register_data.as_ref().and_then(|r| r.ssh_user.clone()),
+                ssh_auth_type: v.register_data.as_ref().and_then(|r| {
+                    r.auth_data
+                        .as_ref()
+                        .map(super::instance::ssh_auth_type_str)
+                }),
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
             })

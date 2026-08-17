@@ -5,6 +5,7 @@ use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
 use automate::scheduler::types::SshConnectOption;
+use automate::ssh::AuthData;
 use automate::Logic;
 use futures::{SinkExt, StreamExt};
 
@@ -47,6 +48,21 @@ pub mod types {
     pub struct WebSshQuery {
         pub cols: u32,
         pub rows: u32,
+        /// Optional manual ssh username. When provided, manual account
+        /// (user + auth) is preferred over the agent-reported account.
+        #[serde(default)]
+        pub user: Option<String>,
+        /// auth type: password | key_path | key_content
+        #[serde(default)]
+        pub auth_type: Option<String>,
+        #[serde(default)]
+        pub password: Option<String>,
+        #[serde(default)]
+        pub key_path: Option<String>,
+        #[serde(default)]
+        pub key_content: Option<String>,
+        #[serde(default)]
+        pub port: Option<u16>,
     }
 }
 
@@ -67,7 +83,7 @@ pub async fn webssh(
     state: Data<&AppState>,
     _session: &WebSession,
     user_info: Data<&logic::types::UserInfo>,
-    Query(types::WebSshQuery { rows, cols }): Query<types::WebSshQuery>,
+    Query(types::WebSshQuery { rows, cols, .. }): Query<types::WebSshQuery>,
     ws: WebSocket,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
@@ -153,7 +169,7 @@ pub async fn proxy_webssh(
     state: Data<&AppState>,
     Path(instance_id): Path<String>,
     user_info: Data<&logic::types::UserInfo>,
-    Query(types::WebSshQuery { rows, cols }): Query<types::WebSshQuery>,
+    Query(query): Query<types::WebSshQuery>,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
     let user_id = user_info.user_id.clone();
@@ -213,48 +229,62 @@ pub async fn proxy_webssh(
             }
         };
 
-        let Some(password_raw) = instance_record.password else {
-            return_err_to_wsconn!(
-                clientsink,
-                format!("Notice: please set the instance password first")
-            );
-        };
+        let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
 
-        let _password = match state_clone.decrypt(password_raw) {
-            Ok(v) => v,
-            Err(e) => {
+        // Manual account (from query params) takes precedence; otherwise fall
+        // back to the account reported by the agent (register_data).
+        let connect_opts = if let Some(user) = query.user.clone() {
+            let auth_data = match query.auth_type.as_deref() {
+                Some("key_path") => {
+                    AuthData::KeyPath(query.key_path.clone().unwrap_or_default())
+                }
+                Some("key_content") => {
+                    AuthData::KeyContent(query.key_content.clone().unwrap_or_default())
+                }
+                _ => AuthData::Password(query.password.clone().unwrap_or_default()),
+            };
+            SshConnectOption {
+                user,
+                port: query.port.unwrap_or(instance_record.ssh_port.unwrap_or(22)),
+                auth_data,
+            }
+        } else {
+            let Some(ref register_data) = instance_record.register_data else {
                 return_err_to_wsconn!(
                     clientsink,
-                    format!("Notice: failed decrypt instance password, {e}")
+                    "Notice: agent has not reported ssh connection options, please specify the account manually"
                 );
+            };
+
+            let Some(user) = register_data
+                .ssh_user
+                .clone()
+                .or(instance_record.sys_user.clone())
+            else {
+                return_err_to_wsconn!(clientsink, "Notice: please set the system user first");
+            };
+
+            let Some(port) = instance_record.ssh_port else {
+                return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
+            };
+
+            let Some(auth_data) = &register_data.auth_data else {
+                return_err_to_wsconn!(
+                    clientsink,
+                    "Notice: agent has not reported ssh auth data, please specify the account manually"
+                );
+            };
+
+            SshConnectOption {
+                user,
+                port,
+                auth_data: json_into::<_, AuthData>(auth_data).unwrap(),
             }
         };
 
-        let Some(user) = instance_record.sys_user else {
-            return_err_to_wsconn!(clientsink, "Notice: please set the system user first");
-        };
-
-        let Some(port) = instance_record.ssh_port else {
-            return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
-        };
-        let Some(ref register_data) = instance_record.register_data else {
-            return_err_to_wsconn!(
-                clientsink,
-                "Notice: please set the ssh connection options first"
-            );
-        };
-
-        let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
-
-        let connect_opts = SshConnectOption {
-            user,
-            port,
-            auth_data: json_into(&register_data.auth_data.clone().unwrap()).unwrap(),
-        };
-
         u.query_pairs_mut()
-            .append_pair("cols", &cols.to_string())
-            .append_pair("rows", &rows.to_string())
+            .append_pair("cols", &query.cols.to_string())
+            .append_pair("rows", &query.rows.to_string())
             .append_pair("ip", &instance_record.ip)
             .append_pair("namespace", &instance_record.namespace)
             .append_pair("mac_addr", &instance_record.mac_addr)

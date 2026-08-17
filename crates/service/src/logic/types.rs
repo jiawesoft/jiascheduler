@@ -91,6 +91,7 @@ pub struct InstanceRecord {
     pub instance_group: Option<String>,
     pub instance_group_id: u64,
     pub ssh_port: u16,
+    pub register_data: Option<RegisterData>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }

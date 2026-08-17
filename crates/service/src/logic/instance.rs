@@ -237,6 +237,7 @@ impl<'a> InstanceLogic<'a> {
                 instance::Column::SshPort,
                 instance::Column::Password,
                 instance::Column::InstanceGroupId,
+                instance::Column::RegisterData,
                 instance::Column::CreatedTime,
                 instance::Column::UpdatedTime,
             ])
@@ -384,6 +385,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::InstanceId)
             .column(instance::Column::Namespace)
             .column(instance::Column::InstanceGroupId)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::Info)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -463,6 +465,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -652,6 +655,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
             .column(instance::Column::InstanceId)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -710,6 +714,7 @@ impl<'a> InstanceLogic<'a> {
                     .column(instance::Column::Info)
                     .column(instance::Column::MacAddr)
                     .column(instance::Column::InstanceId)
+                    .column(instance::Column::RegisterData)
                     .column(instance::Column::InstanceGroupId)
                     .column_as(instance_group::Column::Name, "instance_group_name")
                     .column(instance::Column::Status)

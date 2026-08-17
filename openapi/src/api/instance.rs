@@ -34,6 +34,9 @@ pub mod types {
         pub role_id: u64,
         pub role_name: String,
         pub instance_group_id: u64,
+        pub ssh_port: Option<u16>,
+        pub ssh_user: Option<String>,
+        pub ssh_auth_type: Option<String>,
         pub created_time: String,
         pub updated_time: String,
     }
@@ -90,6 +93,9 @@ pub mod types {
         pub status: i8,
         pub info: String,
         pub tags: Option<Vec<Tag>>,
+        pub ssh_port: Option<u16>,
+        pub ssh_user: Option<String>,
+        pub ssh_auth_type: Option<String>,
         pub created_time: String,
         pub updated_time: String,
     }
@@ -185,6 +191,14 @@ pub mod types {
 
 pub struct InstanceApi;
 
+pub(crate) fn ssh_auth_type_str(auth: &entity::instance::SshAuthData) -> String {
+    match auth {
+        entity::instance::SshAuthData::Password(_) => "password".to_string(),
+        entity::instance::SshAuthData::KeyPath(_) => "key_path".to_string(),
+        entity::instance::SshAuthData::KeyContent(_) => "key_content".to_string(),
+    }
+}
+
 #[OpenApi(prefix_path = "/instance", tag = super::Tag::Instance)]
 impl InstanceApi {
     #[oai(path = "/list", method = "get")]
@@ -256,6 +270,14 @@ impl InstanceApi {
                 updated_time: local_time!(v.updated_time),
                 sys_user: v.sys_user,
                 info: v.info,
+                ssh_port: Some(v.ssh_port),
+                ssh_user: v
+                    .register_data
+                    .as_ref()
+                    .and_then(|r| r.ssh_user.clone()),
+                ssh_auth_type: v.register_data.as_ref().and_then(|r| {
+                    r.auth_data.as_ref().map(ssh_auth_type_str)
+                }),
                 created_time: local_time!(v.created_time),
             })
             .collect();
@@ -364,6 +386,11 @@ impl InstanceApi {
                 instance_group_id: v.instance_group_id.unwrap_or_default(),
                 instance_group: v.instance_group_name.unwrap_or_default(),
                 status: v.status,
+                ssh_port: v.ssh_port,
+                ssh_user: v.register_data.as_ref().and_then(|r| r.ssh_user.clone()),
+                ssh_auth_type: v.register_data.as_ref().and_then(|r| {
+                    r.auth_data.as_ref().map(ssh_auth_type_str)
+                }),
                 created_time: local_time!(v.created_time),
                 updated_time: local_time!(v.updated_time),
             })

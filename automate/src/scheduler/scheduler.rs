@@ -485,13 +485,10 @@ impl
                     return;
                 }
             };
-
-            info!("web ssh exit code {code}");
-
             if let Err(e) = sess.close().await {
                 error!("failed close - {e}");
             }
-            info!("ssh tunnel close");
+            info!("web ssh exit code {code}");
         });
 
         Ok(())
