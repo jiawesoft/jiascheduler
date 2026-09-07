@@ -1,6 +1,9 @@
-use std::env;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
+use std::{env, fs};
 
 use anyhow::Result;
 
@@ -17,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::time::timeout;
-use tracing::info;
 
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream as TWebSocketStream};
 
@@ -311,7 +313,6 @@ impl Session {
 
                     match msg.r#type {
                         MsgType::Resize => {
-                            info!("resize {},{}",msg.cols,msg.rows);
                             channel.window_change(msg.cols, msg.rows, 0, 0).await.expect("failed resize windows");
 
                         },
@@ -518,4 +519,25 @@ pub async fn download(
 
     let data = sftp_session.read(filepath).await?;
     Ok(data)
+}
+
+pub fn ssh_copy_id(key_path: String) -> Result<()> {
+    let p = Path::new(&key_path);
+    let authorized_keys_path = p
+        .parent()
+        .ok_or(anyhow::format_err!(
+            "{key_path} terminates in a root or prefix"
+        ))?
+        .join("authorized_keys");
+    let authorized_keys_conent = fs::read_to_string(&authorized_keys_path)?;
+    let pub_key_content = fs::read_to_string(format!("{key_path}.pub"))?;
+    if !authorized_keys_conent.contains(&pub_key_content) {
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&authorized_keys_path)?;
+        file.write_all(pub_key_content.as_bytes())?;
+    }
+
+    Ok(())
 }

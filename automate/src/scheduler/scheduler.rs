@@ -488,7 +488,7 @@ impl
             if let Err(e) = sess.close().await {
                 error!("failed close - {e}");
             }
-            info!("web ssh exit code {code}");
+            debug!("web ssh exit code {code}");
         });
 
         Ok(())

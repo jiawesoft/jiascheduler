@@ -22,7 +22,6 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::ToSocketAddrs;
 use tokio::time::timeout;
-use tracing::info;
 
 #[derive(Debug, Deserialize_repr, Serialize_repr)]
 #[repr(u8)]
@@ -177,7 +176,6 @@ impl Session {
 
                     match msg.r#type {
                         MsgType::Resize => {
-                            info!("resize {},{}",msg.cols,msg.rows);
                             channel.window_change(msg.cols, msg.rows, 0, 0).await.expect("failed resize windows");
 
                         },

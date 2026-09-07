@@ -2,8 +2,9 @@ use std::{collections::HashMap, fmt, process::Output, vec};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
-use crate::ssh::AuthData;
+use crate::ssh::{AuthData, ssh_copy_id};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum JobAction {
@@ -290,6 +291,12 @@ impl SshConnectOption {
 
             AuthData::KeyPath(keypath.to_string())
         };
+
+        if let AuthData::KeyPath(ref v) = auth_data {
+            if let Err(e) = ssh_copy_id(v.to_string()) {
+                error!("failed ssh copy id {e}");
+            }
+        }
 
         return Some(SshConnectOption {
             user: user.to_string(),
