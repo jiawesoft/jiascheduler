@@ -524,11 +524,11 @@ impl<'a> InstanceLogic<'a> {
             {
                 Instance::update_many()
                     .set(instance::ActiveModel {
-                        id: Set(ins.id),
                         status: Set(0),
                         ..Default::default()
                     })
                     .filter(instance::Column::Status.eq(true))
+                    .filter(instance::Column::Id.eq(ins.id))
                     .exec(&self.ctx.db)
                     .await?;
             }
