@@ -1,7 +1,7 @@
 pub mod macros;
 pub mod response;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
     migration::MigrationApi, role::RoleApi, tag::TagApi, team::TeamApi, terminal, user::UserApi,
@@ -13,20 +13,20 @@ use ::migration::{Migrator, MigratorTrait};
 
 use logic::user::UserLogic;
 use middleware::AuthMiddleware;
-use poem::{get, IntoEndpoint};
+use poem::{IntoEndpoint, get};
 use service::config::Conf;
 
 pub use error::custom_error;
 
 pub use openapi_derive::ApiStdResponse;
 use poem::{
+    EndpointExt, Route,
     endpoint::{EmbeddedFileEndpoint, EmbeddedFilesEndpoint},
     listener::TcpListener,
     session::{CookieConfig, RedisStorage, ServerSession},
-    EndpointExt, Route,
 };
 use poem_openapi::{ContactObject, OpenApiService};
-use redis::{aio::ConnectionManager, Client};
+use redis::{Client, aio::ConnectionManager};
 
 pub use entity;
 use git_version::git_version;

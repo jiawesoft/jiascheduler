@@ -86,7 +86,6 @@ async fn main() -> Result<()> {
     let console_conf: Arc<Mutex<Option<Conf>>> = Arc::new(Mutex::new(None));
     let console_conf_clone = console_conf.clone();
     let comet_bind_addr = args.comet_bind_addr.clone();
-
     tokio::spawn(async move {
         let conf = console_rx.await.unwrap();
         console_conf_clone.lock().await.replace(conf.clone());
