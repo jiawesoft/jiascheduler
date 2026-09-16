@@ -265,7 +265,6 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     let ui = api_service.rapidoc();
     let app = Route::new()
         .at("/", EmbeddedFileEndpoint::<Dist>::new("index.html"))
-        .nest("/", EmbeddedFilesEndpoint::<Dist>::new())
         .at(
             "/terminal/webssh/:instance_id",
             get(terminal::webssh).with(AuthMiddleware),
@@ -274,8 +273,18 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             "/terminal/tunnel/:instance_id",
             get(terminal::proxy_webssh).with(AuthMiddleware),
         )
+        // Streaming download. Poem refuses two `nest` calls on the same prefix,
+        // so like `/terminal/tunnel` this lives at the root; an OpenAPI endpoint
+        // cannot stream a response body anyway.
+        .at(
+            "/file/sftp/tunnel/download/stream",
+            get(api::file::download_stream).with(AuthMiddleware),
+        )
         .nest("/api", api_service.with(AuthMiddleware))
         .nest("/doc", ui)
+        // The static asset endpoint is a catch-all, so it must be registered last
+        // or it swallows every other prefix and poem rejects the duplicate paths.
+        .nest("/", EmbeddedFilesEndpoint::<Dist>::new())
         .catch_all_error(custom_error)
         .with(ServerSession::new(
             CookieConfig::default()

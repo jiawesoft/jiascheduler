@@ -286,10 +286,20 @@ pub async fn proxy_ssh(
     webssh.on_upgrade(move |socket| async move {
         let (mut clientsink, mut clientstream) = socket.split();
 
-        let target_stream = comet
-            .get_ssh_stream(login_params)
-            .await
-            .expect("failed to get websocket stream");
+        // A missing agent stream is an expected condition (agent offline, wrong
+        // pair, ...). Failing it must not panic the whole comet process, which
+        // would drop every other agent connection as well.
+        let Some(target_stream) = comet.get_ssh_stream(login_params).await else {
+            error!("failed to get websocket stream, the agent stream is not registered");
+            let _ = clientsink
+                .send(Message::Text(
+                    "\r\n\x1b[31mNotice: cannot reach the target instance, the agent is not connected"
+                        .to_string(),
+                ))
+                .await;
+            let _ = clientsink.close().await;
+            return;
+        };
 
         let (mut serversink, mut serverstream) = target_stream.split();
 
@@ -382,3 +392,51 @@ pub async fn sftp_remove(
         Err(e) => return_response!(code: 50000, e.to_string()),
     }
 }
+
+/// The chunked transfer handlers are structurally identical, so a macro
+/// generates them to avoid duplication.
+macro_rules! chunk_handler {
+    ($name:ident, $req:ty, $method:ident) => {
+        #[handler]
+        pub async fn $name(
+            comet: Data<&Comet>,
+            Json(req): Json<$req>,
+        ) -> Json<serde_json::Value> {
+            match comet.$method(req).await {
+                Ok(v) => return_response!(json:v),
+                Err(e) => return_response!(code: 50000, e.to_string()),
+            }
+        }
+    };
+}
+
+chunk_handler!(
+    sftp_upload_start,
+    types::SftpUploadStartRequest,
+    sftp_upload_start
+);
+chunk_handler!(
+    sftp_upload_chunk,
+    types::SftpUploadChunkRequest,
+    sftp_upload_chunk
+);
+chunk_handler!(
+    sftp_upload_finish,
+    types::SftpUploadFinishRequest,
+    sftp_upload_finish
+);
+chunk_handler!(
+    sftp_download_stat,
+    types::SftpDownloadStatRequest,
+    sftp_download_stat
+);
+chunk_handler!(
+    sftp_download_chunk,
+    types::SftpDownloadChunkRequest,
+    sftp_download_chunk
+);
+chunk_handler!(
+    sftp_download_finish,
+    types::SftpDownloadFinishRequest,
+    sftp_download_finish
+);

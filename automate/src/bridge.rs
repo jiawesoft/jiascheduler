@@ -1,4 +1,5 @@
 // mod bridge;
+pub mod base64_bytes;
 pub mod client;
 pub mod msg;
 pub mod protocol;
@@ -54,6 +55,20 @@ impl Bridge {
     }
 
     pub async fn send_msg(&self, key: &str, data: MsgReqKind) -> Result<Value> {
+        self.send_msg_with_timeout(key, data, Duration::from_secs(90))
+            .await
+    }
+
+    /// Send a request and wait for its response with an explicit timeout.
+    ///
+    /// Chunked transfer waits for one chunk at a time, so the timeout applies per
+    /// chunk and does not depend on the total file size.
+    pub async fn send_msg_with_timeout(
+        &self,
+        key: &str,
+        data: MsgReqKind,
+        wait: Duration,
+    ) -> Result<Value> {
         let msg = Msg {
             id: 0,
             data: MsgKind::Request(data),
@@ -65,7 +80,7 @@ impl Bridge {
             None => return Err(anyhow::anyhow!("not found client {}", key)),
         }
 
-        let resp = timeout(Duration::from_secs(90), rx.recv())
+        let resp = timeout(wait, rx.recv())
             .await
             .context("receive message timeout")?
             .context("failed receives the next value for the receiver.")?;
@@ -74,6 +89,21 @@ impl Bridge {
             MsgState::Completed(v) => Ok(v),
             MsgState::Err(e) => Err(anyhow!(e)),
         };
+    }
+
+    /// Deliver without waiting for a response, for messages that have none.
+    pub async fn post_msg(&self, key: &str, data: MsgReqKind) -> Result<()> {
+        let msg = Msg {
+            id: 0,
+            data: MsgKind::Request(data),
+        };
+
+        match self.server_clients.lock().await.get(key) {
+            Some(sender) => sender.send((msg, None)).await?,
+            None => return Err(anyhow::anyhow!("not found client {}", key)),
+        }
+
+        Ok(())
     }
 
     pub fn handle_msg(&mut self, msg: String) -> String {

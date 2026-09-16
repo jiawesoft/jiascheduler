@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::bridge::msg::{
-    DispatchJobParams, RuntimeActionParams, SftpDownloadParams, SftpReadDirParams,
-    SftpRemoveParams, SftpUploadParams,
+    DispatchJobParams, RuntimeActionParams, SftpDownloadChunkParams, SftpDownloadParams,
+    SftpDownloadFinishParams, SftpDownloadStatParams, SftpReadDirParams, SftpRemoveParams,
+    SftpUploadChunkParams, SftpUploadFinishParams, SftpUploadParams, SftpUploadStartParams,
 };
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde_repr::*;
@@ -51,6 +52,60 @@ pub struct SftpDownloadRequest {
     pub mac_addr: String,
     pub namespace: String,
     pub params: SftpDownloadParams,
+}
+
+/// Chunked upload: start.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpUploadStartRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpUploadStartParams,
+}
+
+/// Chunked upload: one chunk.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpUploadChunkRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpUploadChunkParams,
+}
+
+/// Chunked upload: finish.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpUploadFinishRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpUploadFinishParams,
+}
+
+/// Chunked download: query the size.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpDownloadStatRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpDownloadStatParams,
+}
+
+/// Chunked download: end the session.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpDownloadFinishRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpDownloadFinishParams,
+}
+
+/// Chunked download: one chunk.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SftpDownloadChunkRequest {
+    pub agent_ip: String,
+    pub mac_addr: String,
+    pub namespace: String,
+    pub params: SftpDownloadChunkParams,
 }
 
 #[derive(Serialize, Clone, FromRedisValue, Deserialize, ToRedisArgs)]

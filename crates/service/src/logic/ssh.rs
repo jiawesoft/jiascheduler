@@ -5,7 +5,14 @@ use std::time::Duration;
 use anyhow::Result;
 
 use automate::bridge::msg::{
-    SftpDownloadParams, SftpReadDirParams, SftpRemoveParams, SftpUploadParams,
+    SftpDownloadChunkParams, SftpDownloadFinishParams, SftpDownloadParams,
+    SftpDownloadStatParams, SftpReadDirParams,
+    SftpRemoveParams, SftpUploadChunkParams, SftpUploadFinishParams, SftpUploadParams,
+    SftpUploadStartParams,
+};
+use automate::comet::types::{
+    SftpDownloadChunkRequest, SftpDownloadFinishRequest, SftpDownloadStatRequest,
+    SftpUploadChunkRequest, SftpUploadFinishRequest, SftpUploadStartRequest,
 };
 use automate::ssh::AuthData;
 use futures::stream::{SplitSink, SplitStream};
@@ -17,6 +24,9 @@ use russh_sftp::client::SftpSession;
 use serde_json::Value;
 
 use crate::state::AppContext;
+
+/// Chunk size, kept in sync with the agent side (512 KiB).
+pub const SFTP_CHUNK_SIZE: usize = 512 * 1024;
 
 use serde::{self, Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -343,8 +353,7 @@ impl<'a> SshLogic<'a> {
         auth_data: AuthData,
         filepath: String,
         data: Vec<u8>,
-    ) -> Result<String> {
-        let logic = automate::Logic::new(self.ctx.redis());
+    ) -> Result<String> {        let logic = automate::Logic::new(self.ctx.redis());
         let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
         let api_url = format!("http://{}/sftp/tunnel/upload", pair.1.comet_addr);
 
@@ -469,5 +478,352 @@ impl<'a> SshLogic<'a> {
             let data: Vec<u8> = serde_json::from_value(ret["data"].take())?;
             Ok(data)
         }
+    }
+
+    /// Chunked upload: start a session and return the chunk size.
+    pub async fn sftp_upload_start(
+        &self,
+        namespace: String,
+        ip: String,
+        mac_addr: String,
+        port: u16,
+        user: String,
+        auth_data: AuthData,
+        filepath: String,
+        total_size: u64,
+        session_id: String,
+    ) -> Result<u64> {
+        let logic = automate::Logic::new(self.ctx.redis());
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
+        let api_url = format!("http://{}/sftp/tunnel/upload/start", pair.1.comet_addr);
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpUploadStartRequest {
+                agent_ip: ip,
+                namespace,
+                mac_addr,
+                params: SftpUploadStartParams {
+                    session_id,
+                    ip: String::new(),
+                    port,
+                    user,
+                    auth_data,
+                    filepath,
+                    total_size,
+                },
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok(ret["data"]["chunk_size"].as_u64().unwrap_or(0))
+    }
+
+    /// Chunked upload: write one chunk and return the offset after it.
+    pub async fn sftp_upload_chunk(
+        &self,
+        namespace: String,
+        comet_addr: String,
+        mac_addr: String,
+        params: SftpUploadChunkParams,
+    ) -> Result<u64> {
+        let api_url = format!("http://{}/sftp/tunnel/upload/chunk", comet_addr);
+        let ip = params.ip.clone();
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpUploadChunkRequest {
+                agent_ip: ip,
+                namespace,
+                mac_addr,
+                params,
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok(ret["data"]["next_offset"].as_u64().unwrap_or(0))
+    }
+
+    /// Chunked upload: finish and verify the remote size.
+    pub async fn sftp_upload_finish(
+        &self,
+        namespace: String,
+        comet_addr: String,
+        mac_addr: String,
+        params: SftpUploadFinishParams,
+    ) -> Result<Value> {
+        let api_url = format!("http://{}/sftp/tunnel/upload/finish", comet_addr);
+        let ip = params.ip.clone();
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpUploadFinishRequest {
+                agent_ip: ip,
+                namespace,
+                mac_addr,
+                params,
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok(ret["data"].take())
+    }
+
+    /// Chunked download: query the remote size and the suggested chunk size.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn sftp_download_stat(
+        &self,
+        namespace: String,
+        ip: String,
+        mac_addr: String,
+        port: u16,
+        user: String,
+        auth_data: AuthData,
+        filepath: String,
+        session_id: String,
+    ) -> Result<(u64, u64)> {
+        let logic = automate::Logic::new(self.ctx.redis());
+        let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
+        let api_url = format!("http://{}/sftp/tunnel/download/stat", pair.1.comet_addr);
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpDownloadStatRequest {
+                agent_ip: ip.clone(),
+                namespace,
+                mac_addr,
+                params: SftpDownloadStatParams {
+                    session_id,
+                    ip,
+                    port,
+                    user,
+                    auth_data,
+                    filepath,
+                },
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok((
+            ret["data"]["size"].as_u64().unwrap_or(0),
+            ret["data"]["chunk_size"].as_u64().unwrap_or(0),
+        ))
+    }
+
+    /// Stream a remote file to an HTTP response body.
+    ///
+    /// Chunks are pulled from the agent one at a time and yielded immediately, so
+    /// neither the console nor the browser has to hold the whole file. The total
+    /// size is known upfront, which lets the caller send a `Content-Length` and
+    /// gives the browser a native progress indicator.
+    pub fn sftp_download_stream(
+        &self,
+        namespace: String,
+        ip: String,
+        mac_addr: String,
+        port: u16,
+        user: String,
+        auth_data: AuthData,
+        filepath: String,
+    ) -> impl futures::Stream<Item = Result<Vec<u8>, std::io::Error>> + Send + 'static {
+        // AppContext is cheap to clone (pool handles and Arcs) and the returned
+        // stream must be 'static, so it owns its own context.
+        let ctx = self.ctx.clone();
+
+        async_stream::stream! {
+            let logic = SshLogic::new(&ctx);
+
+            let pair = match automate::Logic::new(ctx.redis())
+                .get_link_pair(ip.clone(), mac_addr.clone())
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("download stream: cannot resolve comet address - {e}");
+                    return;
+                }
+            };
+
+            let session_id = format!("dl-{}", nanoid::nanoid!(16));
+
+            // Reuse stat to learn the size and to open the agent side session
+            // that the following chunk requests rely on.
+            let (total, _chunk) = match logic
+                .sftp_download_stat(
+                    namespace.clone(),
+                    ip.clone(),
+                    mac_addr.clone(),
+                    port,
+                    user.clone(),
+                    auth_data.clone(),
+                    filepath.clone(),
+                    session_id.clone(),
+                )
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("download stream: stat failed - {e}");
+                    return;
+                }
+            };
+
+            let chunk_size = SFTP_CHUNK_SIZE as u64;
+            let mut offset = 0u64;
+            while offset < total {
+                let len = chunk_size.min(total - offset);
+                match logic
+                    .sftp_download_chunk(
+                        namespace.clone(),
+                        pair.1.comet_addr.clone(),
+                        mac_addr.clone(),
+                        SftpDownloadChunkParams {
+                            session_id: session_id.clone(),
+                            ip: ip.clone(),
+                            port,
+                            user: user.clone(),
+                            auth_data: auth_data.clone(),
+                            filepath: filepath.clone(),
+                            offset,
+                            len: len as u32,
+                        },
+                    )
+                    .await
+                {
+                    Ok(data) if !data.is_empty() => {
+                        offset += data.len() as u64;
+                        yield Ok(data);
+                    }
+                    Ok(_) => break,
+                    Err(e) => {
+                        tracing::error!("download stream: chunk at {offset} failed - {e}");
+                        break;
+                    }
+                }
+            }
+
+            // Release the agent side session instead of waiting for the idle timeout.
+            let _ = logic
+                .sftp_download_finish(
+                    namespace,
+                    pair.1.comet_addr,
+                    mac_addr,
+                    SftpDownloadFinishParams {
+                        session_id,
+                    },
+                    ip,
+                )
+                .await;
+        }
+    }
+
+    /// Chunked download: fetch one chunk.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn sftp_download_chunk(
+        &self,
+        namespace: String,
+        comet_addr: String,
+        mac_addr: String,
+        params: SftpDownloadChunkParams,
+    ) -> Result<Vec<u8>> {
+        let api_url = format!("http://{}/sftp/tunnel/download/chunk", comet_addr);
+        let ip = params.ip.clone();
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpDownloadChunkRequest {
+                agent_ip: ip,
+                namespace,
+                mac_addr,
+                params,
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok(serde_json::from_value(ret["data"].take())?)
+    }
+
+    /// Chunked download: end the session and release the agent side connection.
+    pub async fn sftp_download_finish(
+        &self,
+        namespace: String,
+        comet_addr: String,
+        mac_addr: String,
+        params: SftpDownloadFinishParams,
+        agent_ip: String,
+    ) -> Result<()> {
+        let api_url = format!("http://{}/sftp/tunnel/download/finish", comet_addr);
+
+        let mut ret = self
+            .ctx
+            .http_client
+            .post(api_url)
+            .json(&SftpDownloadFinishRequest {
+                agent_ip,
+                namespace,
+                mac_addr,
+                params,
+            })
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        if ret["code"] != 20000 {
+            anyhow::bail!(ret["msg"].take().to_string())
+        }
+
+        Ok(())
+    }
+
+    /// Resolve the comet address of an instance.
+    pub async fn get_comet_addr(
+        &self,
+        ip: &str,
+        mac_addr: &str,
+    ) -> Result<String> {
+        let logic = automate::Logic::new(self.ctx.redis());
+        let pair = logic.get_link_pair(ip.to_string(), mac_addr.to_string()).await?;
+        Ok(pair.1.comet_addr)
     }
 }

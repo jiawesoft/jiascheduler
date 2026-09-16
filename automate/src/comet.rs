@@ -3,6 +3,8 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use anyhow::{Context, Ok};
 use futures::SinkExt;
 
+use std::time::Duration;
+
 use handler::{SecretHeader, middleware::bearer_auth};
 use poem::{
     EndpointExt, Route, Server, get, listener::TcpListener, post, web::websocket::WebSocketStream,
@@ -160,6 +162,67 @@ impl Comet {
         Ok(ret)
     }
 
+    /// Wait time for a single chunk: one chunk at a time, independent of the
+    /// total file size.
+    const CHUNK_WAIT: Duration = Duration::from_secs(60);
+
+    pub async fn sftp_upload_start(&self, req: types::SftpUploadStartRequest) -> Result<Value> {
+        let val = self.logic.sftp_upload_start(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
+    pub async fn sftp_upload_chunk(&self, req: types::SftpUploadChunkRequest) -> Result<Value> {
+        let val = self.logic.sftp_upload_chunk(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
+    pub async fn sftp_upload_finish(&self, req: types::SftpUploadFinishRequest) -> Result<Value> {
+        let val = self.logic.sftp_upload_finish(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
+    pub async fn sftp_download_stat(&self, req: types::SftpDownloadStatRequest) -> Result<Value> {
+        let val = self.logic.sftp_download_stat(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
+    pub async fn sftp_download_finish(
+        &self,
+        req: types::SftpDownloadFinishRequest,
+    ) -> Result<Value> {
+        let val = self.logic.sftp_download_finish(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
+    pub async fn sftp_download_chunk(&self, req: types::SftpDownloadChunkRequest) -> Result<Value> {
+        let val = self.logic.sftp_download_chunk(req).await?;
+        let ret = self
+            .bridge
+            .send_msg_with_timeout(&val.0, val.1, Self::CHUNK_WAIT)
+            .await?;
+        Ok(ret)
+    }
+
     pub async fn heartbeat(&self, req: HeartbeatParams) -> Result<Value> {
         let v = self.logic.heartbeat(req, self.port).await?;
         Ok(v)
@@ -265,6 +328,42 @@ pub async fn run(opts: CometOptions, signal: Option<OneSender<()>>) -> Result<()
         .at(
             "/sftp/tunnel/download",
             handler::sftp_download
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/upload/start",
+            handler::sftp_upload_start
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/upload/chunk",
+            handler::sftp_upload_chunk
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/upload/finish",
+            handler::sftp_upload_finish
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/download/stat",
+            handler::sftp_download_stat
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/download/chunk",
+            handler::sftp_download_chunk
+                .with(bearer_auth(&opts.secret))
+                .data(comet.clone()),
+        )
+        .at(
+            "/sftp/tunnel/download/finish",
+            handler::sftp_download_finish
                 .with(bearer_auth(&opts.secret))
                 .data(comet.clone()),
         );

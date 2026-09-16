@@ -47,6 +47,7 @@ pub struct SftpUploadParams {
     pub user: String,
     pub auth_data: AuthData,
     pub filepath: String,
+    #[serde(with = "crate::bridge::base64_bytes")]
     pub data: Vec<u8>,
 }
 
@@ -69,6 +70,84 @@ pub struct SftpRemoveParams {
     pub filepath: String,
 }
 
+/// Starts a chunked upload.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpUploadStartParams {
+    pub session_id: String,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub auth_data: AuthData,
+    pub filepath: String,
+    /// Total remote file size, used for verification only.
+    pub total_size: u64,
+}
+
+/// A single upload chunk.
+///
+/// Every chunk carries its own connection parameters, so the agent does not have
+/// to keep per session state to accept a chunk and one failing chunk cannot
+/// affect the others.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpUploadChunkParams {
+    pub session_id: String,
+    pub seq: u64,
+    /// Offset of this chunk inside the file.
+    pub offset: u64,
+    /// Chunk payload (base64 encoded).
+    #[serde(with = "crate::bridge::base64_bytes")]
+    pub data: Vec<u8>,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub auth_data: AuthData,
+    pub filepath: String,
+}
+
+/// Finishes a chunked upload.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpUploadFinishParams {
+    pub session_id: String,
+    pub total_size: u64,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub auth_data: AuthData,
+    pub filepath: String,
+}
+
+/// Download: query the remote file size.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpDownloadStatParams {
+    /// Session id used to reuse an already established SSH/SFTP connection.
+    pub session_id: String,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub auth_data: AuthData,
+    pub filepath: String,
+}
+
+/// Download: fetch the requested range.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpDownloadChunkParams {
+    pub session_id: String,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+    pub auth_data: AuthData,
+    pub filepath: String,
+    pub offset: u64,
+    pub len: u32,
+}
+
+/// Ends a download session and releases the remote handle.
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SftpDownloadFinishParams {
+    pub session_id: String,
+}
+
+
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub enum MsgReqKind {
     DispatchJobRequest(DispatchJobParams),
@@ -78,6 +157,12 @@ pub enum MsgReqKind {
     SftpUploadRequest(SftpUploadParams),
     SftpDownloadRequest(SftpDownloadParams),
     SftpRemoveRequest(SftpRemoveParams),
+    SftpUploadStartRequest(SftpUploadStartParams),
+    SftpUploadChunkRequest(SftpUploadChunkParams),
+    SftpUploadFinishRequest(SftpUploadFinishParams),
+    SftpDownloadStatRequest(SftpDownloadStatParams),
+    SftpDownloadChunkRequest(SftpDownloadChunkParams),
+    SftpDownloadFinishRequest(SftpDownloadFinishParams),
     Auth(AuthParams),
     UpdateJobRequest(UpdateJobParams),
     HeartbeatRequest(HeartbeatParams),
