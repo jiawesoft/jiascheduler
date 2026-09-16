@@ -49,7 +49,7 @@ pub mod types {
         pub cols: u32,
         pub rows: u32,
         /// Optional manual ssh username. When provided, manual account
-        /// (user + auth) is preferred over the agent-reported account.
+        /// (user + auth) is preferred over the stored accounts.
         #[serde(default)]
         pub user: Option<String>,
         /// auth type: password | key_path | key_content
@@ -63,7 +63,85 @@ pub mod types {
         pub key_content: Option<String>,
         #[serde(default)]
         pub port: Option<u16>,
+        /// Optional login user selected from the instance `sys_users` list.
+        /// When empty the default login user of the instance is used.
+        #[serde(default)]
+        pub sys_user: Option<String>,
     }
+}
+
+/// Resolve which ssh account should be used to reach the instance.
+///
+/// The precedence is:
+///
+/// 1. the account explicitly sent by the client (`user` + auth data)
+/// 2. the login user selected from the instance `sys_users` list
+/// 3. the default login user of the instance (the `sys_user` column)
+/// 4. the account reported by the agent at registration time
+fn resolve_account(
+    inst: &crate::logic::types::UserServer,
+    query: &types::WebSshQuery,
+    decrypt: impl Fn(String) -> anyhow::Result<String>,
+) -> anyhow::Result<SshConnectOption> {
+    let port = super::instance::pick_ssh_port(inst, query.port);
+
+    // 1. manual account
+    if let Some(user) = query.user.clone().filter(|v| v.trim() != "") {
+        let auth_data = match query.auth_type.as_deref() {
+            Some("key_path") => AuthData::KeyPath(query.key_path.clone().unwrap_or_default()),
+            Some("key_content") => {
+                AuthData::KeyContent(query.key_content.clone().unwrap_or_default())
+            }
+            _ => AuthData::Password(query.password.clone().unwrap_or_default()),
+        };
+        return Ok(SshConnectOption {
+            user,
+            port,
+            auth_data,
+        });
+    }
+
+    let selected = query
+        .sys_user
+        .clone()
+        .filter(|v| v.trim() != "")
+        .or_else(|| inst.sys_user.clone().filter(|v| v.trim() != ""));
+
+    // 2/3. a login user configured on the instance
+    if let Some(selected) = selected {
+        if let Some((user, auth_data)) =
+            super::instance::resolve_user_auth_of(&inst.sys_users, &selected, decrypt)?
+        {
+            return Ok(SshConnectOption {
+                user,
+                port,
+                auth_data,
+            });
+        }
+    }
+
+    // 4. the account reported by the agent
+    let Some(ref register_data) = inst.register_data else {
+        anyhow::bail!(
+            "Notice: agent has not reported ssh connection options, please specify the account manually"
+        );
+    };
+
+    let Some(user) = register_data.ssh_user.clone() else {
+        anyhow::bail!("Notice: please set the system user first");
+    };
+
+    let Some(ref auth_data) = register_data.auth_data else {
+        anyhow::bail!(
+            "Notice: agent has not reported ssh auth data, please specify the account manually"
+        );
+    };
+
+    Ok(SshConnectOption {
+        user,
+        port,
+        auth_data: json_into::<_, AuthData>(auth_data).unwrap(),
+    })
 }
 
 /// Webssh is deprecated.
@@ -231,54 +309,15 @@ pub async fn proxy_webssh(
 
         let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
 
-        // Manual account (from query params) takes precedence; otherwise fall
-        // back to the account reported by the agent (register_data).
-        let connect_opts = if let Some(user) = query.user.clone() {
-            let auth_data = match query.auth_type.as_deref() {
-                Some("key_path") => {
-                    AuthData::KeyPath(query.key_path.clone().unwrap_or_default())
-                }
-                Some("key_content") => {
-                    AuthData::KeyContent(query.key_content.clone().unwrap_or_default())
-                }
-                _ => AuthData::Password(query.password.clone().unwrap_or_default()),
-            };
-            SshConnectOption {
-                user,
-                port: query.port.unwrap_or(instance_record.ssh_port.unwrap_or(22)),
-                auth_data,
-            }
-        } else {
-            let Some(ref register_data) = instance_record.register_data else {
-                return_err_to_wsconn!(
-                    clientsink,
-                    "Notice: agent has not reported ssh connection options, please specify the account manually"
-                );
-            };
-
-            let Some(user) = register_data
-                .ssh_user
-                .clone()
-                .or(instance_record.sys_user.clone())
-            else {
-                return_err_to_wsconn!(clientsink, "Notice: please set the system user first");
-            };
-
-            let Some(port) = instance_record.ssh_port else {
-                return_err_to_wsconn!(clientsink, "Notice: please set the ssh port first");
-            };
-
-            let Some(auth_data) = &register_data.auth_data else {
-                return_err_to_wsconn!(
-                    clientsink,
-                    "Notice: agent has not reported ssh auth data, please specify the account manually"
-                );
-            };
-
-            SshConnectOption {
-                user,
-                port,
-                auth_data: json_into::<_, AuthData>(auth_data).unwrap(),
+        // Resolve the ssh account: explicit client account first, then the
+        // login user configured on the instance, then the agent-reported one.
+        let decrypt_state = state_clone.clone();
+        let connect_opts = match resolve_account(&instance_record, &query, |v| {
+            super::instance::decrypt_secret(&decrypt_state, v)
+        }) {
+            Ok(v) => v,
+            Err(e) => {
+                return_err_to_wsconn!(clientsink, format!("{e}"));
             }
         };
 

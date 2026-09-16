@@ -7,6 +7,7 @@ use anyhow::Result;
 use automate::bridge::msg::{
     SftpDownloadParams, SftpReadDirParams, SftpRemoveParams, SftpUploadParams,
 };
+use automate::ssh::AuthData;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use poem::web::websocket::{Message, WebSocketStream};
@@ -65,6 +66,12 @@ pub struct ConnectParams<A: ToSocketAddrs, U: Into<String>, P: Into<String>> {
     pub addrs: A,
 }
 
+pub struct ConnectParams2<A: ToSocketAddrs, U: Into<String>> {
+    pub user: U,
+    pub auth: AuthData,
+    pub addrs: A,
+}
+
 impl Session {
     pub async fn connect<A: ToSocketAddrs, U: Into<String>, P: Into<String>>(
         ConnectParams {
@@ -86,6 +93,56 @@ impl Session {
             timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
 
         let auth_res = session.authenticate_password(user, password).await?;
+
+        if !auth_res.success() {
+            anyhow::bail!("Authentication failed");
+        }
+
+        Ok(Self { session })
+    }
+
+    /// Connect to a server with the auth data configured for an instance login
+    /// user (password, key file path or inline key content).
+    pub async fn connect2<A: ToSocketAddrs, U: Into<String>>(
+        ConnectParams2 { user, auth, addrs }: ConnectParams2<A, U>,
+    ) -> Result<Self> {
+        let config = client::Config {
+            inactivity_timeout: Some(Duration::from_secs(90)),
+            keepalive_interval: Some(Duration::from_secs(10)),
+            ..Default::default()
+        };
+
+        let config = Arc::new(config);
+        let sh = Client {};
+
+        let user: String = user.into();
+
+        let mut session =
+            timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
+
+        let mut h = async |user, key_pair| {
+            session
+                .authenticate_publickey(
+                    user,
+                    PrivateKeyWithHashAlg::new(
+                        Arc::new(key_pair),
+                        session.best_supported_rsa_hash().await?.flatten(),
+                    ),
+                )
+                .await
+        };
+
+        let auth_res = match auth {
+            AuthData::Password(password) => session.authenticate_password(user, password).await?,
+            AuthData::KeyPath(path) => {
+                let key_pair = load_secret_key(path, None)?;
+                h(user, key_pair).await?
+            }
+            AuthData::KeyContent(val) => {
+                let key_pair = decode_secret_key(&val, None)?;
+                h(user, key_pair).await?
+            }
+        };
 
         if !auth_res.success() {
             anyhow::bail!("Authentication failed");
@@ -241,7 +298,7 @@ impl<'a> SshLogic<'a> {
         port: u16,
         dir: Option<String>,
         user: String,
-        password: String,
+        auth_data: AuthData,
     ) -> Result<Value> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
         let pair = logic.get_link_pair(ip.clone(), mac_addr.clone()).await?;
@@ -252,7 +309,7 @@ impl<'a> SshLogic<'a> {
             namespace: namespace.clone(),
             params: SftpReadDirParams {
                 user,
-                password,
+                auth_data,
                 ip,
                 dir,
                 port,
@@ -283,7 +340,7 @@ impl<'a> SshLogic<'a> {
         mac_addr: String,
         port: u16,
         user: String,
-        password: String,
+        auth_data: AuthData,
         filepath: String,
         data: Vec<u8>,
     ) -> Result<String> {
@@ -299,7 +356,7 @@ impl<'a> SshLogic<'a> {
                 ip,
                 port,
                 user,
-                password,
+                auth_data,
                 filepath,
                 data,
             },
@@ -330,7 +387,7 @@ impl<'a> SshLogic<'a> {
         mac_addr: String,
         port: u16,
         user: String,
-        password: String,
+        auth_data: AuthData,
         filepath: String,
         remove_type: String,
     ) -> Result<String> {
@@ -346,7 +403,7 @@ impl<'a> SshLogic<'a> {
                 ip,
                 port,
                 user,
-                password,
+                auth_data,
                 filepath,
                 remove_type,
             },
@@ -376,7 +433,7 @@ impl<'a> SshLogic<'a> {
         mac_addr: String,
         port: u16,
         user: String,
-        password: String,
+        auth_data: AuthData,
         filepath: String,
     ) -> Result<Vec<u8>> {
         let logic = automate::Logic::new(self.ctx.redis().clone());
@@ -391,7 +448,7 @@ impl<'a> SshLogic<'a> {
                 ip,
                 port,
                 user,
-                password,
+                auth_data,
                 filepath,
             },
         };

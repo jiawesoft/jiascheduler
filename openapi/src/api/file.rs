@@ -22,7 +22,7 @@ use crate::{
     local_time,
     logic::{
         self,
-        ssh::{ConnectParams, Session as SshSession},
+        ssh::{ConnectParams2, Session as SshSession},
     },
     response::{std_into_error, ApiStdResponse},
     return_err, return_ok, AppState,
@@ -82,6 +82,10 @@ pub mod types {
         pub file: Upload,
         pub namespace: String,
         pub file_path: String,
+        /// Login user selected from the instance `sys_users` list. Empty means
+        /// the default login user of the instance.
+        #[oai(default)]
+        pub sys_user: Option<String>,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -95,6 +99,10 @@ pub mod types {
         /// delete type, dir or file
         pub remove_type: String,
         pub path: String,
+        /// Login user selected from the instance `sys_users` list. Empty means
+        /// the default login user of the instance.
+        #[oai(default)]
+        pub sys_user: Option<String>,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -113,6 +121,11 @@ macro_rules! unwrap_or_response {
 }
 
 pub struct FileApi;
+
+/// Parse the `sys_user` field of a multipart upload form.
+fn multipart_sys_user(req: &types::SftpUploadPayload) -> Option<String> {
+    req.sys_user.clone().filter(|v| v.trim() != "")
+}
 
 #[OpenApi(prefix_path = "/file", tag = super::Tag::File)]
 impl FileApi {
@@ -186,6 +199,7 @@ impl FileApi {
         user_info: Data<&logic::types::UserInfo>,
         Query(instance_id): Query<String>,
         Query(file_path): Query<String>,
+        Query(sys_user): Query<Option<String>>,
     ) -> types::GetFileResponse {
         let svc = state.service();
         let instance_record = unwrap_or_response!(
@@ -195,13 +209,16 @@ impl FileApi {
         )
         .map_or(Err(anyhow!("not found")), |v| Ok(v));
         let instance_record = unwrap_or_response!(instance_record);
-        let password =
-            unwrap_or_response!(state.decrypt(instance_record.password.unwrap_or_default()));
+        let (user, auth_data) = unwrap_or_response!(super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            sys_user.as_deref()
+        ));
 
         let ssh_session = unwrap_or_response!(
-            SshSession::connect(ConnectParams {
-                user: instance_record.sys_user.unwrap_or_default(),
-                password,
+            SshSession::connect2(ConnectParams2 {
+                user,
+                auth: auth_data,
                 addrs: (instance_record.ip, 22),
             })
             .await
@@ -228,6 +245,7 @@ impl FileApi {
         user_info: Data<&logic::types::UserInfo>,
         Query(instance_id): Query<String>,
         Query(dir): Query<Option<String>>,
+        Query(sys_user): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
         let svc = state.service();
         let instance_record = svc
@@ -235,10 +253,14 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, instance_id.clone())
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let password = state.decrypt(instance_record.password.unwrap_or_default())?;
-        let ssh_session = SshSession::connect(ConnectParams {
-            user: instance_record.sys_user.unwrap_or_default(),
-            password,
+        let (user, auth_data) = super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            sys_user.as_deref(),
+        )?;
+        let ssh_session = SshSession::connect2(ConnectParams2 {
+            user,
+            auth: auth_data,
             addrs: (instance_record.ip, 22),
         })
         .await?;
@@ -303,15 +325,17 @@ impl FileApi {
         req: types::SftpUploadPayload,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
+        let sys_user = multipart_sys_user(&req);
         let instance_record = svc
             .instance
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let password = state.decrypt(instance_record.password.unwrap_or_default())?;
-        let ssh_session = SshSession::connect(ConnectParams {
-            user: instance_record.sys_user.unwrap_or_default(),
-            password,
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
+        let ssh_session = SshSession::connect2(ConnectParams2 {
+            user,
+            auth: auth_data,
             addrs: (instance_record.ip, 22),
         })
         .await?;
@@ -357,10 +381,14 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let password = state.decrypt(instance_record.password.unwrap_or_default())?;
-        let ssh_session = SshSession::connect(ConnectParams {
-            user: instance_record.sys_user.unwrap_or_default(),
-            password,
+        let (user, auth_data) = super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            req.sys_user.as_deref(),
+        )?;
+        let ssh_session = SshSession::connect2(ConnectParams2 {
+            user,
+            auth: auth_data,
             addrs: (instance_record.ip, 22),
         })
         .await?;
@@ -391,6 +419,7 @@ impl FileApi {
         user_info: Data<&logic::types::UserInfo>,
         Query(instance_id): Query<String>,
         Query(dir): Query<Option<String>>,
+        Query(sys_user): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
         let svc = state.service();
         let instance_record = svc
@@ -398,20 +427,16 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
-        let user = instance_record
-            .sys_user
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no system user"))?;
-        let password = instance_record
-            .password
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no password"))?;
+        let (user, auth_data) = super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            sys_user.as_deref(),
+        )?;
         let port = instance_record
             .ssh_port
             .filter(|&v| v != 0)
             .ok_or(anyhow!("no ssh port"))?;
 
-        let password = state.decrypt(password)?;
         let ret = svc
             .ssh
             .sftp_read_dir(
@@ -421,7 +446,7 @@ impl FileApi {
                 port,
                 dir,
                 user,
-                password,
+                auth_data,
             )
             .await?;
 
@@ -438,26 +463,19 @@ impl FileApi {
         req: types::SftpUploadPayload,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
+        let sys_user = multipart_sys_user(&req);
         let instance_record = svc
             .instance
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
 
-        let user = instance_record
-            .sys_user
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no sys user"))?;
-        let password = instance_record
-            .password
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no password"))?;
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
         let port = instance_record
             .ssh_port
             .filter(|&v| v != 0)
             .ok_or(anyhow!("no ssh port"))?;
-
-        let password = state.decrypt(password)?;
 
         let data = req.file.into_vec().await.map_err(std_into_error)?;
 
@@ -469,7 +487,7 @@ impl FileApi {
                 instance_record.mac_addr,
                 port,
                 user,
-                password,
+                auth_data,
                 req.file_path,
                 data,
             )
@@ -496,20 +514,15 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
-        let user = instance_record
-            .sys_user
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no sys user"))?;
-        let password = instance_record
-            .password
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no password"))?;
+        let (user, auth_data) = super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            req.sys_user.as_deref(),
+        )?;
         let port = instance_record
             .ssh_port
             .filter(|&v| v != 0)
             .ok_or(anyhow!("no ssh port"))?;
-
-        let password = state.decrypt(password)?;
 
         let ret = svc
             .ssh
@@ -519,7 +532,7 @@ impl FileApi {
                 instance_record.mac_addr,
                 port,
                 user,
-                password,
+                auth_data,
                 req.path,
                 req.remove_type,
             )
@@ -535,6 +548,7 @@ impl FileApi {
         user_info: Data<&logic::types::UserInfo>,
         Query(file_path): Query<String>,
         Query(instance_id): Query<String>,
+        Query(sys_user): Query<Option<String>>,
     ) -> types::GetFileResponse {
         let svc = state.service();
         let instance_record = unwrap_or_response!(
@@ -546,21 +560,16 @@ impl FileApi {
         let instance_record =
             unwrap_or_response!(instance_record.ok_or(anyhow!("not found instance")));
 
-        let user = unwrap_or_response!(instance_record
-            .sys_user
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no sys user")));
+        let (user, auth_data) = unwrap_or_response!(super::instance::resolve_user_auth(
+            &state,
+            &instance_record,
+            sys_user.as_deref()
+        ));
 
-        let password = unwrap_or_response!(instance_record
-            .password
-            .filter(|v| v != "")
-            .ok_or(anyhow!("no password")));
         let port = unwrap_or_response!(instance_record
             .ssh_port
             .filter(|&v| v != 0)
             .ok_or(anyhow!("no ssh port")));
-
-        let password = unwrap_or_response!(state.decrypt(password));
 
         let data = unwrap_or_response!(
             svc.ssh
@@ -570,7 +579,7 @@ impl FileApi {
                     instance_record.mac_addr,
                     port,
                     user,
-                    password,
+                    auth_data,
                     file_path.clone()
                 )
                 .await

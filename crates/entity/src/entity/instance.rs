@@ -3,10 +3,16 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SysUser {
     pub user: String,
     pub auth_data: Option<SshAuthData>,
+    /// Whether this user is the default login user of the instance.
+    ///
+    /// The default user is kept in sync with the `sys_user` column of the
+    /// `instance` table so both places always agree.
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 // The custom struct must derive `FromJsonQueryResult`, `Serialize` and `Deserialize`

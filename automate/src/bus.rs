@@ -139,6 +139,7 @@ impl Bus {
 
 #[tokio::test]
 async fn test_bus() {
+    use std::{thread::sleep, time::Duration};
     let redis_client =
         redis::Client::open("redis://:wang@127.0.0.1").expect("failed connect to redis");
     let bus = Bus::new(redis_client);
@@ -162,12 +163,16 @@ async fn test_bus() {
     .await
     .unwrap();
 
-    bus.recv(|key, val| {
-        Box::pin(async move {
-            println!("key:{key} val:{}", serde_json::to_string(&val).unwrap());
-            Ok(())
+    tokio::spawn(async move {
+        bus.recv(|key, val| {
+            Box::pin(async move {
+                println!("key:{key} val:{}", serde_json::to_string(&val).unwrap());
+                Ok(())
+            })
         })
-    })
-    .await
-    .unwrap();
+        .await
+        .unwrap();
+    });
+
+    sleep(Duration::from_secs(10));
 }

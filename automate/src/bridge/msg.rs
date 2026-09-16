@@ -11,6 +11,7 @@ use crate::{
     scheduler::types::{
         BaseJob, BundleOutput, JobAction, RunStatus, RuntimeAction, ScheduleStatus, ScheduleType,
     },
+    ssh::AuthData,
 };
 
 pub enum MsgState {
@@ -33,7 +34,7 @@ impl TransactionMsg {
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub struct SftpReadDirParams {
     pub user: String,
-    pub password: String,
+    pub auth_data: AuthData,
     pub ip: String,
     pub port: u16,
     pub dir: Option<String>,
@@ -44,7 +45,7 @@ pub struct SftpUploadParams {
     pub ip: String,
     pub port: u16,
     pub user: String,
-    pub password: String,
+    pub auth_data: AuthData,
     pub filepath: String,
     pub data: Vec<u8>,
 }
@@ -54,7 +55,7 @@ pub struct SftpDownloadParams {
     pub ip: String,
     pub port: u16,
     pub user: String,
-    pub password: String,
+    pub auth_data: AuthData,
     pub filepath: String,
 }
 
@@ -63,7 +64,7 @@ pub struct SftpRemoveParams {
     pub ip: String,
     pub port: u16,
     pub user: String,
-    pub password: String,
+    pub auth_data: AuthData,
     pub remove_type: String,
     pub filepath: String,
 }

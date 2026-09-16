@@ -54,7 +54,7 @@ pub struct PasswordParams<A: ToSocketAddrs, T: Into<String>> {
     pub addrs: A,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum AuthData {
     Password(String),
     KeyPath(String),
@@ -382,12 +382,12 @@ pub async fn read_dir(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     dir: Option<&str>,
 ) -> Result<DirDetail> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -446,7 +446,7 @@ pub async fn upload(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     filepath: &str,
     data: Vec<u8>,
 ) -> Result<()> {
@@ -455,9 +455,9 @@ pub async fn upload(
         .map(|v| v.to_str())
         .flatten();
 
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -479,13 +479,13 @@ pub async fn remove(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     remove_type: &str,
     filepath: &str,
 ) -> Result<()> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -505,12 +505,12 @@ pub async fn download(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     filepath: &str,
 ) -> Result<Vec<u8>> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;

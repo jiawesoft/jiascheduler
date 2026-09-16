@@ -1054,7 +1054,7 @@ impl
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             req.dir.filter(|v| v != "").as_deref(),
         )
         .await?;
@@ -1067,7 +1067,7 @@ impl
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             &req.filepath,
             req.data,
         )
@@ -1077,7 +1077,7 @@ impl
     }
 
     pub async fn sftp_download(req: SftpDownloadParams) -> Result<Value> {
-        let ret = ssh::download(&req.ip, req.port, &req.user, &req.password, &req.filepath).await?;
+        let ret = ssh::download(&req.ip, req.port, &req.user, req.auth_data, &req.filepath).await?;
         let ret = serde_json::to_value(ret)?;
         Ok(ret)
     }
@@ -1087,7 +1087,7 @@ impl
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             &req.remove_type,
             &req.filepath,
         )

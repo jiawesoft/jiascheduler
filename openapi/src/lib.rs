@@ -63,18 +63,16 @@ impl WebapiOptions {
         let real_path = shellexpand::full(config_path)?;
         let mut conf = Conf::parse(real_path.as_ref())?;
 
-        let _ = self
-            .database_url
-            .iter()
-            .map(|v| conf.database_url = v.to_string());
-        let _ = self
-            .redis_url
-            .iter()
-            .map(|v| conf.redis_url = v.to_string());
-        let _ = self
-            .bind_addr
-            .iter()
-            .map(|v| conf.bind_addr = v.to_string());
+        // command line parameters temporarily overwrite the configuration file
+        if let Some(v) = &self.database_url {
+            conf.database_url = v.to_string();
+        }
+        if let Some(v) = &self.redis_url {
+            conf.redis_url = v.to_string();
+        }
+        if let Some(v) = &self.bind_addr {
+            conf.bind_addr = v.to_string();
+        }
 
         Ok(conf)
     }

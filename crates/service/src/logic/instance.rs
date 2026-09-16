@@ -234,6 +234,7 @@ impl<'a> InstanceLogic<'a> {
                 instance::Column::Info,
                 instance::Column::Status,
                 instance::Column::SysUser,
+                instance::Column::SysUsers,
                 instance::Column::SshPort,
                 instance::Column::Password,
                 instance::Column::InstanceGroupId,
@@ -386,6 +387,8 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::InstanceGroupId)
             .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::Info)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -466,6 +469,8 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
             .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -656,6 +661,8 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::MacAddr)
             .column(instance::Column::InstanceId)
             .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -795,6 +802,11 @@ impl<'a> InstanceLogic<'a> {
         Ok(model)
     }
 
+    pub async fn find_by_id(&self, id: u64) -> Result<Option<instance::Model>> {
+        let model = Instance::find_by_id(id).one(&self.ctx.db).await?;
+        Ok(model)
+    }
+
     pub async fn save_group(
         &self,
         model: instance_group::ActiveModel,
@@ -912,6 +924,7 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::MacAddr)
             .column(instance::Column::Password)
             .column(instance::Column::SysUser)
+            .column(instance::Column::SysUsers)
             .column(instance::Column::SshPort)
             .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
@@ -1013,6 +1026,7 @@ impl<'a> InstanceLogic<'a> {
                 .column(instance::Column::Namespace)
                 .column(instance::Column::Info)
                 .column(instance::Column::SysUser)
+                .column(instance::Column::SysUsers)
                 .column(instance::Column::SshPort)
                 .column(instance::Column::Password)
                 .column(instance::Column::Status)
