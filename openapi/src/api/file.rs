@@ -7,38 +7,38 @@ use anyhow::anyhow;
 
 use chrono::{DateTime, Utc};
 use poem::{
-    handler,
-    http::{header, HeaderValue},
+    Body, Response, Result, handler,
+    http::{HeaderValue, header},
     session::Session,
     web::{Data, Query as WebQuery},
-    Body, Response, Result,
 };
 use poem_openapi::{
+    OpenApi,
     param::{Path, Query},
     payload::{Attachment, AttachmentType, Json, PlainText},
-    OpenApi,
 };
 use tokio::{
-    fs::{self, create_dir_all, File},
+    fs::{self, File, create_dir_all},
     io::AsyncWriteExt,
 };
 
 use crate::{
+    AppState,
     error::NoPermission,
     local_time,
     logic::{
         self,
         ssh::{ConnectParams2, Session as SshSession},
     },
-    response::{std_into_error, ApiStdResponse},
-    return_err, return_ok, AppState,
+    response::{ApiStdResponse, std_into_error},
+    return_err, return_ok,
 };
 
 pub mod types {
     use poem_openapi::{
+        ApiResponse, Multipart, Object,
         payload::{Attachment, PlainText},
         types::multipart::Upload,
-        ApiResponse, Multipart, Object,
     };
     use serde::{Deserialize, Serialize};
 
@@ -301,11 +301,8 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, instance_id.clone())
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(
-            &state,
-            &instance_record,
-            sys_user.as_deref(),
-        )?;
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
         let ssh_session = SshSession::connect2(ConnectParams2 {
             user,
             auth: auth_data,
@@ -429,11 +426,8 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(
-            &state,
-            &instance_record,
-            req.sys_user.as_deref(),
-        )?;
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, req.sys_user.as_deref())?;
         let ssh_session = SshSession::connect2(ConnectParams2 {
             user,
             auth: auth_data,
@@ -475,11 +469,8 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(
-            &state,
-            &instance_record,
-            sys_user.as_deref(),
-        )?;
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
         let port = instance_record
             .ssh_port
             .filter(|&v| v != 0)
@@ -612,7 +603,6 @@ impl FileApi {
             .ssh_port
             .filter(|&v| v != 0)
             .ok_or(anyhow!("no ssh port"))?;
-
         let comet_addr = svc
             .ssh
             .get_comet_addr(&instance_record.ip, &instance_record.mac_addr)
@@ -715,11 +705,8 @@ impl FileApi {
             .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
             .await?
             .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(
-            &state,
-            &instance_record,
-            req.sys_user.as_deref(),
-        )?;
+        let (user, auth_data) =
+            super::instance::resolve_user_auth(&state, &instance_record, req.sys_user.as_deref())?;
         let port = instance_record
             .ssh_port
             .filter(|&v| v != 0)
@@ -912,10 +899,12 @@ impl FileApi {
             sys_user.as_deref()
         ));
 
-        let port = unwrap_or_response!(instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port")));
+        let port = unwrap_or_response!(
+            instance_record
+                .ssh_port
+                .filter(|&v| v != 0)
+                .ok_or(anyhow!("no ssh port"))
+        );
 
         let data = unwrap_or_response!(
             svc.ssh
@@ -972,11 +961,8 @@ pub async fn download_stream(
         .await?
         .ok_or(anyhow!("not found instance"))?;
 
-    let (user, auth_data) = super::instance::resolve_user_auth(
-        &state,
-        &instance_record,
-        query.sys_user.as_deref(),
-    )?;
+    let (user, auth_data) =
+        super::instance::resolve_user_auth(&state, &instance_record, query.sys_user.as_deref())?;
 
     let port = instance_record
         .ssh_port
@@ -1010,7 +996,13 @@ pub async fn download_stream(
     // original name in the save dialog.
     let safe_name: String = name
         .chars()
-        .map(|c| if c.is_ascii_graphic() && c != '"' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_graphic() && c != '"' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let safe_name = if safe_name.is_empty() {
         "download.bin".to_string()

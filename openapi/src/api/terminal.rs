@@ -4,16 +4,16 @@ use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
 use crate::{logic, return_err_to_wsconn};
 
+use automate::Logic;
 use automate::scheduler::types::SshConnectOption;
 use automate::ssh::AuthData;
-use automate::Logic;
 use futures::{SinkExt, StreamExt};
 
 use poem::http::HeaderMap;
 use poem::session::Session as WebSession;
 use poem::web::websocket::WebSocket;
 use poem::web::{Data, Path, Query};
-use poem::{handler, FromRequest, IntoResponse, Request};
+use poem::{FromRequest, IntoResponse, Request, handler};
 use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async;
 
@@ -48,36 +48,27 @@ pub mod types {
     pub struct WebSshQuery {
         pub cols: u32,
         pub rows: u32,
+        /// user_source: manual | agent | sys_user
+        #[serde(default)]
+        pub user_source: Option<String>,
         /// Optional manual ssh username. When provided, manual account
         /// (user + auth) is preferred over the stored accounts.
         #[serde(default)]
-        pub user: Option<String>,
-        /// auth type: password | key_path | key_content
-        #[serde(default)]
         pub auth_type: Option<String>,
+        /// Optional manual ssh password
         #[serde(default)]
         pub password: Option<String>,
-        #[serde(default)]
-        pub key_path: Option<String>,
+        /// Optional manual ssh key_content
         #[serde(default)]
         pub key_content: Option<String>,
         #[serde(default)]
         pub port: Option<u16>,
-        /// Optional login user selected from the instance `sys_users` list.
-        /// When empty the default login user of the instance is used.
         #[serde(default)]
         pub sys_user: Option<String>,
     }
 }
 
 /// Resolve which ssh account should be used to reach the instance.
-///
-/// The precedence is:
-///
-/// 1. the account explicitly sent by the client (`user` + auth data)
-/// 2. the login user selected from the instance `sys_users` list
-/// 3. the default login user of the instance (the `sys_user` column)
-/// 4. the account reported by the agent at registration time
 fn resolve_account(
     inst: &crate::logic::types::UserServer,
     query: &types::WebSshQuery,
@@ -85,42 +76,48 @@ fn resolve_account(
 ) -> anyhow::Result<SshConnectOption> {
     let port = super::instance::pick_ssh_port(inst, query.port);
 
-    // 1. manual account
-    if let Some(user) = query.user.clone().filter(|v| v.trim() != "") {
+    // manual account
+    if query.user_source.as_ref().is_some_and(|v| v == "manual") {
+        let user = query
+            .sys_user
+            .as_ref()
+            .ok_or(anyhow::anyhow!("sys_user is required"))?;
+
         let auth_data = match query.auth_type.as_deref() {
-            Some("key_path") => AuthData::KeyPath(query.key_path.clone().unwrap_or_default()),
             Some("key_content") => {
                 AuthData::KeyContent(query.key_content.clone().unwrap_or_default())
             }
             _ => AuthData::Password(query.password.clone().unwrap_or_default()),
         };
         return Ok(SshConnectOption {
-            user,
+            user: user.clone(),
             port,
             auth_data,
         });
     }
 
-    let selected = query
-        .sys_user
-        .clone()
-        .filter(|v| v.trim() != "")
-        .or_else(|| inst.sys_user.clone().filter(|v| v.trim() != ""));
+    if query.user_source.is_none() || query.user_source.as_ref().is_some_and(|v| v != "agent") {
+        let selected = query
+            .sys_user
+            .clone()
+            .filter(|v| v.trim() != "")
+            .or_else(|| inst.sys_user.clone().filter(|v| v.trim() != ""));
 
-    // 2/3. a login user configured on the instance
-    if let Some(selected) = selected {
-        if let Some((user, auth_data)) =
-            super::instance::resolve_user_auth_of(&inst.sys_users, &selected, decrypt)?
-        {
-            return Ok(SshConnectOption {
-                user,
-                port,
-                auth_data,
-            });
+        // a login user configured on the instance
+        if let Some(selected) = selected {
+            if let Some((user, auth_data)) =
+                super::instance::resolve_user_auth_of(&inst.sys_users, &selected, decrypt)?
+            {
+                return Ok(SshConnectOption {
+                    user,
+                    port,
+                    auth_data,
+                });
+            }
         }
     }
 
-    // 4. the account reported by the agent
+    // the account reported by the agent
     let Some(ref register_data) = inst.register_data else {
         anyhow::bail!(
             "Notice: agent has not reported ssh connection options, please specify the account manually"

@@ -79,11 +79,7 @@ struct Transfer {
 }
 
 /// Establish one SSH + SFTP session.
-pub async fn open(
-    user: &str,
-    auth: AuthData,
-    port: u16,
-) -> Result<(Session, RawSftpSession)> {
+pub async fn open(user: &str, auth: AuthData, port: u16) -> Result<(Session, RawSftpSession)> {
     let ssh = Session::connect2(ConnectParams2 {
         user: user.to_string(),
         auth,
@@ -165,9 +161,7 @@ pub async fn drop_session(session_id: &str) {
     registry().lock().await.remove(session_id);
 }
 
-async fn lock_transfer<'a>(
-    transfer: &'a Arc<Mutex<Transfer>>,
-) -> MutexGuard<'a, Transfer> {
+async fn lock_transfer<'a>(transfer: &'a Arc<Mutex<Transfer>>) -> MutexGuard<'a, Transfer> {
     let mut guard = transfer.lock().await;
     guard.last_used = Instant::now();
     guard
@@ -200,10 +194,7 @@ pub async fn write_chunk(
             t.sftp.create(filepath).await?
         } else {
             t.sftp
-                .open_with_flags(
-                    filepath,
-                    OpenFlags::CREATE | OpenFlags::WRITE,
-                )
+                .open_with_flags(filepath, OpenFlags::CREATE | OpenFlags::WRITE)
                 .await?
         };
         t.upload_file = Some(file);

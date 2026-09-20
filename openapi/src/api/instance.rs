@@ -97,6 +97,7 @@ pub mod types {
         pub ssh_port: Option<u16>,
         pub sys_user: Option<String>,
         pub sys_users: Vec<SysUser>,
+        /// agent report client ssh user
         pub ssh_user: Option<String>,
         pub ssh_auth_type: Option<String>,
         pub created_time: String,
@@ -293,9 +294,9 @@ pub(crate) fn resolve_user_auth(
 ) -> anyhow::Result<(String, automate::ssh::AuthData)> {
     let user = pick_sys_user(instance_record, selected).unwrap_or_default();
 
-    if let Some(found) =
-        resolve_user_auth_of(&instance_record.sys_users, &user, |v| decrypt_secret(state, v))?
-    {
+    if let Some(found) = resolve_user_auth_of(&instance_record.sys_users, &user, |v| {
+        decrypt_secret(state, v)
+    })? {
         return Ok(found);
     }
 
