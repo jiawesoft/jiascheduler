@@ -2,18 +2,22 @@ use std::sync::Arc;
 
 use crate::logic::ssh::{ConnectParams, Session};
 use crate::state::AppState;
-use crate::{logic, return_err_to_wsconn};
+use crate::{logic, return_err, return_err_to_wsconn, return_ok};
 
+use anyhow::{Context, anyhow};
 use automate::Logic;
 use automate::scheduler::types::SshConnectOption;
 use automate::ssh::AuthData;
 use futures::{SinkExt, StreamExt};
-
+use nanoid::nanoid;
 use poem::http::HeaderMap;
 use poem::session::Session as WebSession;
 use poem::web::websocket::WebSocket;
-use poem::web::{Data, Path, Query};
+use poem::web::{Data, Json, Path, Query};
 use poem::{FromRequest, IntoResponse, Request, handler};
+use poem_openapi::OpenApi;
+use poem_openapi::param::Query as ApiQuery;
+use redis::Commands;
 use tokio::sync::RwLock;
 use tokio_tungstenite::connect_async;
 
@@ -21,57 +25,103 @@ use tracing::{debug, error};
 use url::Url;
 use utils::json_into;
 
-pub mod types {
-    use serde::{Deserialize, Serialize};
-    use serde_repr::*;
+pub struct TerminalApi;
 
-    #[derive(Debug, Deserialize_repr, Serialize_repr)]
-    #[repr(u8)]
-    pub enum MsgType {
-        Resize = 1,
-        Data = 2,
-        Ping = 3,
+#[OpenApi(prefix_path = "/terminal", tag = super::Tag::Terminal)]
+impl TerminalApi {
+    #[oai(path = "/session/create", method = "post")]
+    pub async fn create_session(
+        &self,
+        state: Data<&AppState>,
+        _session: &WebSession,
+        user_info: Data<&logic::types::UserInfo>,
+        Json(req): Json<crate::api::types::terminal::CreateSessionReq>,
+    ) -> crate::api_response!(crate::api::types::terminal::CreateSessionResp) {
+        let can_manage_instance = state
+            .can_manage_instance(&user_info.user_id)
+            .await
+            .context("check permission")?;
+        let svc = state.service();
+
+        let instance_record = if can_manage_instance {
+            svc.instance
+                .get_one_admin_server(None, None, Some(req.instance_id.clone()))
+                .await
+        } else {
+            svc.instance
+                .get_one_user_server(
+                    None,
+                    None,
+                    Some(req.instance_id.clone()),
+                    user_info.user_id.clone(),
+                )
+                .await
+        };
+        let instance_record =
+            instance_record?.ok_or(anyhow::anyhow!("not found {}", req.instance_id))?;
+
+        let connect_opts = resolve_account(&instance_record, &req, |v| {
+            super::instance::decrypt_secret(&state, v)
+        })
+        .context("failed resolve account")?;
+
+        let terminal_session = crate::api::types::terminal::TerminalSession {
+            connect_opts,
+            created_username: user_info.username.clone(),
+            instance: instance_record,
+        };
+
+        let session_id = nanoid!();
+        state
+            .redis()
+            .set_ex::<_, _, ()>(
+                &session_id,
+                serde_json::to_string(&terminal_session)
+                    .map_err(|e| anyhow!("{e}"))
+                    .context("encode connect options")?,
+                24 * 3600,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        return_ok!(crate::api::types::terminal::CreateSessionResp {
+            session_id: session_id.clone()
+        });
     }
 
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct Msg {
-        pub r#type: MsgType,
-        #[serde(default)]
-        pub msg: String,
-        #[serde(default)]
-        pub cols: u32,
-        #[serde(default)]
-        pub rows: u32,
-    }
+    #[oai(path = "/session/detail", method = "get")]
+    pub async fn get_session(
+        &self,
+        state: Data<&AppState>,
+        _session: &WebSession,
+        ApiQuery(session_id): ApiQuery<String>,
+        user_info: Data<&logic::types::UserInfo>,
+    ) -> crate::api_response!(crate::api::types::terminal::GetTerminalSessionResp) {
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
 
-    #[derive(Deserialize)]
-    pub struct WebSshQuery {
-        pub cols: u32,
-        pub rows: u32,
-        /// user_source: manual | agent | sys_user
-        #[serde(default)]
-        pub user_source: Option<String>,
-        /// Optional manual ssh username. When provided, manual account
-        /// (user + auth) is preferred over the stored accounts.
-        #[serde(default)]
-        pub auth_type: Option<String>,
-        /// Optional manual ssh password
-        #[serde(default)]
-        pub password: Option<String>,
-        /// Optional manual ssh key_content
-        #[serde(default)]
-        pub key_content: Option<String>,
-        #[serde(default)]
-        pub port: Option<u16>,
-        #[serde(default)]
-        pub sys_user: Option<String>,
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
+
+        return_ok!(json_into::<
+            _,
+            crate::api::types::terminal::GetTerminalSessionResp,
+        >(&terminal_session)?);
     }
 }
 
 /// Resolve which ssh account should be used to reach the instance.
 fn resolve_account(
     inst: &crate::logic::types::UserServer,
-    query: &types::WebSshQuery,
+    query: &crate::api::types::terminal::CreateSessionReq,
     decrypt: impl Fn(String) -> anyhow::Result<String>,
 ) -> anyhow::Result<SshConnectOption> {
     let port = super::instance::pick_ssh_port(inst, query.port);
@@ -158,7 +208,9 @@ pub async fn webssh(
     state: Data<&AppState>,
     _session: &WebSession,
     user_info: Data<&logic::types::UserInfo>,
-    Query(types::WebSshQuery { rows, cols, .. }): Query<types::WebSshQuery>,
+    Query(crate::api::types::terminal::WebSshQuery { rows, cols, .. }): Query<
+        crate::api::types::terminal::WebSshQuery,
+    >,
     ws: WebSocket,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
@@ -242,12 +294,12 @@ pub async fn proxy_webssh(
     req: &Request,
     headers: &HeaderMap,
     state: Data<&AppState>,
-    Path(instance_id): Path<String>,
+    Path(session_id): Path<String>,
     user_info: Data<&logic::types::UserInfo>,
-    Query(query): Query<types::WebSshQuery>,
+    Query(query): Query<crate::api::types::terminal::WebSshQuery>,
 ) -> impl IntoResponse {
     let state_clone = state.clone();
-    let user_id = user_info.user_id.clone();
+    let username = user_info.username.clone();
 
     let ws = WebSocket::from_request_without_body(req)
         .await
@@ -259,40 +311,34 @@ pub async fn proxy_webssh(
     ws.on_upgrade(move |socket| async move {
         let (mut clientsink, mut clientstream) = socket.split();
 
-        let svc = state_clone.service();
-
-        let can_manage_instance = match state_clone.can_manage_instance(&user_id).await {
+        let terminal_session = match state_clone
+            .redis()
+            .get::<_, String>(&session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+        {
             Ok(v) => v,
             Err(e) => {
                 return_err_to_wsconn!(
                     clientsink,
-                    format!("Notice: failed to valid permissions, {e}")
+                    format!("Notice: failed to get terminal session, {e}")
                 );
             }
         };
 
-        let instance_record = if can_manage_instance {
-            svc.instance
-                .get_one_admin_server(None, None, Some(instance_id))
-                .await
-        } else {
-            svc.instance
-                .get_one_user_server(None, None, Some(instance_id), user_id.clone())
-                .await
-        };
-
-        let instance_record = match instance_record {
-            Ok(Some(v)) => v,
-            Ok(None) => {
-                return_err_to_wsconn!(clientsink, "Notice: no instance found");
-            }
-            Err(e) => {
-                return_err_to_wsconn!(clientsink, format!("Notice: failed get instance, {e}"));
-            }
-        };
+        if terminal_session.created_username.ne(&username) {
+            return_err_to_wsconn!(clientsink, "Notice: no permission");
+        }
 
         let pair = match Logic::new(state_clone.redis().clone())
-            .get_link_pair(&instance_record.ip, &instance_record.mac_addr)
+            .get_link_pair(
+                &terminal_session.instance.ip,
+                &terminal_session.instance.mac_addr,
+            )
             .await
         {
             Ok(v) => v,
@@ -306,27 +352,17 @@ pub async fn proxy_webssh(
 
         let mut u = Url::parse(format!("ws://{}/ssh/tunnel", pair.1.comet_addr).as_ref()).unwrap();
 
-        // Resolve the ssh account: explicit client account first, then the
-        // login user configured on the instance, then the agent-reported one.
-        let decrypt_state = state_clone.clone();
-        let connect_opts = match resolve_account(&instance_record, &query, |v| {
-            super::instance::decrypt_secret(&decrypt_state, v)
-        }) {
-            Ok(v) => v,
-            Err(e) => {
-                return_err_to_wsconn!(clientsink, format!("{e}"));
-            }
-        };
-
         u.query_pairs_mut()
             .append_pair("cols", &query.cols.to_string())
             .append_pair("rows", &query.rows.to_string())
-            .append_pair("ip", &instance_record.ip)
-            .append_pair("namespace", &instance_record.namespace)
-            .append_pair("mac_addr", &instance_record.mac_addr)
+            .append_pair("ip", &terminal_session.instance.ip)
+            .append_pair("namespace", &terminal_session.instance.namespace)
+            .append_pair("mac_addr", &terminal_session.instance.mac_addr)
             .append_pair(
                 "connect_options",
-                serde_json::to_string(&connect_opts).unwrap().as_ref(),
+                serde_json::to_string(&terminal_session.connect_opts)
+                    .unwrap()
+                    .as_ref(),
             );
 
         let mut ws_request = http::Request::builder()

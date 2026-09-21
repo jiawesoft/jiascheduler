@@ -1,4 +1,5 @@
 pub mod job;
+pub mod terminal;
 pub mod workflow;
 
 pub use job::*;

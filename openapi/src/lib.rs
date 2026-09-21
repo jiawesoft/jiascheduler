@@ -270,7 +270,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             get(terminal::webssh).with(AuthMiddleware),
         )
         .at(
-            "/terminal/tunnel/:instance_id",
+            "/terminal/tunnel/:session_id",
             get(terminal::proxy_webssh).with(AuthMiddleware),
         )
         // Streaming download. Poem refuses two `nest` calls on the same prefix,

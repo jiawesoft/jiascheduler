@@ -46,6 +46,7 @@ pub enum Tag {
     Migration,
     Tag,
     Workflow,
+    Terminal,
 }
 
 pub struct OneOfValidator(Vec<String>);

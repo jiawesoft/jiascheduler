@@ -1,11 +1,7 @@
-use std::{
-    path::PathBuf,
-    time::{Duration, UNIX_EPOCH},
-};
+use std::path::PathBuf;
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 
-use chrono::{DateTime, Utc};
 use poem::{
     Body, Response, Result, handler,
     http::{HeaderValue, header},
@@ -17,6 +13,7 @@ use poem_openapi::{
     param::{Path, Query},
     payload::{Attachment, AttachmentType, Json, PlainText},
 };
+use redis::Commands;
 use tokio::{
     fs::{self, File, create_dir_all},
     io::AsyncWriteExt,
@@ -25,11 +22,7 @@ use tokio::{
 use crate::{
     AppState,
     error::NoPermission,
-    local_time,
-    logic::{
-        self,
-        ssh::{ConnectParams2, Session as SshSession},
-    },
+    logic::{self},
     response::{ApiStdResponse, std_into_error},
     return_err, return_ok,
 };
@@ -84,14 +77,9 @@ pub mod types {
 
     #[derive(Debug, Multipart)]
     pub struct SftpUploadPayload {
-        pub instance_id: String,
         pub file: Upload,
-        pub namespace: String,
         pub file_path: String,
-        /// Login user selected from the instance `sys_users` list. Empty means
-        /// the default login user of the instance.
-        #[oai(default)]
-        pub sys_user: Option<String>,
+        pub terminal_session_id: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -120,9 +108,9 @@ pub mod types {
     /// only inflates it 1.33x and stays far below the frame limit.
     #[derive(Object, Serialize, Deserialize, Default)]
     pub struct SftpUploadChunkPayload {
-        pub instance_id: String,
         pub file_path: String,
         pub session_id: String,
+        pub terminal_session_id: String,
         pub offset: u64,
         pub data: String,
     }
@@ -152,9 +140,9 @@ pub mod types {
 
     #[derive(Object, Serialize, Deserialize, Default)]
     pub struct SftpFinishPayload {
-        pub instance_id: String,
         pub file_path: String,
         pub session_id: String,
+        pub terminal_session_id: String,
         pub total_size: u64,
     }
 }
@@ -169,11 +157,6 @@ macro_rules! unwrap_or_response {
 }
 
 pub struct FileApi;
-
-/// Parse the `sys_user` field of a multipart upload form.
-fn multipart_sys_user(req: &types::SftpUploadPayload) -> Option<String> {
-    req.sys_user.clone().filter(|v| v.trim() != "")
-}
 
 #[OpenApi(prefix_path = "/file", tag = super::Tag::File)]
 impl FileApi {
@@ -240,252 +223,40 @@ impl FileApi {
         types::GetFileResponse::Ok(attachment)
     }
 
-    #[oai(path = "/sftp/download", method = "get")]
-    async fn download(
-        &self,
-        state: Data<&AppState>,
-        user_info: Data<&logic::types::UserInfo>,
-        Query(instance_id): Query<String>,
-        Query(file_path): Query<String>,
-        Query(sys_user): Query<Option<String>>,
-    ) -> types::GetFileResponse {
-        let svc = state.service();
-        let instance_record = unwrap_or_response!(
-            svc.instance
-                .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
-                .await
-        )
-        .map_or(Err(anyhow!("not found")), |v| Ok(v));
-        let instance_record = unwrap_or_response!(instance_record);
-        let (user, auth_data) = unwrap_or_response!(super::instance::resolve_user_auth(
-            &state,
-            &instance_record,
-            sys_user.as_deref()
-        ));
-
-        let ssh_session = unwrap_or_response!(
-            SshSession::connect2(ConnectParams2 {
-                user,
-                auth: auth_data,
-                addrs: (instance_record.ip, 22),
-            })
-            .await
-        );
-
-        let sftp_session = unwrap_or_response!(ssh_session.sftp_client().await);
-        let data = unwrap_or_response!(sftp_session.read(&file_path).await);
-
-        let name = std::path::Path::new(&file_path)
-            .file_name()
-            .map(|v| v.to_str())
-            .flatten()
-            .map_or("download.tmp".to_string(), |v| v.to_owned());
-
-        let mut attachment = Attachment::new(data).attachment_type(AttachmentType::Attachment);
-        attachment = attachment.filename(name);
-        types::GetFileResponse::Ok(attachment)
-    }
-
-    #[oai(path = "/sftp/read-dir", method = "get")]
-    async fn sftp_read_dir(
-        &self,
-        state: Data<&AppState>,
-        user_info: Data<&logic::types::UserInfo>,
-        Query(instance_id): Query<String>,
-        Query(dir): Query<Option<String>>,
-        Query(sys_user): Query<Option<String>>,
-    ) -> Result<ApiStdResponse<types::ReadDirResp>> {
-        let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, instance_id.clone())
-            .await?
-            .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
-        let ssh_session = SshSession::connect2(ConnectParams2 {
-            user,
-            auth: auth_data,
-            addrs: (instance_record.ip, 22),
-        })
-        .await?;
-
-        let sft_session = ssh_session.sftp_client().await?;
-
-        let current_dir = sft_session
-            .canonicalize(dir.filter(|v| v != "").map_or("./".to_string(), |v| v))
-            .await
-            .map_err(std_into_error)?;
-
-        let dir = sft_session
-            .read_dir(&current_dir)
-            .await
-            .map_err(std_into_error)?;
-
-        let mut resp = types::ReadDirResp {
-            current_dir,
-            entry: vec![],
-        };
-
-        for entry in dir {
-            let meta = entry.metadata();
-            let permissions = format!("{}", meta.permissions());
-            let file_type = format!("{:?}", entry.file_type()).to_string();
-            let file_name = entry.file_name();
-            let modified = local_time!(DateTime::<Utc>::from(
-                UNIX_EPOCH + Duration::from_secs(meta.mtime.unwrap_or(0) as u64),
-            ));
-            let user = if let Some(user) = &meta.user {
-                user.to_string()
-            } else {
-                meta.uid.unwrap_or(0).to_string()
-            };
-
-            let group = if let Some(user) = &meta.group {
-                user.to_string()
-            } else {
-                meta.gid.unwrap_or(0).to_string()
-            };
-            let size = meta.size.unwrap_or(0);
-
-            resp.entry.push(types::DirEntry {
-                file_name,
-                file_type,
-                permissions,
-                modified,
-                size,
-                user,
-                group,
-            })
-        }
-
-        return_ok!(resp)
-    }
-
-    #[oai(path = "/sftp/upload", method = "post")]
-    async fn sftp_upload(
-        &self,
-        state: Data<&AppState>,
-        user_info: Data<&logic::types::UserInfo>,
-        req: types::SftpUploadPayload,
-    ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
-        let svc = state.service();
-        let sys_user = multipart_sys_user(&req);
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
-        let ssh_session = SshSession::connect2(ConnectParams2 {
-            user,
-            auth: auth_data,
-            addrs: (instance_record.ip, 22),
-        })
-        .await?;
-
-        let dir = std::path::Path::new(&req.file_path)
-            .parent()
-            .map(|v| v.to_str())
-            .flatten();
-
-        let sftp_session = ssh_session.sftp_client().await?;
-
-        if let Some(dir) = dir {
-            let is_exists = sftp_session.try_exists(dir).await.map_err(std_into_error)?;
-            if !is_exists {
-                sftp_session.create_dir(dir).await.map_err(std_into_error)?;
-            }
-        }
-
-        let data = req.file.into_vec().await.map_err(std_into_error)?;
-
-        let mut file = sftp_session
-            .create(req.file_path)
-            .await
-            .map_err(std_into_error)?;
-
-        file.write_all(&data).await.map_err(std_into_error)?;
-
-        return_ok!(types::SftpUploadFileRes {
-            result: "success".to_string()
-        })
-    }
-
-    #[oai(path = "/sftp/remove", method = "post")]
-    async fn sftp_remove(
-        &self,
-        state: Data<&AppState>,
-        user_info: Data<&logic::types::UserInfo>,
-        Json(req): Json<types::SftpRemovePayload>,
-    ) -> Result<ApiStdResponse<types::SftpRemoveFileRes>> {
-        let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .map_or(Err(anyhow!("not found")), |v| Ok(v))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, req.sys_user.as_deref())?;
-        let ssh_session = SshSession::connect2(ConnectParams2 {
-            user,
-            auth: auth_data,
-            addrs: (instance_record.ip, 22),
-        })
-        .await?;
-
-        let sftp_session = ssh_session.sftp_client().await?;
-
-        if req.remove_type == "dir" {
-            sftp_session
-                .remove_dir(req.path)
-                .await
-                .map_err(std_into_error)?;
-        } else {
-            sftp_session
-                .remove_file(req.path)
-                .await
-                .map_err(std_into_error)?;
-        }
-
-        return_ok!(types::SftpRemoveFileRes {
-            result: "success".to_string()
-        })
-    }
-
     #[oai(path = "/sftp/tunnel/read-dir", method = "get")]
     async fn sftp_tunnel_read_dir(
         &self,
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
-        Query(instance_id): Query<String>,
+        Query(terminal_session_id): Query<String>,
         Query(dir): Query<Option<String>>,
-        Query(sys_user): Query<Option<String>>,
     ) -> Result<ApiStdResponse<types::ReadDirResp>> {
         let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         let ret = svc
             .ssh
             .sftp_read_dir(
-                instance_record.namespace,
-                instance_record.ip,
-                instance_record.mac_addr,
-                port,
+                terminal_session.instance.namespace,
+                terminal_session.instance.ip,
+                terminal_session.instance.mac_addr,
+                terminal_session.connect_opts.port,
                 dir,
-                user,
-                auth_data,
+                terminal_session.connect_opts.user,
+                terminal_session.connect_opts.auth_data,
             )
             .await?;
 
@@ -504,31 +275,31 @@ impl FileApi {
         req: types::SftpUploadPayload,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
-        let sys_user = multipart_sys_user(&req);
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&req.terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         let data = req.file.into_vec().await.map_err(std_into_error)?;
 
         let ret = svc
             .ssh
             .sftp_upload(
-                req.namespace,
-                instance_record.ip,
-                instance_record.mac_addr,
-                port,
-                user,
-                auth_data,
+                terminal_session.instance.namespace,
+                terminal_session.instance.ip,
+                terminal_session.instance.mac_addr,
+                terminal_session.connect_opts.port,
+                terminal_session.connect_opts.user,
+                terminal_session.connect_opts.auth_data,
                 req.file_path,
                 data,
             )
@@ -546,26 +317,31 @@ impl FileApi {
         Json(req): Json<types::SftpFinishPayload>,
     ) -> Result<ApiStdResponse<types::SftpChunkStartRes>> {
         let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(&state, &instance_record, None)?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&req.terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         let chunk_size = svc
             .ssh
             .sftp_upload_start(
-                instance_record.namespace,
-                instance_record.ip,
-                instance_record.mac_addr,
-                port,
-                user,
-                auth_data,
+                terminal_session.instance.namespace,
+                terminal_session.instance.ip,
+                terminal_session.instance.mac_addr,
+                terminal_session.connect_opts.port,
+                terminal_session.connect_opts.user,
+                terminal_session.connect_opts.auth_data,
                 req.file_path,
                 req.total_size,
                 req.session_id.clone(),
@@ -591,21 +367,28 @@ impl FileApi {
         Json(req): Json<types::SftpUploadChunkPayload>,
     ) -> Result<ApiStdResponse<types::SftpChunkRes>> {
         use rustc_serialize::base64::FromBase64;
-
         let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(&state, &instance_record, None)?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&req.terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
+
         let comet_addr = svc
             .ssh
-            .get_comet_addr(&instance_record.ip, &instance_record.mac_addr)
+            .get_comet_addr(
+                &terminal_session.instance.ip,
+                &terminal_session.instance.mac_addr,
+            )
             .await?;
 
         let data = req.data.as_bytes().from_base64().map_err(std_into_error)?;
@@ -613,18 +396,18 @@ impl FileApi {
         let next_offset = svc
             .ssh
             .sftp_upload_chunk(
-                instance_record.namespace,
+                terminal_session.instance.namespace,
                 comet_addr,
-                instance_record.mac_addr,
+                terminal_session.instance.mac_addr,
                 automate::bridge::msg::SftpUploadChunkParams {
                     session_id: req.session_id,
                     seq: req.offset / (logic::ssh::SFTP_CHUNK_SIZE as u64),
                     offset: req.offset,
                     data,
-                    ip: instance_record.ip,
-                    port,
-                    user,
-                    auth_data,
+                    ip: terminal_session.instance.ip,
+                    port: terminal_session.connect_opts.port,
+                    user: terminal_session.connect_opts.user,
+                    auth_data: terminal_session.connect_opts.auth_data,
                     filepath: req.file_path,
                 },
             )
@@ -646,35 +429,42 @@ impl FileApi {
         Json(req): Json<types::SftpFinishPayload>,
     ) -> Result<ApiStdResponse<types::SftpUploadFileRes>> {
         let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) = super::instance::resolve_user_auth(&state, &instance_record, None)?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&req.terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         let comet_addr = svc
             .ssh
-            .get_comet_addr(&instance_record.ip, &instance_record.mac_addr)
+            .get_comet_addr(
+                &terminal_session.instance.ip,
+                &terminal_session.instance.mac_addr,
+            )
             .await?;
 
         let data = svc
             .ssh
             .sftp_upload_finish(
-                instance_record.namespace,
+                terminal_session.instance.namespace,
                 comet_addr,
-                instance_record.mac_addr,
+                terminal_session.instance.mac_addr,
                 automate::bridge::msg::SftpUploadFinishParams {
                     session_id: req.session_id,
                     total_size: req.total_size,
-                    ip: instance_record.ip,
-                    port,
-                    user,
-                    auth_data,
+                    ip: terminal_session.instance.ip,
+                    port: terminal_session.connect_opts.port,
+                    user: terminal_session.connect_opts.user,
+                    auth_data: terminal_session.connect_opts.auth_data,
                     filepath: req.file_path,
                 },
             )
