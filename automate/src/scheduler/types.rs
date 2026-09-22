@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::ssh::{AuthData, ssh_copy_id};
+use crate::ssh::AuthData;
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum JobAction {
@@ -253,6 +253,7 @@ pub struct SshConnectOption {
 }
 
 impl SshConnectOption {
+    #[cfg(not(target_os = "windows"))]
     pub fn build(
         user: Option<String>,
         password: Option<String>,
@@ -293,7 +294,7 @@ impl SshConnectOption {
         };
 
         if let AuthData::KeyPath(ref v) = auth_data {
-            if let Err(e) = ssh_copy_id(v.to_string()) {
+            if let Err(e) = crate::ssh::ssh_copy_id(v.to_string()) {
                 error!("failed ssh copy id {e}");
             }
         }
@@ -303,6 +304,16 @@ impl SshConnectOption {
             port: port.unwrap_or(22),
             auth_data: auth_data,
         });
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn build(
+        _user: Option<String>,
+        _password: Option<String>,
+        _keypath: Option<String>,
+        _port: Option<u16>,
+    ) -> Option<SshConnectOption> {
+        None
     }
 }
 

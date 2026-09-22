@@ -40,5 +40,7 @@ russh-sftp.workspace = true
 serde_repr.workspace = true
 mac_address.workspace = true
 nix.workspace = true
-users.workspace = true
 dirs.workspace = true
+
+[target.'cfg(not(target_os="windows"))'.dependencies]
+users.workspace = true

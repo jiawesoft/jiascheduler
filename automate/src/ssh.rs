@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
+
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
@@ -521,7 +522,9 @@ pub async fn download(
     Ok(data)
 }
 
+#[cfg(not(target_os = "windows"))]
 pub fn ssh_copy_id(key_path: String) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
     let p = Path::new(&key_path);
     let authorized_keys_path = p
         .parent()
@@ -529,15 +532,17 @@ pub fn ssh_copy_id(key_path: String) -> Result<()> {
             "{key_path} terminates in a root or prefix"
         ))?
         .join("authorized_keys");
-    let authorized_keys_conent = fs::read_to_string(&authorized_keys_path)?;
     let pub_key_content = fs::read_to_string(format!("{key_path}.pub"))?;
-    if !authorized_keys_conent.contains(&pub_key_content) {
+    if std::path::Path::new(&authorized_keys_path).exists()
+        && fs::read_to_string(&authorized_keys_path)?.contains(&pub_key_content)
+    {
+        Ok(())
+    } else {
         let mut file = OpenOptions::new()
+            .mode(644)
             .append(true)
             .create(true)
             .open(&authorized_keys_path)?;
-        file.write_all(pub_key_content.as_bytes())?;
+        Ok(file.write_all(pub_key_content.as_bytes())?)
     }
-
-    Ok(())
 }
