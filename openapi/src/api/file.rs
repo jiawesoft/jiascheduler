@@ -89,14 +89,10 @@ pub mod types {
 
     #[derive(Object, Serialize, Default)]
     pub struct SftpRemovePayload {
-        pub instance_id: String,
         /// delete type, dir or file
         pub remove_type: String,
         pub path: String,
-        /// Login user selected from the instance `sys_users` list. Empty means
-        /// the default login user of the instance.
-        #[oai(default)]
-        pub sys_user: Option<String>,
+        pub terminal_session_id: String,
     }
 
     #[derive(Object, Serialize, Default)]
@@ -484,33 +480,35 @@ impl FileApi {
         user_info: Data<&logic::types::UserInfo>,
         Json(req): Json<types::SftpRemovePayload>,
     ) -> Result<ApiStdResponse<types::SftpRemoveFileRes>> {
+        let svc = state.service();
         let v = vec!["file", "dir"];
         if !v.contains(&req.remove_type.as_str()) {
             return_err!("invalid remove type");
         }
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&req.terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
 
-        let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, req.instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, req.sys_user.as_deref())?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         let ret = svc
             .ssh
             .sftp_remove(
-                instance_record.namespace,
-                instance_record.ip,
-                instance_record.mac_addr,
-                port,
-                user,
-                auth_data,
+                terminal_session.instance.namespace,
+                terminal_session.instance.ip,
+                terminal_session.instance.mac_addr,
+                terminal_session.connect_opts.port,
+                terminal_session.connect_opts.user,
+                terminal_session.connect_opts.auth_data,
                 req.path,
                 req.remove_type,
             )
@@ -526,21 +524,23 @@ impl FileApi {
         state: Data<&AppState>,
         user_info: Data<&logic::types::UserInfo>,
         Query(file_path): Query<String>,
-        Query(instance_id): Query<String>,
-        Query(sys_user): Query<Option<String>>,
+        Query(terminal_session_id): Query<String>,
     ) -> Result<ApiStdResponse<types::SftpChunkRes>> {
         let svc = state.service();
-        let instance_record = svc
-            .instance
-            .get_one_user_server_with_permission(state.clone(), &user_info, instance_id)
-            .await?
-            .ok_or(anyhow!("not found instance"))?;
-        let (user, auth_data) =
-            super::instance::resolve_user_auth(&state, &instance_record, sys_user.as_deref())?;
-        let port = instance_record
-            .ssh_port
-            .filter(|&v| v != 0)
-            .ok_or(anyhow!("no ssh port"))?;
+        let terminal_session = state
+            .redis()
+            .get::<_, String>(&terminal_session_id)
+            .map_err(|e| anyhow!("{e}"))
+            .map(|v| {
+                serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                    .map_err(|e| anyhow!("{e}"))
+            })
+            .flatten()
+            .context("failed get session")?;
+
+        if terminal_session.created_username.ne(&user_info.username) {
+            return_err!("no permission");
+        }
 
         // Downloads reuse a session as well: the client pulls chunks with the
         // returned session_id.
@@ -548,12 +548,12 @@ impl FileApi {
         let (size, _chunk) = svc
             .ssh
             .sftp_download_stat(
-                instance_record.namespace,
-                instance_record.ip,
-                instance_record.mac_addr,
-                port,
-                user,
-                auth_data,
+                terminal_session.instance.namespace,
+                terminal_session.instance.ip,
+                terminal_session.instance.mac_addr,
+                terminal_session.connect_opts.port,
+                terminal_session.connect_opts.user,
+                terminal_session.connect_opts.auth_data,
                 file_path,
                 session_id.clone(),
             )
@@ -726,17 +726,10 @@ impl FileApi {
 #[derive(serde::Deserialize)]
 pub struct DownloadStreamQuery {
     pub file_path: String,
-    pub instance_id: String,
-    #[serde(default)]
-    pub sys_user: Option<String>,
+    pub terminal_session_id: String,
 }
 
 /// Stream a remote file straight to the browser.
-///
-/// This is deliberately a plain poem handler instead of an `#[oai]` endpoint:
-/// OpenAPI endpoints have to produce a value, while streaming needs to write the
-/// response body incrementally. It mirrors how `proxy_webssh` is built and
-/// registered, and it is protected by the same `AuthMiddleware`.
 #[handler]
 pub async fn download_stream(
     state: Data<&AppState>,
@@ -745,31 +738,32 @@ pub async fn download_stream(
 ) -> Result<Response> {
     // `#[handler]` produces Result<Response>, so this stays a plain route.
     let svc = state.service();
-    let instance_record = svc
-        .instance
-        .get_one_user_server_with_permission(state.clone(), &user_info, query.instance_id)
-        .await?
-        .ok_or(anyhow!("not found instance"))?;
+    let terminal_session = state
+        .redis()
+        .get::<_, String>(&query.terminal_session_id)
+        .map_err(|e| anyhow!("{e}"))
+        .map(|v| {
+            serde_json::from_str::<crate::api::types::terminal::TerminalSession>(&v)
+                .map_err(|e| anyhow!("{e}"))
+        })
+        .flatten()
+        .context("failed get session")?;
 
-    let (user, auth_data) =
-        super::instance::resolve_user_auth(&state, &instance_record, query.sys_user.as_deref())?;
-
-    let port = instance_record
-        .ssh_port
-        .filter(|&v| v != 0)
-        .ok_or(anyhow!("no ssh port"))?;
+    if terminal_session.created_username.ne(&user_info.username) {
+        return_err!("no permission");
+    }
 
     // The remote size is resolved inside the stream (it opens the agent session
     // there), so no Content-Length is sent and the browser uses chunked transfer
     // encoding. Feeding the body from the live connection is what keeps both the
     // console and the browser from buffering the whole file.
     let stream = svc.ssh.sftp_download_stream(
-        instance_record.namespace.clone(),
-        instance_record.ip.clone(),
-        instance_record.mac_addr.clone(),
-        port,
-        user,
-        auth_data,
+        terminal_session.instance.namespace.clone(),
+        terminal_session.instance.ip.clone(),
+        terminal_session.instance.mac_addr.clone(),
+        terminal_session.connect_opts.port,
+        terminal_session.connect_opts.user,
+        terminal_session.connect_opts.auth_data,
         query.file_path.clone(),
     );
 

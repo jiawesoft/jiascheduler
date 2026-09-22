@@ -50,11 +50,15 @@ pub struct TerminalSession {
     pub connect_opts: SshConnectOption,
     pub created_username: String,
     pub instance: UserServer,
+    pub session_id: String,
+    pub user_source: Option<String>,
 }
 
 #[derive(Object, Serialize, Deserialize)]
 pub struct GetTerminalSessionResp {
+    pub session_id: String,
     pub connect_opts: serde_json::Value,
     pub created_username: String,
     pub instance: serde_json::Value,
+    pub user_source: Option<String>,
 }

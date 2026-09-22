@@ -80,6 +80,8 @@ impl WebapiOptions {
 
 use rust_embed::RustEmbed;
 
+use crate::api::terminal::TerminalApi;
+
 #[derive(RustEmbed)]
 #[folder = "../dist"]
 pub struct Dist;
@@ -241,6 +243,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             ManageApi,
             TagApi,
             WorkflowApi,
+            TerminalApi,
         ),
         "jiascheduler web api",
         "1.0",

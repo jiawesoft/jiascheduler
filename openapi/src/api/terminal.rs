@@ -64,14 +64,15 @@ impl TerminalApi {
             super::instance::decrypt_secret(&state, v)
         })
         .context("failed resolve account")?;
-
+        let session_id = nanoid!();
         let terminal_session = crate::api::types::terminal::TerminalSession {
             connect_opts,
             created_username: user_info.username.clone(),
             instance: instance_record,
+            session_id: session_id.clone(),
+            user_source: req.user_source.clone(),
         };
 
-        let session_id = nanoid!();
         state
             .redis()
             .set_ex::<_, _, ()>(
