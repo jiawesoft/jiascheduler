@@ -12,7 +12,11 @@ members = [
 
 [package]
 name = "jiascheduler"
-version = "1.1.5"
+edition.workspace = true
+version.workspace = true
+
+[workspace.package]
+version = "2.0.3"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -71,6 +75,8 @@ automate.workspace = true
 openapi.workspace = true
 watchexec-supervisor.workspace = true
 service.workspace = true
+dirs.workspace = true
+
 
 
 # terminal-keycode = "1.1.1"
@@ -107,7 +113,21 @@ redis = { version = "0.27", features = [
     "tokio-comp",
     "connection-manager",
 ] }
-sea-orm = { version = "1.1.7", features = [
+# sea-orm = { version = "1.1.7", features = [
+#     "macros",
+#     "with-json",
+#     "with-chrono",
+#     "with-rust_decimal",
+#     "with-bigdecimal",
+#     "with-uuid",
+#     "with-time",
+#     "sqlx-mysql",
+#     # "runtime-tokio-native-tls",
+#     "debug-print",
+#     "runtime-tokio-rustls",
+# ] }
+#
+sea-orm = { version = "2.0.1", features = [
     "macros",
     "with-json",
     "with-chrono",
@@ -131,9 +151,8 @@ nanoid = "0.4.0"
 uuid = "*"
 futures = "*"
 serde_repr = "0.1.18"
-russh = "0.44.0"
-russh-sftp = "2.0.1"
-russh-keys = "0.44.0"
+russh = "0.62.2"
+russh-sftp = "2.3.0"
 redis-macros = "0.5.1"
 config = "*"
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -145,12 +164,12 @@ leader-election = { path = "crates/leader-election" }
 entity = { path = "crates/entity" }
 service = { path = "crates/service" }
 utils = { path = "crates/utils" }
-sea-query = "0.32.2"
+sea-query = "1.0.1"
 rust-embed = "*"
 reqwest = { version = "*", features = ["json"] }
 evalexpr = "12.0.2"
 watchexec-supervisor = "*"
-sea-orm-adapter = "0.4.0"
+sea-orm-adapter = { path = "crates/sea-orm-adapter" }
 simple_crypt = "*"
 rustc-serialize = "0.3.25"
 async-trait = "0.1.81"
@@ -166,3 +185,8 @@ handlebars = "6.3.2"
 expr-lang = { path = "crates/expr.rs", features = ["serde"] }
 croner = "3.0.0"
 english-to-cron = "0.1.6"
+users = "0.11.0"
+itoa = "1.0.18"
+base64 = "0.22"
+async-stream = "0.3"
+dirs = "6.0.0"

@@ -1,6 +1,7 @@
 [package]
 name = "openapi"
-edition = "2021"
+edition.workspace = true
+version.workspace = true
 
 
 [features]
@@ -25,7 +26,6 @@ futures.workspace = true
 serde_repr.workspace = true
 russh.workspace = true
 russh-sftp.workspace = true
-russh-keys.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
 config.workspace = true

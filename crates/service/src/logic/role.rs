@@ -1,7 +1,8 @@
 use std::sync::LazyLock;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use futures::Future;
+use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
     QueryTrait, Set,
@@ -235,7 +236,8 @@ impl<'a> RoleLogic<'a> {
             return Ok(InstanceRole::insert_many(data)
                 .exec(&self.ctx.db)
                 .await?
-                .last_insert_id);
+                .last_insert_id
+                .unwrap_or_default());
         }
 
         if let Some(instance_group_ids) = instance_group_ids {
@@ -251,7 +253,8 @@ impl<'a> RoleLogic<'a> {
             Ok(InstanceRole::insert_many(data)
                 .exec(&self.ctx.db)
                 .await?
-                .last_insert_id)
+                .last_insert_id
+                .unwrap_or_default())
         } else {
             Ok(0)
         }

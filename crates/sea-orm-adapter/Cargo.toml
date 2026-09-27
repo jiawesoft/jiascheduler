@@ -1,0 +1,37 @@
+[package]
+name = "sea-orm-adapter"
+version = "0.4.0"
+edition = "2021"
+authors = ["zihan <ZihanType@proton.me>"]
+license = "MIT/Apache-2.0"
+homepage = "https://github.com/ZihanType/sea-orm-adapter"
+repository = "https://github.com/ZihanType/sea-orm-adapter"
+description = "Sea ORM adapter for casbin-rs"
+keywords = ["casbin", "adapter", "sea-orm"]
+include = ["src/**/*", "Cargo.toml"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = { version = "0.1", default-features = false }
+casbin = { version = "2", default-features = false }
+sea-orm = { version = "2", default-features = false, features = ["macros"] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["full"] }
+
+[features]
+default = ["mysql", "runtime-tokio-rustls"]
+
+#databases
+mysql = ["sea-orm/sqlx-mysql"]
+postgres = ["sea-orm/sqlx-postgres"]
+sqlite = ["sea-orm/sqlx-sqlite"]
+
+
+# tokio
+runtime-tokio-native-tls = [
+    "casbin/runtime-tokio",
+    "sea-orm/runtime-tokio-native-tls",
+]
+runtime-tokio-rustls = ["casbin/runtime-tokio", "sea-orm/runtime-tokio-rustls"]

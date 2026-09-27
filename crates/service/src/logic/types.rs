@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
-use sea_orm::{FromQueryResult, prelude::DateTimeLocal};
+use entity::instance::RegisterData;
+use sea_orm::{FromQueryResult, prelude::DateTimeLocal, prelude::Json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -50,6 +51,8 @@ pub struct UserServer {
     pub info: String,
     pub namespace: String,
     pub sys_user: Option<String>,
+    pub sys_users: Option<Json>,
+    pub register_data: Option<RegisterData>,
     pub ssh_port: Option<u16>,
     pub password: Option<String>,
     pub instance_group_id: Option<u64>,
@@ -83,12 +86,14 @@ pub struct InstanceRecord {
     pub info: String,
     pub status: i8,
     pub sys_user: String,
+    pub sys_users: Option<Json>,
     pub password: String,
     pub role_id: Option<u64>,
     pub role_name: Option<String>,
     pub instance_group: Option<String>,
     pub instance_group_id: u64,
     pub ssh_port: u16,
+    pub register_data: Option<RegisterData>,
     pub created_time: DateTimeLocal,
     pub updated_time: DateTimeLocal,
 }

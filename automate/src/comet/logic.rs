@@ -113,6 +113,60 @@ impl Logic {
         Ok((key, msg))
     }
 
+    pub async fn sftp_upload_start(
+        &self,
+        req: types::SftpUploadStartRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpUploadStartRequest(req.params);
+        Ok((key, msg))
+    }
+
+    pub async fn sftp_upload_chunk(
+        &self,
+        req: types::SftpUploadChunkRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpUploadChunkRequest(req.params);
+        Ok((key, msg))
+    }
+
+    pub async fn sftp_upload_finish(
+        &self,
+        req: types::SftpUploadFinishRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpUploadFinishRequest(req.params);
+        Ok((key, msg))
+    }
+
+    pub async fn sftp_download_stat(
+        &self,
+        req: types::SftpDownloadStatRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpDownloadStatRequest(req.params);
+        Ok((key, msg))
+    }
+
+    pub async fn sftp_download_finish(
+        &self,
+        req: types::SftpDownloadFinishRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpDownloadFinishRequest(req.params);
+        Ok((key, msg))
+    }
+
+    pub async fn sftp_download_chunk(
+        &self,
+        req: types::SftpDownloadChunkRequest,
+    ) -> Result<(String, MsgReqKind)> {
+        let key = self.get_agent_key(&req.agent_ip, &req.mac_addr);
+        let msg = MsgReqKind::SftpDownloadChunkRequest(req.params);
+        Ok((key, msg))
+    }
+
     pub async fn runtime_action(
         &self,
         req: types::RuntimeActionRequest,

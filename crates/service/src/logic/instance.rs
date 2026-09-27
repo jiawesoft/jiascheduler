@@ -1,13 +1,17 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use automate::scheduler::types::SshConnectionOption;
+use automate::scheduler::types::SshConnectOption;
 use chrono::Local;
 
 use chrono::Utc;
+use entity::instance::RegisterData;
+use entity::instance::SshAuthData;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::Condition;
 use sea_orm::DbBackend;
+use sea_orm::ExprTrait;
+
 use sea_orm::FromQueryResult;
 use sea_orm::Order;
 use sea_orm::Statement;
@@ -15,11 +19,12 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Set,
 };
-
 use sea_query::MysqlQueryBuilder;
 use sea_query::UnionType;
 use sea_query::{ConditionType, Expr, IntoCondition, OnConflict};
+
 use tracing::warn;
+use utils::json_into;
 use utils::non_empty;
 
 use crate::IdGenerator;
@@ -58,12 +63,15 @@ impl<'a> InstanceLogic<'a> {
         mac_addr: String,
         status: i8,
         assign_user: Option<(String, String)>,
-        ssh_connection_option: Option<SshConnectionOption>,
+        ssh_connection_option: Option<SshConnectOption>,
     ) -> Result<()> {
-        let (sys_user, password, ssh_port) = match ssh_connection_option {
+        let (_sys_user, register_data, ssh_port) = match ssh_connection_option {
             Some(opt) => (
-                Set(opt.user),
-                Set(self.ctx.encrypt(opt.password)?),
+                Set(opt.user.to_string()),
+                Set(Some(RegisterData {
+                    ssh_user: Some(opt.user.to_string()),
+                    auth_data: Some(json_into::<_, SshAuthData>(&opt.auth_data)?),
+                })),
                 Set(opt.port),
             ),
             None => (NotSet, NotSet, NotSet),
@@ -103,23 +111,22 @@ impl<'a> InstanceLogic<'a> {
             }
         }
 
-        let mut updated = if sys_user.is_set() {
-            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
-                .value(instance::Column::UpdatedTime, Local::now())
-                .value(instance::Column::Status, status)
-                .value(instance::Column::SysUser, sys_user.clone().unwrap())
-                .value(instance::Column::Password, password.clone().unwrap())
-                .value(instance::Column::SshPort, ssh_port.clone().unwrap())
-                .to_owned()
-        } else {
-            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip])
-                .value(instance::Column::UpdatedTime, Local::now())
-                .value(instance::Column::Status, status)
-                .to_owned()
-        };
+        let mut update_cols =
+            OnConflict::columns([instance::Column::MacAddr, instance::Column::Ip]);
+
+        update_cols
+            .value(instance::Column::UpdatedTime, Local::now())
+            .value(instance::Column::Status, status);
+        if let Set(Some(ref v)) = register_data {
+            update_cols.value(instance::Column::RegisterData, v.clone());
+        }
+
+        if let Set(v) = ssh_port {
+            update_cols.value(instance::Column::SshPort, v);
+        }
 
         if let Some(ref namespace) = namespace {
-            updated.value(instance::Column::Namespace, namespace.clone());
+            update_cols.value(instance::Column::Namespace, namespace.clone());
         }
 
         let instance_id = IdGenerator::get_instance_uid();
@@ -131,12 +138,11 @@ impl<'a> InstanceLogic<'a> {
                 status: Set(status),
                 instance_id: Set(instance_id),
                 mac_addr: Set(mac_addr.clone()),
-                sys_user,
-                password,
+                register_data,
                 ssh_port,
                 ..Default::default()
             })
-            .on_conflict(updated)
+            .on_conflict(update_cols)
             .exec(&self.ctx.db)
             .await;
         } else {
@@ -228,9 +234,11 @@ impl<'a> InstanceLogic<'a> {
                 instance::Column::Info,
                 instance::Column::Status,
                 instance::Column::SysUser,
+                instance::Column::SysUsers,
                 instance::Column::SshPort,
                 instance::Column::Password,
                 instance::Column::InstanceGroupId,
+                instance::Column::RegisterData,
                 instance::Column::CreatedTime,
                 instance::Column::UpdatedTime,
             ])
@@ -323,7 +331,7 @@ impl<'a> InstanceLogic<'a> {
         user_id: Vec<String>,
         instance_ids: Option<Vec<String>>,
         instance_group_ids: Option<Vec<i64>>,
-    ) -> Result<u64> {
+    ) -> Result<Option<u64>> {
         let mut models = vec![];
 
         if let Some(instance_ids) = instance_ids {
@@ -378,6 +386,9 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::InstanceId)
             .column(instance::Column::Namespace)
             .column(instance::Column::InstanceGroupId)
+            .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::Info)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -457,6 +468,9 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
+            .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -513,14 +527,15 @@ impl<'a> InstanceLogic<'a> {
                 .await
                 .is_err()
             {
-                Instance::update(instance::ActiveModel {
-                    id: Set(ins.id),
-                    status: Set(0),
-                    ..Default::default()
-                })
-                .filter(instance::Column::Status.eq(true))
-                .exec(&self.ctx.db)
-                .await?;
+                Instance::update_many()
+                    .set(instance::ActiveModel {
+                        status: Set(0),
+                        ..Default::default()
+                    })
+                    .filter(instance::Column::Status.eq(true))
+                    .filter(instance::Column::Id.eq(ins.id))
+                    .exec(&self.ctx.db)
+                    .await?;
             }
         }
 
@@ -645,6 +660,9 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Info)
             .column(instance::Column::MacAddr)
             .column(instance::Column::InstanceId)
+            .column(instance::Column::RegisterData)
+            .column(instance::Column::SysUsers)
+            .column(instance::Column::SysUser)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -703,6 +721,9 @@ impl<'a> InstanceLogic<'a> {
                     .column(instance::Column::Info)
                     .column(instance::Column::MacAddr)
                     .column(instance::Column::InstanceId)
+                    .column(instance::Column::RegisterData)
+                    .column(instance::Column::SysUsers)
+                    .column(instance::Column::SysUser)
                     .column(instance::Column::InstanceGroupId)
                     .column_as(instance_group::Column::Name, "instance_group_name")
                     .column(instance::Column::Status)
@@ -780,6 +801,11 @@ impl<'a> InstanceLogic<'a> {
         model: instance::ActiveModel,
     ) -> Result<instance::ActiveModel> {
         let model = model.save(&self.ctx.db).await?;
+        Ok(model)
+    }
+
+    pub async fn find_by_id(&self, id: u64) -> Result<Option<instance::Model>> {
+        let model = Instance::find_by_id(id).one(&self.ctx.db).await?;
         Ok(model)
     }
 
@@ -900,7 +926,9 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::MacAddr)
             .column(instance::Column::Password)
             .column(instance::Column::SysUser)
+            .column(instance::Column::SysUsers)
             .column(instance::Column::SshPort)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::Status)
@@ -943,9 +971,11 @@ impl<'a> InstanceLogic<'a> {
             .column(instance::Column::Namespace)
             .column(instance::Column::Info)
             .column(instance::Column::SysUser)
+            .column(instance::Column::SysUsers)
             .column(instance::Column::SshPort)
             .column(instance::Column::Password)
             .column(instance::Column::Status)
+            .column(instance::Column::RegisterData)
             .column(instance::Column::InstanceGroupId)
             .column_as(instance_group::Column::Name, "instance_group_name")
             .column(instance::Column::CreatedTime)
@@ -999,9 +1029,11 @@ impl<'a> InstanceLogic<'a> {
                 .column(instance::Column::Namespace)
                 .column(instance::Column::Info)
                 .column(instance::Column::SysUser)
+                .column(instance::Column::SysUsers)
                 .column(instance::Column::SshPort)
                 .column(instance::Column::Password)
                 .column(instance::Column::Status)
+                .column(instance::Column::RegisterData)
                 .column(instance::Column::InstanceGroupId)
                 .column_as(instance_group::Column::Name, "instance_group_name")
                 .column(instance::Column::CreatedTime)

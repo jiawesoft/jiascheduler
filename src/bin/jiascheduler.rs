@@ -5,7 +5,7 @@ use automate::{
     comet::{self, CometOptions},
     scheduler::{
         Scheduler,
-        types::{AssignUserOption, SshConnectionOption},
+        types::{AssignUserOption, SshConnectOption},
     },
 };
 use clap::Parser;
@@ -48,6 +48,9 @@ struct WebapiArgs {
     /// Set the login user's password of the instance for SSH remote connection
     #[arg(long)]
     ssh_password: Option<String>,
+    /// Set the login user's key path of the instance for SSH remote connection
+    #[arg(long)]
+    ssh_keypath: Option<String>,
     /// Set the port of this instance for SSH remote connection
     #[arg(long)]
     ssh_port: Option<u16>,
@@ -63,6 +66,15 @@ struct WebapiArgs {
     /// you can temporarily overwrite the configuration file using command-line parameters
     #[arg(long, value_name = "FILE", default_value_t = String::from("~/.jiascheduler/console.toml"))]
     config: String,
+
+    /// redis connect address, eg: "redis://:wang@127.0.0.1"
+    /// can be used to override configuration items in the configuration file
+    #[arg(long)]
+    redis_url: Option<String>,
+    /// mysql connect address, eg: "mysql://root:root@localhost:3306/jiascheduler"
+    /// can be used to override configuration items in the configuration file
+    #[arg(long)]
+    database_url: Option<String>,
 }
 
 #[tokio::main]
@@ -83,7 +95,6 @@ async fn main() -> Result<()> {
     let console_conf: Arc<Mutex<Option<Conf>>> = Arc::new(Mutex::new(None));
     let console_conf_clone = console_conf.clone();
     let comet_bind_addr = args.comet_bind_addr.clone();
-
     tokio::spawn(async move {
         let conf = console_rx.await.unwrap();
         console_conf_clone.lock().await.replace(conf.clone());
@@ -111,7 +122,12 @@ async fn main() -> Result<()> {
             vec![format!("ws://{}", args.comet_bind_addr)],
             conf.comet_secret.to_string(),
             args.output_dir,
-            SshConnectionOption::build(args.ssh_user, args.ssh_password, args.ssh_port),
+            SshConnectOption::build(
+                args.ssh_user,
+                args.ssh_password,
+                args.ssh_keypath,
+                args.ssh_port,
+            ),
             AssignUserOption::build(args.assign_username, args.assign_password),
         );
         info!("starting agent");
@@ -124,8 +140,8 @@ async fn main() -> Result<()> {
 
     openapi::run(
         WebapiOptions {
-            database_url: None,
-            redis_url: None,
+            database_url: args.database_url,
+            redis_url: args.redis_url,
             config_file: args.config,
             bind_addr: args.console_bind_addr,
         },

@@ -2,8 +2,8 @@ use anyhow::{Ok, Result};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
-    ColumnTrait, EntityTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait, Set,
+    ColumnTrait, EntityTrait, ExprTrait, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait, Set,
 };
 use sea_query::Expr;
 
@@ -281,7 +281,8 @@ impl<'a> TeamLogic<'a> {
         return Ok(TeamMember::insert_many(members)
             .exec(&self.ctx.db)
             .await?
-            .last_insert_id);
+            .last_insert_id
+            .unwrap_or_default());
     }
 
     pub async fn remove_member(&self, team_id: u64, user_ids: Option<Vec<String>>) -> Result<u64> {

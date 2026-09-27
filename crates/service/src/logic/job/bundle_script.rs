@@ -4,11 +4,12 @@ use crate::entity::job_bundle_script;
 use crate::entity::prelude::*;
 use crate::entity::team;
 use crate::logic::types::UserInfo;
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use chrono::Local;
 use sea_orm::ActiveValue::Set;
 use sea_orm::Condition;
+use sea_orm::ExprTrait;
 use sea_orm::JoinType;
 use sea_orm::QuerySelect;
 use sea_orm::QueryTrait;
@@ -17,8 +18,8 @@ use sea_orm::{
 };
 use sea_query::Expr;
 
-use super::types;
 use super::JobLogic;
+use super::types;
 
 impl<'a> JobLogic<'a> {
     pub async fn save_job_bundle_script(
@@ -149,10 +150,6 @@ impl<'a> JobLogic<'a> {
             .can_write_bundle_script(user_info, team_id, None)
             .await?;
 
-        if ok {
-            Ok(team_id)
-        } else {
-            Ok(None)
-        }
+        if ok { Ok(team_id) } else { Ok(None) }
     }
 }

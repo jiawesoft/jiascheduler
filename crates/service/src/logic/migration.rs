@@ -63,10 +63,11 @@ impl<'a> MigrationLogic<'a> {
 
     pub async fn get_database(&self, db: &str) -> Result<Option<(String, String)>> {
         let backend = self.ctx.db.get_database_backend();
+
         let ret = self
             .ctx
             .db
-            .query_one(Statement::from_string(
+            .query_one_raw(Statement::from_string(
                 backend,
                 format!("show create database {db}"),
             ))

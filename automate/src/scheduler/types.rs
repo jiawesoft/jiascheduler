@@ -1,7 +1,10 @@
-use std::{collections::HashMap, fmt, process::Output};
+use std::{collections::HashMap, fmt, process::Output, vec};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
+use tracing::error;
+
+use crate::ssh::AuthData;
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum JobAction {
@@ -243,27 +246,74 @@ impl BundleOutput {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SshConnectionOption {
+pub struct SshConnectOption {
     pub user: String,
-    pub password: String,
     pub port: u16,
+    pub auth_data: AuthData,
 }
 
-impl SshConnectionOption {
+impl SshConnectOption {
+    #[cfg(not(target_os = "windows"))]
     pub fn build(
         user: Option<String>,
         password: Option<String>,
+        keypath: Option<String>,
         port: Option<u16>,
-    ) -> Option<SshConnectionOption> {
-        if let (Some(user), Some(password), Some(port)) = (user, password, port) {
-            Some(SshConnectionOption {
-                user,
-                password,
-                port,
-            })
+    ) -> Option<SshConnectOption> {
+        let Some(user) = user.or_else(|| {
+            users::get_current_username().map(|v| v.to_str().unwrap_or_default().to_string())
+        }) else {
+            return None;
+        };
+
+        let auth_data = if let Some(v) = password {
+            AuthData::Password(v)
+        } else if let Some(v) = keypath {
+            if !std::path::Path::new(&v).exists() {
+                panic!("keypath: {v} not exists");
+            }
+            AuthData::KeyPath(v)
         } else {
-            None
+            let mut keypaths = vec![];
+            let p = dirs::home_dir()
+                .and_then(|v| v.to_str().map(String::from))
+                .unwrap_or(format!("/home/{user}"));
+            keypaths.append(&mut vec![
+                format!("{p}/.ssh/id_rsa"),
+                format!("{p}/.ssh/id_ed25519"),
+            ]);
+            let Some(keypath) = keypaths
+                .iter()
+                .find(|p| std::path::Path::new(p).exists())
+                .cloned()
+            else {
+                return None;
+            };
+
+            AuthData::KeyPath(keypath.to_string())
+        };
+
+        if let AuthData::KeyPath(ref v) = auth_data {
+            if let Err(e) = crate::ssh::ssh_copy_id(v.to_string()) {
+                error!("failed ssh copy id {e}");
+            }
         }
+
+        return Some(SshConnectOption {
+            user: user.to_string(),
+            port: port.unwrap_or(22),
+            auth_data: auth_data,
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn build(
+        _user: Option<String>,
+        _password: Option<String>,
+        _keypath: Option<String>,
+        _port: Option<u16>,
+    ) -> Option<SshConnectOption> {
+        None
     }
 }
 

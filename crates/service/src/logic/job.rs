@@ -6,9 +6,9 @@ mod exec_history;
 mod schedule;
 mod supervisor;
 mod timer;
-
 use automate::scheduler::types::ScheduleType;
 use chrono::Local;
+use sea_orm::ExprTrait;
 
 use entity::job_schedule;
 use sea_orm::{
@@ -409,7 +409,8 @@ impl<'a> JobLogic<'a> {
         if self.ctx.can_manage_instance(&user_info.user_id).await? {
             return Ok(true);
         }
-        Ok(schedule_user.eq(&user_info.username))
+
+        Ok(schedule_user == user_info.username)
     }
 
     pub async fn get_authorized_job(

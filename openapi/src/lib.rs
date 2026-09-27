@@ -1,7 +1,7 @@
 pub mod macros;
 pub mod response;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use api::{
     executor::ExecutorApi, file::FileApi, instance::InstanceApi, job::JobApi, manage::ManageApi,
     migration::MigrationApi, role::RoleApi, tag::TagApi, team::TeamApi, terminal, user::UserApi,
@@ -13,20 +13,20 @@ use ::migration::{Migrator, MigratorTrait};
 
 use logic::user::UserLogic;
 use middleware::AuthMiddleware;
-use poem::{get, IntoEndpoint};
+use poem::{IntoEndpoint, get};
 use service::config::Conf;
 
 pub use error::custom_error;
 
 pub use openapi_derive::ApiStdResponse;
 use poem::{
+    EndpointExt, Route,
     endpoint::{EmbeddedFileEndpoint, EmbeddedFilesEndpoint},
     listener::TcpListener,
     session::{CookieConfig, RedisStorage, ServerSession},
-    EndpointExt, Route,
 };
 use poem_openapi::{ContactObject, OpenApiService};
-use redis::{aio::ConnectionManager, Client};
+use redis::{Client, aio::ConnectionManager};
 
 pub use entity;
 use git_version::git_version;
@@ -63,24 +63,24 @@ impl WebapiOptions {
         let real_path = shellexpand::full(config_path)?;
         let mut conf = Conf::parse(real_path.as_ref())?;
 
-        let _ = self
-            .database_url
-            .iter()
-            .map(|v| conf.database_url = v.to_string());
-        let _ = self
-            .redis_url
-            .iter()
-            .map(|v| conf.redis_url = v.to_string());
-        let _ = self
-            .bind_addr
-            .iter()
-            .map(|v| conf.bind_addr = v.to_string());
+        // command line parameters temporarily overwrite the configuration file
+        if let Some(v) = &self.database_url {
+            conf.database_url = v.to_string();
+        }
+        if let Some(v) = &self.redis_url {
+            conf.redis_url = v.to_string();
+        }
+        if let Some(v) = &self.bind_addr {
+            conf.bind_addr = v.to_string();
+        }
 
         Ok(conf)
     }
 }
 
 use rust_embed::RustEmbed;
+
+use crate::api::terminal::TerminalApi;
 
 #[derive(RustEmbed)]
 #[folder = "../dist"]
@@ -105,7 +105,7 @@ m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act
 "#;
 
 const GIT_VERSION: &str = git_version!();
-const APP_VERSION: &str = "2.0.1";
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn get_version() -> String {
     format!("{APP_VERSION}-{GIT_VERSION}")
@@ -185,6 +185,8 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     }
 
     let conf = opts.merge_conf(&opts.config_file).context("merge config")?;
+
+    info!("load config: {}", serde_json::to_string_pretty(&conf)?);
     let mut connect_opts =
         ConnectOptions::new(Url::parse(&conf.database_url).expect("database url"));
     connect_opts
@@ -243,6 +245,7 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
             ManageApi,
             TagApi,
             WorkflowApi,
+            TerminalApi,
         ),
         "jiascheduler web api",
         "1.0",
@@ -267,17 +270,26 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     let ui = api_service.rapidoc();
     let app = Route::new()
         .at("/", EmbeddedFileEndpoint::<Dist>::new("index.html"))
-        .nest("/", EmbeddedFilesEndpoint::<Dist>::new())
         .at(
             "/terminal/webssh/:instance_id",
             get(terminal::webssh).with(AuthMiddleware),
         )
         .at(
-            "/terminal/tunnel/:instance_id",
+            "/terminal/tunnel/:session_id",
             get(terminal::proxy_webssh).with(AuthMiddleware),
+        )
+        // Streaming download. Poem refuses two `nest` calls on the same prefix,
+        // so like `/terminal/tunnel` this lives at the root; an OpenAPI endpoint
+        // cannot stream a response body anyway.
+        .at(
+            "/file/sftp/tunnel/download/stream",
+            get(api::file::download_stream).with(AuthMiddleware),
         )
         .nest("/api", api_service.with(AuthMiddleware))
         .nest("/doc", ui)
+        // The static asset endpoint is a catch-all, so it must be registered last
+        // or it swallows every other prefix and poem rejects the duplicate paths.
+        .nest("/", EmbeddedFilesEndpoint::<Dist>::new())
         .catch_all_error(custom_error)
         .with(ServerSession::new(
             CookieConfig::default()

@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use tokio::sync::RwLock;
 
 pub async fn async_batch_do<I, T, F>(data: Vec<I>, handler: F) -> Vec<Result<T>>
@@ -57,7 +57,10 @@ async fn test_async_queue_do() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    std::env::set_var("RUST_LOG", "debug");
+    unsafe {
+        std::env::set_var("RUST_LOG", "debug");
+    }
+
     tracing_subscriber::fmt::init();
     let data = 1..100;
 

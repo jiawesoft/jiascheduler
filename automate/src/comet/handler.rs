@@ -1,29 +1,28 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use futures::SinkExt;
 use futures_util::{
-    stream::{SplitSink, SplitStream},
     StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 
 use poem::{
-    handler,
+    FromRequest, IntoResponse, Request, RequestBody, Response, Result as PoemResult, handler,
     http::StatusCode,
     web::{
-        websocket::{Message, WebSocket, WebSocketStream},
         Data,
         Json,
         Path,
         Query, // RemoteAddr,
+        websocket::{Message, WebSocket, WebSocketStream},
     },
-    FromRequest, IntoResponse, Request, RequestBody, Response, Result as PoemResult,
 };
 
 use serde::{Deserialize, Serialize};
 use tokio::{
-    fs::{self, create_dir_all, File},
+    fs::{self, File, create_dir_all},
     io::AsyncWriteExt,
     sync::RwLock,
 };
@@ -32,18 +31,18 @@ use tracing::error;
 use crate::{
     bridge::client::WsClient,
     comet::{
-        types::{self, SshLoginParams},
         Comet,
+        types::{self, SshLoginParams},
     },
     return_response,
-    scheduler::types::{SshConnectionOption, UploadFile},
+    scheduler::types::{SshConnectOption, UploadFile},
 };
 
 pub mod middleware {
     use poem::{
-        http::StatusCode,
-        web::headers::{self, authorization::Bearer, HeaderMapExt},
         Endpoint, Error, Middleware, Request, Result,
+        http::StatusCode,
+        web::headers::{self, HeaderMapExt, authorization::Bearer},
     };
 
     pub fn bearer_auth(secret: &str) -> BearerAuth {
@@ -89,7 +88,7 @@ pub mod middleware {
 pub struct SecretHeader {
     pub mac_addr: String,
     pub assign_user: Option<(String, String)>,
-    pub ssh_connection_params: Option<SshConnectionOption>,
+    pub ssh_connection_params: Option<SshConnectOption>,
 }
 
 // Implements a token extractor
@@ -109,42 +108,17 @@ impl<'a> FromRequest<'a> for SecretHeader {
             .get("X-Assign-Password")
             .and_then(|value| value.to_str().ok());
 
-        let ssh_user = header
-            .get("X-Ssh-User")
-            .and_then(|value| value.to_str().ok());
-        let ssh_password = header
-            .get("X-Ssh-Password")
-            .and_then(|value| value.to_str().ok());
-        let ssh_port = header.get("x-ssh-port").and_then(|value| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| u16::from_str_radix(v, 10).ok())
-                .flatten()
-        });
-
-        let mut assign = match (username, password) {
-            (Some(u), Some(p)) => SecretHeader {
-                assign_user: Some((u.to_string(), p.to_string())),
-                ssh_connection_params: None,
-                mac_addr: mac_addr.to_string(),
+        Ok(SecretHeader {
+            assign_user: match (username, password) {
+                (Some(u), Some(p)) => Some((u.to_string(), p.to_string())),
+                _ => None,
             },
-            _ => SecretHeader {
-                assign_user: None,
-                ssh_connection_params: None,
-                mac_addr: mac_addr.to_string(),
-            },
-        };
-
-        if let (Some(u), Some(p), Some(port)) = (ssh_user, ssh_password, ssh_port) {
-            assign.ssh_connection_params = Some(SshConnectionOption {
-                user: u.to_string(),
-                password: p.to_string(),
-                port,
-            });
-        }
-
-        Ok(assign)
+            mac_addr: mac_addr.to_string(),
+            ssh_connection_params: header
+                .get("X-Ssh-Options")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| serde_json::from_str::<SshConnectOption>(v).ok()),
+        })
     }
 }
 
@@ -241,7 +215,7 @@ pub async fn get_file(Path(filename): Path<String>) -> impl IntoResponse {
         Err(e) => {
             return resp
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.to_string())
+                .body(e.to_string());
         }
     };
 
@@ -309,14 +283,23 @@ pub async fn proxy_ssh(
     comet: Data<&Comet>,
 ) -> impl IntoResponse {
     let mut comet = comet.clone();
-
     webssh.on_upgrade(move |socket| async move {
         let (mut clientsink, mut clientstream) = socket.split();
 
-        let target_stream = comet
-            .get_ssh_stream(login_params)
-            .await
-            .expect("failed to get websocket stream");
+        // A missing agent stream is an expected condition (agent offline, wrong
+        // pair, ...). Failing it must not panic the whole comet process, which
+        // would drop every other agent connection as well.
+        let Some(target_stream) = comet.get_ssh_stream(login_params).await else {
+            error!("failed to get websocket stream, the agent stream is not registered");
+            let _ = clientsink
+                .send(Message::Text(
+                    "\r\n\x1b[31mNotice: cannot reach the target instance, the agent is not connected"
+                        .to_string(),
+                ))
+                .await;
+            let _ = clientsink.close().await;
+            return;
+        };
 
         let (mut serversink, mut serverstream) = target_stream.split();
 
@@ -409,3 +392,51 @@ pub async fn sftp_remove(
         Err(e) => return_response!(code: 50000, e.to_string()),
     }
 }
+
+/// The chunked transfer handlers are structurally identical, so a macro
+/// generates them to avoid duplication.
+macro_rules! chunk_handler {
+    ($name:ident, $req:ty, $method:ident) => {
+        #[handler]
+        pub async fn $name(
+            comet: Data<&Comet>,
+            Json(req): Json<$req>,
+        ) -> Json<serde_json::Value> {
+            match comet.$method(req).await {
+                Ok(v) => return_response!(json:v),
+                Err(e) => return_response!(code: 50000, e.to_string()),
+            }
+        }
+    };
+}
+
+chunk_handler!(
+    sftp_upload_start,
+    types::SftpUploadStartRequest,
+    sftp_upload_start
+);
+chunk_handler!(
+    sftp_upload_chunk,
+    types::SftpUploadChunkRequest,
+    sftp_upload_chunk
+);
+chunk_handler!(
+    sftp_upload_finish,
+    types::SftpUploadFinishRequest,
+    sftp_upload_finish
+);
+chunk_handler!(
+    sftp_download_stat,
+    types::SftpDownloadStatRequest,
+    sftp_download_stat
+);
+chunk_handler!(
+    sftp_download_chunk,
+    types::SftpDownloadChunkRequest,
+    sftp_download_chunk
+);
+chunk_handler!(
+    sftp_download_finish,
+    types::SftpDownloadFinishRequest,
+    sftp_download_finish
+);

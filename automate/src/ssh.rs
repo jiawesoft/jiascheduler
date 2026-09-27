@@ -1,23 +1,26 @@
-use std::env;
+use std::fs::OpenOptions;
+use std::io::Write;
+
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
+use std::{env, fs};
 
 use anyhow::Result;
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use poem::web::websocket::{Message, WebSocketStream};
+
+use russh::keys::*;
 use russh::*;
-use russh_keys::*;
 use russh_sftp::client::SftpSession;
 
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::time::timeout;
-use tracing::info;
 
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream as TWebSocketStream};
 
@@ -26,13 +29,11 @@ use crate::local_time;
 
 struct Client {}
 
-#[async_trait]
 impl client::Handler for Client {
     type Error = russh::Error;
-
     async fn check_server_key(
         &mut self,
-        _server_public_key: &key::PublicKey,
+        _server_public_key: &ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
         Ok(true)
     }
@@ -42,19 +43,38 @@ pub struct Session {
     session: client::Handle<Client>,
 }
 
-pub struct ConnectParams<A: ToSocketAddrs, U: Into<String>, P: Into<String>> {
-    pub user: U,
-    pub password: P,
+pub struct ConnectParams<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub password: T,
     pub addrs: A,
 }
 
+pub struct PasswordParams<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub password: T,
+    pub addrs: A,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum AuthData {
+    Password(String),
+    KeyPath(String),
+    KeyContent(String),
+}
+
+pub struct ConnectParams2<A: ToSocketAddrs, T: Into<String>> {
+    pub user: T,
+    pub addrs: A,
+    pub auth: AuthData,
+}
+
 impl Session {
-    pub async fn connect<A: ToSocketAddrs, U: Into<String>, P: Into<String>>(
+    pub async fn connect<A: ToSocketAddrs, T: Into<String>>(
         ConnectParams {
             user,
             password,
             addrs,
-        }: ConnectParams<A, U, P>,
+        }: ConnectParams<A, T>,
     ) -> Result<Self> {
         let config = client::Config {
             inactivity_timeout: Some(Duration::from_secs(90)),
@@ -70,7 +90,54 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
+            anyhow::bail!("Authentication failed");
+        }
+
+        Ok(Self { session })
+    }
+
+    pub async fn connect2<A: ToSocketAddrs, T: Into<String>>(
+        ConnectParams2 { user, auth, addrs }: ConnectParams2<A, T>,
+    ) -> Result<Self> {
+        let config = client::Config {
+            inactivity_timeout: Some(Duration::from_secs(90)),
+            keepalive_interval: Some(Duration::from_secs(10)),
+            ..Default::default()
+        };
+
+        let config = Arc::new(config);
+        let sh = Client {};
+        let user: String = user.into();
+
+        let mut session =
+            timeout(Duration::from_secs(1), client::connect(config, addrs, sh)).await??;
+
+        let mut h = async |user, key_pair| {
+            session
+                .authenticate_publickey(
+                    user,
+                    PrivateKeyWithHashAlg::new(
+                        Arc::new(key_pair),
+                        session.best_supported_rsa_hash().await?.flatten(),
+                    ),
+                )
+                .await
+        };
+
+        let auth_res = match auth {
+            AuthData::Password(password) => session.authenticate_password(user, password).await?,
+            AuthData::KeyPath(path) => {
+                let key_pair = load_secret_key(path, None)?;
+                h(user, key_pair).await?
+            }
+            AuthData::KeyContent(val) => {
+                let key_pair = decode_secret_key(&val, None)?;
+                h(user, key_pair).await?
+            }
+        };
+
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 
@@ -99,7 +166,7 @@ impl Session {
 
         let auth_res = session.authenticate_password(user, password).await?;
 
-        if !auth_res {
+        if !auth_res.success() {
             anyhow::bail!("Authentication failed");
         }
 
@@ -159,7 +226,6 @@ impl Session {
 
                     match msg.r#type {
                         MsgType::Resize => {
-                            info!("resize {},{}",msg.cols,msg.rows);
                             channel.window_change(msg.cols, msg.rows, 0, 0).await.expect("failed resize windows");
 
                         },
@@ -248,7 +314,6 @@ impl Session {
 
                     match msg.r#type {
                         MsgType::Resize => {
-                            info!("resize {},{}",msg.cols,msg.rows);
                             channel.window_change(msg.cols, msg.rows, 0, 0).await.expect("failed resize windows");
 
                         },
@@ -318,12 +383,12 @@ pub async fn read_dir(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     dir: Option<&str>,
 ) -> Result<DirDetail> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -382,7 +447,7 @@ pub async fn upload(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     filepath: &str,
     data: Vec<u8>,
 ) -> Result<()> {
@@ -391,9 +456,9 @@ pub async fn upload(
         .map(|v| v.to_str())
         .flatten();
 
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -415,13 +480,13 @@ pub async fn remove(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     remove_type: &str,
     filepath: &str,
 ) -> Result<()> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -441,12 +506,12 @@ pub async fn download(
     _ip: &str,
     port: u16,
     user: &str,
-    password: &str,
+    auth: AuthData,
     filepath: &str,
 ) -> Result<Vec<u8>> {
-    let ssh_session = Session::connect(ConnectParams {
+    let ssh_session = Session::connect2(ConnectParams2 {
         user,
-        password,
+        auth,
         addrs: ("127.0.0.1", port),
     })
     .await?;
@@ -455,4 +520,29 @@ pub async fn download(
 
     let data = sftp_session.read(filepath).await?;
     Ok(data)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn ssh_copy_id(key_path: String) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let p = Path::new(&key_path);
+    let authorized_keys_path = p
+        .parent()
+        .ok_or(anyhow::format_err!(
+            "{key_path} terminates in a root or prefix"
+        ))?
+        .join("authorized_keys");
+    let pub_key_content = fs::read_to_string(format!("{key_path}.pub"))?;
+    if std::path::Path::new(&authorized_keys_path).exists()
+        && fs::read_to_string(&authorized_keys_path)?.contains(&pub_key_content)
+    {
+        Ok(())
+    } else {
+        let mut file = OpenOptions::new()
+            .mode(644)
+            .append(true)
+            .create(true)
+            .open(&authorized_keys_path)?;
+        Ok(file.write_all(pub_key_content.as_bytes())?)
+    }
 }

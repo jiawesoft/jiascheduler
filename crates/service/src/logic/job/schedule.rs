@@ -1,12 +1,12 @@
 use std::{num::NonZeroU64, str::FromStr, time::Duration};
 
 use anyhow::{Result, anyhow};
-
 use automate::{
     JobAction,
     bridge::msg::{BundleOutputParams, TimerExpr, UpdateJobParams},
     scheduler::types::{BundleScript, RunStatus, ScheduleStatus, ScheduleType, UploadFile},
 };
+use sea_orm::ExprTrait;
 
 use chrono::Local;
 use entity::job_schedule;

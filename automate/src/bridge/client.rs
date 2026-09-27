@@ -4,37 +4,36 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use futures_util::{
-    stream::{SplitSink, SplitStream},
     Future, SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 
 use moka::future::Cache;
 use poem::web::websocket::{Message as PMessage, WebSocketStream as PWebSocketStream};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::{
     net::TcpStream,
     sync::mpsc::{self, Receiver, Sender},
     time::timeout,
 };
 use tokio_tungstenite::{
-    connect_async,
+    MaybeTlsStream, WebSocketStream, connect_async,
     tungstenite::{ClientRequestBuilder, Message},
-    MaybeTlsStream, WebSocketStream,
 };
 use tracing::{error, info};
 
 use crate::{
     get_endpoint,
-    scheduler::types::{AssignUserOption, SshConnectionOption},
+    scheduler::types::{AssignUserOption, SshConnectOption},
 };
 
 use super::{
+    Bridge,
     msg::{AuthParams, Msg, MsgKind, MsgReqKind, MsgState, TransactionMsg},
     protocol::Protocol,
-    Bridge,
 };
 
 pub struct WsClient<W, R> {
@@ -46,7 +45,7 @@ pub struct WsClient<W, R> {
     local_ip: Option<IpAddr>,
     namespace: Option<String>,
     is_initialized: Option<bool>,
-    ssh_connection_option: Option<SshConnectionOption>,
+    ssh_connection_option: Option<SshConnectOption>,
     assign_user_option: Option<AssignUserOption>,
     msg_box: Cache<u64, TransactionMsg>,
     bridge: Option<Bridge>,
@@ -102,7 +101,7 @@ impl<W, R> WsClient<W, R> {
         self
     }
 
-    pub fn set_ssh_connection(&mut self, ssh_option: SshConnectionOption) -> &mut Self {
+    pub fn set_ssh_connection(&mut self, ssh_option: SshConnectOption) -> &mut Self {
         self.ssh_connection_option = Some(ssh_option);
         self
     }
@@ -361,10 +360,7 @@ impl
         }
 
         if let Some(ref ssh_opt) = self.ssh_connection_option {
-            req = req
-                .with_header("X-Ssh-User", ssh_opt.user.clone())
-                .with_header("X-Ssh-Password", ssh_opt.password.clone())
-                .with_header("X-Ssh-Port", ssh_opt.port.to_string());
+            req = req.with_header("X-Ssh-Options", serde_json::to_string(&ssh_opt)?);
         }
 
         let (ws_stream, _b) = timeout(Duration::from_secs(5), connect_async(req))

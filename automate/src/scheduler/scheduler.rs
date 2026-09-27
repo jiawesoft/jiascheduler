@@ -9,16 +9,20 @@ use chrono::{DateTime, Local, Utc};
 use futures::{SinkExt, StreamExt};
 use nanoid::nanoid;
 
+use crate::scheduler::sftp_chunk::SFTP_CHUNK_SIZE;
+
 use crate::{
     bridge::msg::{
-        BundleOutputParams, RuntimeActionParams, SftpDownloadParams, SftpReadDirParams,
-        SftpRemoveParams, SftpUploadParams, UpdateJobParams,
+        BundleOutputParams, RuntimeActionParams, SftpDownloadChunkParams,
+        SftpDownloadParams, SftpDownloadStatParams, SftpReadDirParams,
+        SftpRemoveParams, SftpUploadChunkParams, SftpUploadFinishParams, SftpUploadParams,
+        SftpUploadStartParams, UpdateJobParams,
     },
     comet::types::SshLoginParams,
     get_comet_addr, get_local_ip, get_mac_address, run_id,
     scheduler::types::JobAction,
     set_comet_addr,
-    ssh::{self, ConnectParams, Session},
+    ssh::{self, ConnectParams2, Session},
 };
 use futures_util::stream::{SplitSink, SplitStream};
 
@@ -44,9 +48,7 @@ use uuid::Uuid;
 use super::{
     executor::Ctx,
     file::try_download_file,
-    types::{
-        self, AssignUserOption, BundleOutput, RuntimeAction, ScheduleType, SshConnectionOption,
-    },
+    types::{self, AssignUserOption, BundleOutput, RuntimeAction, ScheduleType, SshConnectOption},
 };
 
 use crate::{
@@ -344,7 +346,7 @@ pub struct Scheduler<T> {
     client: Option<T>,
     pub namespace: String,
     bridge: Bridge,
-    ssh_connection_option: Option<SshConnectionOption>,
+    ssh_connection_option: Option<SshConnectOption>,
     assign_user_option: Option<AssignUserOption>,
 }
 
@@ -361,7 +363,7 @@ impl
         comet_addr: Vec<String>,
         comet_secret: String,
         output_dir: String,
-        ssh_connection_option: Option<SshConnectionOption>,
+        ssh_connection_option: Option<SshConnectOption>,
         assign_user_option: Option<AssignUserOption>,
     ) -> Self {
         Scheduler {
@@ -406,7 +408,7 @@ impl
                 if let Err(e) =
                     Self::ssh_keepalive(addr.clone(), mac_addr.clone(), comet_secret.clone()).await
                 {
-                    error!("failed ssh keepalive {e}");
+                    error!("failed ssh keepalive, {e}");
                     sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -453,12 +455,13 @@ impl
                 _ => return Ok(()),
             };
         };
+        let connect_opts: SshConnectOption = serde_json::from_str(&login_params.connect_options)?;
 
         tokio::spawn(async move {
-            let sess = match Session::connect(ConnectParams {
-                user: login_params.user,
-                password: login_params.password,
-                addrs: (local_ip, login_params.port),
+            let sess = match Session::connect2(ConnectParams2 {
+                user: connect_opts.user,
+                auth: connect_opts.auth_data,
+                addrs: (local_ip, connect_opts.port),
             })
             .await
             {
@@ -486,13 +489,10 @@ impl
                     return;
                 }
             };
-
-            info!("web ssh exit code {code}");
-
             if let Err(e) = sess.close().await {
                 error!("failed close - {e}");
             }
-            info!("ssh tunnel close");
+            debug!("web ssh exit code {code}");
         });
 
         Ok(())
@@ -1053,12 +1053,81 @@ impl
         Ok(json!(null))
     }
 
+    /// Chunked upload: start a session and return the chunk size.
+    pub async fn sftp_upload_start(req: SftpUploadStartParams) -> Result<Value> {
+        Ok(json!({
+            "session_id": req.session_id,
+            "chunk_size": SFTP_CHUNK_SIZE,
+        }))
+    }
+
+    /// Chunked upload: write one chunk.
+    pub async fn sftp_upload_chunk(req: SftpUploadChunkParams) -> Result<Value> {
+        let written = crate::scheduler::sftp_chunk::write_chunk(
+            &req.session_id,
+            &req.user,
+            req.auth_data,
+            req.port,
+            &req.filepath,
+            req.offset,
+            req.data,
+        )
+        .await?;
+
+        Ok(json!({ "written": written, "next_offset": req.offset + written }))
+    }
+
+    /// Chunked upload: finish and verify the size.
+    pub async fn sftp_upload_finish(req: SftpUploadFinishParams) -> Result<Value> {
+        let size = crate::scheduler::sftp_chunk::finish_upload(
+            &req.session_id,
+            &req.user,
+            req.auth_data,
+            req.port,
+            &req.filepath,
+            req.total_size,
+        )
+        .await?;
+
+        Ok(json!({ "size": size }))
+    }
+
+    /// Chunked download: query the remote file size.
+    pub async fn sftp_download_stat(req: SftpDownloadStatParams) -> Result<Value> {
+        let size = crate::scheduler::sftp_chunk::download_stat(
+            &req.session_id,
+            &req.user,
+            req.auth_data,
+            req.port,
+            &req.filepath,
+        )
+        .await?;
+
+        Ok(json!({ "size": size, "chunk_size": SFTP_CHUNK_SIZE }))
+    }
+
+    /// Chunked download: read one chunk.
+    pub async fn sftp_download_chunk(req: SftpDownloadChunkParams) -> Result<Value> {
+        let data = crate::scheduler::sftp_chunk::read_chunk(
+            &req.session_id,
+            &req.user,
+            req.auth_data,
+            req.port,
+            &req.filepath,
+            req.offset,
+            req.len,
+        )
+        .await?;
+
+        Ok(serde_json::to_value(data)?)
+    }
+
     pub async fn sftp_read_dir(req: SftpReadDirParams) -> Result<Value> {
         let ret = ssh::read_dir(
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             req.dir.filter(|v| v != "").as_deref(),
         )
         .await?;
@@ -1071,7 +1140,7 @@ impl
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             &req.filepath,
             req.data,
         )
@@ -1081,7 +1150,7 @@ impl
     }
 
     pub async fn sftp_download(req: SftpDownloadParams) -> Result<Value> {
-        let ret = ssh::download(&req.ip, req.port, &req.user, &req.password, &req.filepath).await?;
+        let ret = ssh::download(&req.ip, req.port, &req.user, req.auth_data, &req.filepath).await?;
         let ret = serde_json::to_value(ret)?;
         Ok(ret)
     }
@@ -1091,7 +1160,7 @@ impl
             &req.ip,
             req.port,
             &req.user,
-            &req.password,
+            req.auth_data,
             &req.remove_type,
             &req.filepath,
         )
@@ -1108,9 +1177,18 @@ impl
             MsgReqKind::SftpUploadRequest(v) => Self::sftp_upload(v).await,
             MsgReqKind::SftpRemoveRequest(v) => Self::sftp_remove(v).await,
             MsgReqKind::SftpDownloadRequest(v) => Self::sftp_download(v).await,
+            MsgReqKind::SftpUploadStartRequest(v) => Self::sftp_upload_start(v).await,
+            MsgReqKind::SftpUploadChunkRequest(v) => Self::sftp_upload_chunk(v).await,
+            MsgReqKind::SftpUploadFinishRequest(v) => Self::sftp_upload_finish(v).await,
+            MsgReqKind::SftpDownloadStatRequest(v) => Self::sftp_download_stat(v).await,
+            MsgReqKind::SftpDownloadChunkRequest(v) => Self::sftp_download_chunk(v).await,
+            MsgReqKind::SftpDownloadFinishRequest(v) => {
+                crate::scheduler::sftp_chunk::finish_download(&v.session_id).await;
+                Ok(json!(null))
+            }
             MsgReqKind::PullJobRequest(_) => todo!(),
             MsgReqKind::HeartbeatRequest(_) => todo!(),
-            _ => todo!(),
+            other => Err(anyhow!("unsupported message kind: {other:?}")),
         };
 
         match ret {

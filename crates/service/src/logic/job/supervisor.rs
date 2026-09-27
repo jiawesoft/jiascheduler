@@ -7,6 +7,7 @@ use crate::{
 use anyhow::Result;
 use automate::scheduler::types::{RunStatus, ScheduleStatus, ScheduleType};
 use chrono::Local;
+use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, EntityTrait, JoinType,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,

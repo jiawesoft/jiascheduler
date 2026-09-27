@@ -5,7 +5,6 @@ use crate::{
     logic::types::{CustomTimerExpr, ResourceType, UserInfo},
 };
 use anyhow::{Result, anyhow};
-
 use chrono::{Local, Utc};
 use entity::{tag_resource, team, workflow, workflow_timer, workflow_version};
 use local_ip_address::local_ip;
@@ -14,6 +13,7 @@ use redis::{
     streams::{StreamMaxlen, StreamReadOptions, StreamReadReply},
 };
 use redis_macros::{FromRedisValue, ToRedisArgs};
+use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, Condition, FromQueryResult, JoinType, PaginatorTrait,
     QueryOrder, QuerySelect, QueryTrait, prelude::DateTimeLocal,

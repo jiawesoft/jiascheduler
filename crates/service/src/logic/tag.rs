@@ -6,9 +6,10 @@ use crate::{
 use anyhow::Result;
 use entity::workflow;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, JoinType, QueryFilter, QuerySelect,
-    QueryTrait, Set,
+    ActiveModelTrait, ColumnTrait, Condition, EntityTrait, ExprTrait, JoinType, QueryFilter,
+    QuerySelect, QueryTrait, Set,
 };
+
 use sea_query::Query;
 
 #[derive(Clone)]

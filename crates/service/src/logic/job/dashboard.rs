@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-
 use automate::scheduler::types::RunStatus;
+use sea_orm::ExprTrait;
 use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Statement,
