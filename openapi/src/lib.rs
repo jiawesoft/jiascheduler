@@ -185,6 +185,8 @@ pub async fn run(opts: WebapiOptions, signal: Option<Sender<Conf>>) -> Result<()
     }
 
     let conf = opts.merge_conf(&opts.config_file).context("merge config")?;
+
+    info!("load config: {}", serde_json::to_string_pretty(&conf)?);
     let mut connect_opts =
         ConnectOptions::new(Url::parse(&conf.database_url).expect("database url"));
     connect_opts

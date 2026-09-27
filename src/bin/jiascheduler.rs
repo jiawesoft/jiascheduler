@@ -66,6 +66,15 @@ struct WebapiArgs {
     /// you can temporarily overwrite the configuration file using command-line parameters
     #[arg(long, value_name = "FILE", default_value_t = String::from("~/.jiascheduler/console.toml"))]
     config: String,
+
+    /// redis connect address, eg: "redis://:wang@127.0.0.1"
+    /// can be used to override configuration items in the configuration file
+    #[arg(long)]
+    redis_url: Option<String>,
+    /// mysql connect address, eg: "mysql://root:root@localhost:3306/jiascheduler"
+    /// can be used to override configuration items in the configuration file
+    #[arg(long)]
+    database_url: Option<String>,
 }
 
 #[tokio::main]
@@ -131,8 +140,8 @@ async fn main() -> Result<()> {
 
     openapi::run(
         WebapiOptions {
-            database_url: None,
-            redis_url: None,
+            database_url: args.database_url,
+            redis_url: args.redis_url,
             config_file: args.config,
             bind_addr: args.console_bind_addr,
         },
