@@ -10,6 +10,8 @@ jiascheduler 执行脚本的节点不需要都在同一个网络，其内部设�
 
 Github 地址：https://github.com/jiawesoft/jiascheduler
 
+国内 AtomGit 同步托管：https://atomgit.com/iwannay/jiascheduler
+
 ## 架构图
 
 ![架构图](./assets/jiascheduler-arch.png)
