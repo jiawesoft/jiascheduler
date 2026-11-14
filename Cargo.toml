@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "automate",
-    "openapi",
-    "openapi-derive",
-    "migration",
-    "crates/leader-election",
-    "crates/entity",
-    "crates/service",
-    "crates/utils",
+  "automate",
+  "openapi",
+  "openapi-derive",
+  "migration",
+  "crates/leader-election",
+  "crates/entity",
+  "crates/service",
+  "crates/utils",
 ]
 
 [package]
@@ -78,18 +78,17 @@ service.workspace = true
 dirs.workspace = true
 
 
-
 # terminal-keycode = "1.1.1"
 
 
 [workspace.dependencies]
 # diesel = { version = "2.1.4", features = ["mysql"] }
 poem = { version = "3.1.1", features = [
-    "anyhow",
-    "redis-session",
-    "websocket",
-    "embed",
-    "static-files",
+  "anyhow",
+  "redis-session",
+  "websocket",
+  "embed",
+  "static-files",
 ] }
 poem-openapi = { version = "5.1.1", features = ["rapidoc"] }
 tokio = { version = "1.43.0", features = ["full"] }
@@ -108,10 +107,10 @@ serde = "1.0.193"
 file-rotate = "0.8.0"
 openapi-derive = { path = "openapi-derive" }
 redis = { version = "0.27", features = [
-    "json",
-    "aio",
-    "tokio-comp",
-    "connection-manager",
+  "json",
+  "aio",
+  "tokio-comp",
+  "connection-manager",
 ] }
 # sea-orm = { version = "1.1.7", features = [
 #     "macros",
@@ -128,17 +127,17 @@ redis = { version = "0.27", features = [
 # ] }
 #
 sea-orm = { version = "2.0.1", features = [
-    "macros",
-    "with-json",
-    "with-chrono",
-    "with-rust_decimal",
-    "with-bigdecimal",
-    "with-uuid",
-    "with-time",
-    "sqlx-mysql",
-    # "runtime-tokio-native-tls",
-    "debug-print",
-    "runtime-tokio-rustls",
+  "macros",
+  "with-json",
+  "with-chrono",
+  "with-rust_decimal",
+  "with-bigdecimal",
+  "with-uuid",
+  "with-time",
+  "sqlx-mysql",
+  # "runtime-tokio-native-tls",
+  "debug-print",
+  "runtime-tokio-rustls",
 ] }
 syn = "2.0.48"
 quote = "1.0.35"
